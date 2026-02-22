@@ -4,11 +4,11 @@
   "description": "Mobile-friendly church service control panel for Proclaim, OBS, and X32",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "test": "node --test",
-    "test:unit": "node --test 'test/unit/*.test.js'",
-    "test:e2e": "node --test 'test/e2e/*.test.js'"
+    "start": "bun server.js",
+    "dev": "bun --watch server.js",
+    "test": "bun test",
+    "test:unit": "bun test test/unit",
+    "test:e2e": "bun test test/e2e"
   },
   "dependencies": {
     "easymidi": "^3.1.0",

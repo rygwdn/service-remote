@@ -1,4 +1,3 @@
-const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const { State } = require('../../src/state');
 
@@ -40,7 +39,7 @@ describe('State', () => {
     assert.equal(s.get().obs.currentScene, 'Main');
   });
 
-  test('update() emits a change event with section and full state', (t, done) => {
+  test('update() emits a change event with section and full state', (done) => {
     const s = new State();
     s.once('change', ({ section, state }) => {
       assert.equal(section, 'x32');

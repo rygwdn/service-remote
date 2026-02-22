@@ -1,4 +1,3 @@
-const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const supertest = require('supertest');
 const { createTestApp } = require('../helpers/app');
@@ -6,12 +5,12 @@ const { createTestApp } = require('../helpers/app');
 describe('API routes', () => {
   let app, server, state, calls, request;
 
-  before(() => {
+  beforeAll(() => {
     ({ app, server, state, calls } = createTestApp());
     request = supertest(app);
   });
 
-  after(() => new Promise((resolve) => server.close(resolve)));
+  afterAll(() => new Promise((resolve) => server.close(resolve)));
 
   // Reset recorded calls before each test by wiping the call objects
   const resetCalls = () => {

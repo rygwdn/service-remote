@@ -1,4 +1,3 @@
-const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { WebSocket } = require('ws');
 const { createTestApp, startServer } = require('../helpers/app');
@@ -23,12 +22,12 @@ function nextMessage(ws) {
 describe('WebSocket', () => {
   let server, state, port;
 
-  before(async () => {
+  beforeAll(async () => {
     ({ server, state } = createTestApp());
     port = await startServer(server);
   });
 
-  after(() => new Promise((resolve) => server.close(resolve)));
+  afterAll(() => new Promise((resolve) => server.close(resolve)));
 
   test('new client receives full state immediately on connect', async () => {
     const { ws, data } = await connectAndReceive(port);

@@ -1,4 +1,3 @@
-const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const { merge } = require('../../src/config');
 
