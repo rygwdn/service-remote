@@ -1,4 +1,5 @@
-function setupRoutes(app, { obs, x32, proclaim }) {
+function setupRoutes(app, { obs, x32, proclaim }, stateOverride) {
+  const state = stateOverride || require('./state');
   // --- OBS ---
   app.post('/api/obs/scene', async (req, res) => {
     try {
@@ -71,7 +72,6 @@ function setupRoutes(app, { obs, x32, proclaim }) {
   });
 
   // --- State (for initial page load) ---
-  const state = require('./state');
   app.get('/api/state', (req, res) => {
     res.json(state.get());
   });

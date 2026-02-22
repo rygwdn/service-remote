@@ -32,4 +32,6 @@ class State extends EventEmitter {
   }
 }
 
-module.exports = new State();
+const defaultState = new State();
+module.exports = defaultState;
+module.exports.State = State;

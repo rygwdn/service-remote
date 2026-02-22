@@ -28,4 +28,6 @@ function merge(base, override) {
   return result;
 }
 
-module.exports = merge(defaultConfig, userConfig);
+const config = merge(defaultConfig, userConfig);
+module.exports = config;
+module.exports.merge = merge;

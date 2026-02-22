@@ -6,6 +6,7 @@ const state = require('../state');
 const client = dgram.createSocket('udp4');
 let connected = false;
 let keepAliveInterval = null;
+let subscribeInterval = null;
 let reconnectTimer = null;
 
 // Track configured channels with their state
@@ -19,6 +20,7 @@ const channels = config.x32.channels.map((ch) => ({
 function connect() {
   clearTimeout(reconnectTimer);
   clearInterval(keepAliveInterval);
+  clearInterval(subscribeInterval);
 
   client.removeAllListeners('message');
   client.on('message', handleMessage);
@@ -26,6 +28,8 @@ function connect() {
   // X32 requires /xremote every <10s to stay connected
   sendOsc('/xremote');
   keepAliveInterval = setInterval(() => sendOsc('/xremote'), 8000);
+  // Subscriptions expire after ~10s; renew periodically
+  subscribeInterval = setInterval(subscribeToChanges, 8000);
 
   // Request initial state for each configured channel
   for (const ch of channels) {
@@ -62,6 +66,29 @@ function sendOsc(address, args) {
   client.send(msg, 0, msg.length, config.x32.port, config.x32.address);
 }
 
+// Pure function: parse an OSC address + args into a channel state patch.
+// Returns { index, patch } or null if the message isn't a recognised channel message.
+function parseOscMessage(address, args) {
+  const faderMatch = address.match(/^\/ch\/(\d+)\/mix\/fader$/);
+  if (faderMatch) {
+    return { index: parseInt(faderMatch[1], 10), patch: { fader: args?.[0]?.value ?? 0 } };
+  }
+
+  const muteMatch = address.match(/^\/ch\/(\d+)\/mix\/on$/);
+  if (muteMatch) {
+    return { index: parseInt(muteMatch[1], 10), patch: { muted: (args?.[0]?.value ?? 1) === 0 } };
+  }
+
+  const nameMatch = address.match(/^\/ch\/(\d+)\/config\/name$/);
+  if (nameMatch) {
+    const name = args?.[0]?.value;
+    if (!name) return null;
+    return { index: parseInt(nameMatch[1], 10), patch: { label: name } };
+  }
+
+  return null;
+}
+
 function handleMessage(buf) {
   let msg;
   try {
@@ -75,33 +102,9 @@ function handleMessage(buf) {
     console.log('[X32] Connected');
   }
 
-  // Match /ch/XX/mix/fader
-  const faderMatch = msg.address.match(/^\/ch\/(\d+)\/mix\/fader$/);
-  if (faderMatch) {
-    const index = parseInt(faderMatch[1]);
-    const value = msg.args?.[0]?.value ?? 0;
-    updateChannel(index, { fader: value });
-    return;
-  }
-
-  // Match /ch/XX/mix/on (mute state: 0 = muted, 1 = on)
-  const muteMatch = msg.address.match(/^\/ch\/(\d+)\/mix\/on$/);
-  if (muteMatch) {
-    const index = parseInt(muteMatch[1]);
-    const on = msg.args?.[0]?.value ?? 1;
-    updateChannel(index, { muted: on === 0 });
-    return;
-  }
-
-  // Match /ch/XX/config/name
-  const nameMatch = msg.address.match(/^\/ch\/(\d+)\/config\/name$/);
-  if (nameMatch) {
-    const index = parseInt(nameMatch[1]);
-    const name = msg.args?.[0]?.value;
-    if (name) {
-      updateChannel(index, { label: name });
-    }
-    return;
+  const result = parseOscMessage(msg.address, msg.args);
+  if (result) {
+    updateChannel(result.index, result.patch);
   }
 }
 
@@ -112,7 +115,6 @@ function updateChannel(index, patch) {
   state.update('x32', { connected: true, channels: [...channels] });
 }
 
-// Subscribe to channel changes so we get live updates
 function subscribeToChanges() {
   for (const ch of channels) {
     const prefix = channelPrefix(ch.index);
@@ -128,10 +130,8 @@ function subscribeToChanges() {
   }
 }
 
-// Re-subscribe periodically (subscriptions expire after ~10s)
-setInterval(subscribeToChanges, 8000);
-
 module.exports = {
+  parseOscMessage,
   connect,
 
   setFader(channelIndex, value) {
