@@ -1,0 +1,55 @@
+name: Build
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run tests
+        run: bun test
+
+  build-windows:
+    name: Build Windows Executable
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build Windows executable
+        run: bun build --compile --target=bun-windows-x64 --external=easymidi ./server.js --outfile service-remote.exe
+
+      - name: Package release
+        run: |
+          New-Item -ItemType Directory -Path release | Out-Null
+          Copy-Item service-remote.exe release\
+          Copy-Item -Recurse public release\public
+          Copy-Item config.default.json release\
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-remote-windows
+          path: release/
