@@ -46,6 +46,9 @@ jobs:
           Copy-Item service-remote.exe release\
           Copy-Item -Recurse public release\public
           Copy-Item config.default.json release\
+          # Include the native easymidi addon so MIDI support works at runtime.
+          # Bun resolves --external modules from node_modules/ next to the exe.
+          Copy-Item -Recurse node_modules\easymidi release\node_modules\easymidi
         shell: pwsh
 
       - name: Upload artifact
