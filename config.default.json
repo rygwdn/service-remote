@@ -1,0 +1,30 @@
+{
+  "server": {
+    "port": 3000
+  },
+  "obs": {
+    "address": "ws://localhost:4455",
+    "password": ""
+  },
+  "x32": {
+    "address": "192.168.1.100",
+    "port": 10023,
+    "channels": [
+      { "index": 1, "label": "Vocal 1" },
+      { "index": 2, "label": "Vocal 2" },
+      { "index": 3, "label": "Guitar" },
+      { "index": 4, "label": "Keys" },
+      { "index": 5, "label": "Bass" },
+      { "index": 6, "label": "Drums" }
+    ]
+  },
+  "proclaim": {
+    "midiPortName": "Service Remote",
+    "actions": {
+      "nextSlide": { "type": "cc", "channel": 0, "controller": 1, "value": 127 },
+      "prevSlide": { "type": "cc", "channel": 0, "controller": 2, "value": 127 },
+      "nextItem": { "type": "cc", "channel": 0, "controller": 3, "value": 127 },
+      "prevItem": { "type": "cc", "channel": 0, "controller": 4, "value": 127 }
+    }
+  }
+}

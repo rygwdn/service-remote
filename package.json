@@ -1,0 +1,17 @@
+{
+  "name": "service-remote",
+  "version": "1.0.0",
+  "description": "Mobile-friendly church service control panel for Proclaim, OBS, and X32",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "obs-websocket-js": "^5.0.6",
+    "osc-min": "^1.1.2",
+    "easymidi": "^3.1.0",
+    "ws": "^8.18.0"
+  }
+}

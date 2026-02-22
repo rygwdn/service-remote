@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Service Remote</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Service Remote</h1>
+    <div class="status-dots">
+      <span class="dot" id="dot-obs" title="OBS"></span>
+      <span class="dot-label">OBS</span>
+      <span class="dot" id="dot-x32" title="X32"></span>
+      <span class="dot-label">X32</span>
+      <span class="dot" id="dot-proclaim" title="Proclaim"></span>
+      <span class="dot-label">MIDI</span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="proclaim">Proclaim</button>
+    <button class="tab" data-tab="obs">OBS</button>
+    <button class="tab" data-tab="sound">Sound</button>
+  </nav>
+
+  <main>
+    <!-- Proclaim Panel -->
+    <section id="panel-proclaim" class="panel active">
+      <div class="proclaim-controls">
+        <div class="control-row">
+          <button class="btn btn-large" onclick="sendAction('prevItem')">Prev Item</button>
+          <button class="btn btn-large" onclick="sendAction('nextItem')">Next Item</button>
+        </div>
+        <div class="control-row">
+          <button class="btn btn-large btn-primary" onclick="sendAction('prevSlide')">Prev Slide</button>
+          <button class="btn btn-large btn-primary" onclick="sendAction('nextSlide')">Next Slide</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- OBS Panel -->
+    <section id="panel-obs" class="panel">
+      <div class="obs-section">
+        <h2>Scenes</h2>
+        <div id="obs-scenes" class="scene-grid"></div>
+      </div>
+      <div class="obs-section">
+        <h2>Audio</h2>
+        <div id="obs-audio" class="audio-list"></div>
+      </div>
+      <div class="obs-section">
+        <h2>Output</h2>
+        <div class="control-row">
+          <button class="btn" id="obs-stream-btn" onclick="toggleStream()">Stream</button>
+          <button class="btn" id="obs-record-btn" onclick="toggleRecord()">Record</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sound (X32) Panel -->
+    <section id="panel-sound" class="panel">
+      <div id="x32-channels" class="channel-grid"></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,347 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --surface-light: #1f3056;
+  --accent: #0f3460;
+  --primary: #e94560;
+  --text: #eee;
+  --text-dim: #888;
+  --green: #4caf50;
+  --red: #e94560;
+  --yellow: #ffc107;
+}
+
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Header */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--accent);
+}
+
+header h1 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.status-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red);
+  margin-left: 8px;
+}
+
+.dot.connected {
+  background: var(--green);
+}
+
+.dot-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 2px solid var(--accent);
+}
+
+.tab {
+  flex: 1;
+  padding: 12px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+
+.tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* Main content */
+main {
+  height: calc(100% - 90px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.panel {
+  display: none;
+  padding: 16px;
+}
+
+.panel.active {
+  display: block;
+}
+
+/* Buttons */
+.btn {
+  padding: 12px 20px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.btn:active {
+  background: var(--surface-light);
+}
+
+.btn-large {
+  padding: 20px 24px;
+  font-size: 16px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--primary);
+}
+
+.btn-primary:active {
+  background: var(--primary);
+}
+
+/* Control layout */
+.control-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.control-row .btn {
+  flex: 1;
+}
+
+/* Proclaim */
+.proclaim-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 20px;
+}
+
+/* OBS */
+.obs-section {
+  margin-bottom: 24px;
+}
+
+.obs-section h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  letter-spacing: 1px;
+}
+
+.scene-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.scene-btn {
+  padding: 14px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.scene-btn:active {
+  background: var(--surface-light);
+}
+
+.scene-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  font-weight: 600;
+}
+
+/* Audio sources */
+.audio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.audio-source {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+}
+
+.audio-source .name {
+  flex: 0 0 80px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audio-source input[type="range"] {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--accent);
+  border-radius: 3px;
+  outline: none;
+}
+
+.audio-source input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--text);
+  cursor: pointer;
+}
+
+.mute-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface-light);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mute-btn.muted {
+  background: var(--red);
+}
+
+/* Stream/Record buttons */
+#obs-stream-btn.active {
+  background: var(--red);
+  border-color: var(--red);
+}
+
+#obs-record-btn.active {
+  background: var(--red);
+  border-color: var(--red);
+}
+
+/* X32 Channels */
+.channel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 10px;
+}
+
+.channel-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 6px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  gap: 8px;
+}
+
+.channel-strip .ch-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-strip .fader-wrap {
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.channel-strip input[type="range"] {
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 28px;
+  height: 130px;
+  background: var(--accent);
+  outline: none;
+}
+
+.channel-strip input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 28px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--text);
+  cursor: pointer;
+}
+
+.channel-strip .ch-mute {
+  width: 100%;
+  padding: 8px 4px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface-light);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.channel-strip .ch-mute.muted {
+  background: var(--red);
+  border-color: var(--red);
+}
