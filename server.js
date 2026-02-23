@@ -1,3 +1,6 @@
+// Must be first: extracts embedded native binaries in compiled mode.
+require('./src/native-loader');
+
 const http = require('http');
 const express = require('express');
 const path = require('path');
@@ -14,7 +17,23 @@ const app = express();
 const server = http.createServer(app);
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// In compiled mode the public/ files are baked in via scripts/embed-public.js;
+// fall back to serving from the filesystem during development.
+let embeddedPublic = {};
+try { embeddedPublic = require('./src/embedded-public'); } catch (_) {}
+
+if (Object.keys(embeddedPublic).length > 0) {
+  app.use((req, res, next) => {
+    const key = req.path === '/' ? '/index.html' : req.path;
+    const file = embeddedPublic[key];
+    if (!file) return next();
+    res.set('Content-Type', file.mimeType);
+    res.send(file.content);
+  });
+} else {
+  app.use(express.static(path.join(__dirname, 'public')));
+}
 
 setupRoutes(app, { obs, x32, proclaim });
 setupWebSocket(server, state);
