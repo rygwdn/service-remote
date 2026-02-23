@@ -5,3 +5,4 @@ config.json
 # Build outputs
 dist/
 src/embedded-public.js
+src/embedded-natives.js

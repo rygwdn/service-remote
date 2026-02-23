@@ -5,12 +5,13 @@
  *
  * Steps:
  *   1. Embed public/ assets into src/embedded-public.js
- *   2. Run `bun build --compile` to bundle all JS + the Bun runtime
+ *   2. Embed native binaries into src/embedded-natives.js
+ *   3. Run `bun build --compile` to bundle all JS + the Bun runtime
  *
- * Native modules (easymidi, systray) are marked external — they rely on
- * platform-specific binaries that cannot be bundled.  Both already have
- * graceful fallbacks so the executable works without them; MIDI and the
- * Windows system tray simply won't be available.
+ * The native .node addon (easymidi/midi) and the systray Go binary are
+ * base64-encoded into src/embedded-natives.js at step 2.  At runtime,
+ * src/native-loader.js extracts them to a per-user cache directory and
+ * patches the module loader so they are found transparently.
  */
 
 const { execSync } = require('child_process');
@@ -28,8 +29,12 @@ function run(cmd) {
 console.log('Step 1: Embedding public/ assets …');
 run('bun scripts/embed-public.js');
 
-// 2. Compile
-console.log('\nStep 2: Compiling single executable …');
+// 2. Embed native binaries
+console.log('\nStep 2: Embedding native binaries …');
+run('bun scripts/embed-natives.js');
+
+// 3. Compile
+console.log('\nStep 3: Compiling single executable …');
 fs.mkdirSync(dist, { recursive: true });
 
 const exeName = 'service-remote' + (process.platform === 'win32' ? '.exe' : '');
@@ -41,8 +46,6 @@ run(
     '--compile',
     '--minify',
     '--target=bun',
-    '--external=easymidi',
-    '--external=systray',
     'server.js',
     `--outfile=${outfile}`,
   ].join(' ')
@@ -52,6 +55,6 @@ console.log(`
 Build complete → ${outfile}
 
 Embedded:  all JS modules + public/ UI assets + Bun runtime
-External:  easymidi (native MIDI), systray (Windows tray)
-           → both degrade gracefully if not present at runtime
+           + midi .node addon + systray binary (current platform)
+At runtime: native-loader.js extracts binaries to ~/.service-remote/natives/
 `);
