@@ -8,7 +8,8 @@
     "dev": "bun --watch server.js",
     "test": "bun test",
     "test:unit": "bun test test/unit",
-    "test:e2e": "bun test test/e2e"
+    "test:e2e": "bun test test/e2e",
+    "build": "bun scripts/build.js"
   },
   "dependencies": {
     "easymidi": "^3.1.0",
