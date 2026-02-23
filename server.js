@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const config = require('./src/config');
 const state = require('./src/state');
+const { startTray } = require('./src/tray');
 const { setupWebSocket } = require('./src/ws');
 const { setupRoutes } = require('./src/routes');
 const obs = require('./src/connections/obs');
@@ -25,4 +26,5 @@ proclaim.connect();
 const port = config.server.port;
 server.listen(port, () => {
   console.log(`Service Remote running at http://localhost:${port}`);
+  startTray(port, state);
 });

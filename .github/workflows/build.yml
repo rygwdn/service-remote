@@ -38,7 +38,7 @@ jobs:
         run: bun install
 
       - name: Build Windows executable
-        run: bun build --compile --target=bun-windows-x64 --external=easymidi ./server.js --outfile service-remote.exe
+        run: bun build --compile --target=bun-windows-x64 --external=easymidi --external=systray ./server.js --outfile service-remote.exe
 
       - name: Package release
         run: |
@@ -46,9 +46,9 @@ jobs:
           Copy-Item service-remote.exe release\
           Copy-Item -Recurse public release\public
           Copy-Item config.default.json release\
-          # Include the native easymidi addon so MIDI support works at runtime.
-          # Bun resolves --external modules from node_modules/ next to the exe.
+          # Include external modules that Bun resolves from node_modules/ next to the exe.
           Copy-Item -Recurse node_modules\easymidi release\node_modules\easymidi
+          Copy-Item -Recurse node_modules\systray release\node_modules\systray
         shell: pwsh
 
       - name: Upload artifact
