@@ -45,7 +45,7 @@ run(
     '--compile',
     '--minify',
     '--target=bun',
-    'server.js',
+    'server.ts',
     `--outfile=${outfile}`,
   ].join(' ')
 );

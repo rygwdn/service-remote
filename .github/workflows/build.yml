@@ -38,21 +38,48 @@ jobs:
         run: bun install
 
       - name: Build Windows executable
-        run: bun build --compile --target=bun-windows-x64 --external=easymidi --external=systray ./server.js --outfile service-remote.exe
+        run: bun run build
 
-      - name: Package release
-        run: |
-          New-Item -ItemType Directory -Path release | Out-Null
-          Copy-Item service-remote.exe release\
-          Copy-Item -Recurse public release\public
-          Copy-Item config.default.json release\
-          # Include external modules that Bun resolves from node_modules/ next to the exe.
-          Copy-Item -Recurse node_modules\easymidi release\node_modules\easymidi
-          Copy-Item -Recurse node_modules\systray release\node_modules\systray
+      - name: Create zip
+        run: Compress-Archive -Path dist\* -DestinationPath service-remote-windows.zip
         shell: pwsh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: service-remote-windows
-          path: release/
+          path: service-remote-windows.zip
+
+  release:
+    name: Create Dev Release
+    needs: build-windows
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: service-remote-windows
+
+      - name: Delete existing dev release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete dev --yes --repo "$GH_REPO" || true
+          git -c "http.extraheader=Authorization: Bearer $GH_TOKEN" \
+            ls-remote --tags "https://github.com/$GH_REPO.git" refs/tags/dev \
+            && gh api --method DELETE "/repos/$GH_REPO/git/refs/tags/dev" || true
+
+      - name: Create dev release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create dev \
+            --repo "$GH_REPO" \
+            --title "Dev Build" \
+            --notes "Latest build from main. Automatically updated on every push." \
+            --prerelease \
+            service-remote-windows.zip
