@@ -95,6 +95,28 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
     }
   });
 
+  // --- OBS program preview screenshot ---
+  app.get('/api/obs/screenshot', async (req: Request, res: Response) => {
+    try {
+      const currentState = state.get();
+      const sceneName = currentState.obs.currentScene;
+      if (!sceneName) return res.status(503).end();
+      const result = await (obs as any).call('GetSourceScreenshot', {
+        sourceName: sceneName,
+        imageFormat: 'jpeg',
+        imageWidth: 480,
+        imageCompressionQuality: 70,
+      });
+      const b64 = (result.imageData as string).replace(/^data:image\/\w+;base64,/, '');
+      const buf = Buffer.from(b64, 'base64');
+      res.set('Content-Type', 'image/jpeg');
+      res.set('Cache-Control', 'no-store');
+      res.send(buf);
+    } catch (err) {
+      res.status(500).end();
+    }
+  });
+
   // --- State (for initial page load) ---
   app.get('/api/state', (req: Request, res: Response) => {
     res.json(state.get());

@@ -23,14 +23,54 @@
   </header>
 
   <nav class="tabs">
-    <button class="tab active" data-tab="proclaim">Proclaim</button>
+    <button class="tab active" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="proclaim">Proclaim</button>
     <button class="tab" data-tab="obs">OBS</button>
     <button class="tab" data-tab="sound">Sound</button>
   </nav>
 
   <main>
+    <!-- Overview Panel -->
+    <section id="panel-overview" class="panel active">
+      <div class="overview-grid">
+        <!-- Proclaim -->
+        <div class="ov-block ov-proclaim">
+          <div class="ov-title">Proclaim</div>
+          <div class="slide-strip">
+            <div class="slide-thumb" id="ov-thumb-prev"></div>
+            <div class="slide-thumb active" id="ov-thumb-current"></div>
+            <div class="slide-thumb" id="ov-thumb-next"></div>
+          </div>
+          <div id="ov-now-playing" class="proclaim-now-playing"></div>
+          <div class="control-row">
+            <button class="btn btn-large" onclick="sendAction('PreviousSlide')">&#8592; Slide</button>
+            <button class="btn btn-large" onclick="sendAction('NextSlide')">Slide &#8594;</button>
+          </div>
+          <div class="control-row" style="margin-top:8px">
+            <button class="btn" onclick="sendAction('PreviousServiceItem')">&#8592; Item</button>
+            <button class="btn" onclick="sendAction('NextServiceItem')">Item &#8594;</button>
+          </div>
+        </div>
+
+        <!-- OBS preview (read-only) -->
+        <div class="ov-block ov-obs">
+          <div class="ov-title">OBS &mdash; <span id="ov-current-scene"></span></div>
+          <div class="ov-obs-preview-wrap">
+            <img id="ov-obs-preview" class="ov-obs-preview" src="" alt="Program">
+          </div>
+          <div id="ov-stream-status" class="ov-status-row"></div>
+        </div>
+
+        <!-- X32 mix levels (read-only) -->
+        <div class="ov-block ov-x32">
+          <div class="ov-title">Mix</div>
+          <div id="ov-channels" class="ov-channel-list"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- Proclaim Panel -->
-    <section id="panel-proclaim" class="panel active">
+    <section id="panel-proclaim" class="panel">
       <div class="slide-strip">
         <div class="slide-thumb" id="proclaim-thumb-prev"></div>
         <div class="slide-thumb active" id="proclaim-thumb-current"></div>
@@ -52,6 +92,11 @@
 
     <!-- OBS Panel -->
     <section id="panel-obs" class="panel">
+      <div class="obs-section">
+        <div class="ov-obs-preview-wrap">
+          <img id="obs-preview" class="ov-obs-preview" src="" alt="Program">
+        </div>
+      </div>
       <div class="obs-section">
         <h2>Scenes</h2>
         <div id="obs-scenes" class="scene-grid"></div>

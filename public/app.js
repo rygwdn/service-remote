@@ -89,6 +89,7 @@ function renderState(s) {
   renderObs(s.obs);
   renderX32(s.x32);
   renderProclaim(s.proclaim);
+  renderOverview(s);
 }
 
 function setDot(id, connected) {
@@ -256,6 +257,127 @@ function renderProclaim(p) {
     })
     .join('');
 }
+
+// --- Overview rendering ---
+let screenshotInterval = null;
+let lastObsScene = null;
+
+function startScreenshotPolling() {
+  if (screenshotInterval) return;
+  screenshotInterval = setInterval(refreshScreenshot, 2000);
+  refreshScreenshot();
+}
+
+function stopScreenshotPolling() {
+  clearInterval(screenshotInterval);
+  screenshotInterval = null;
+}
+
+function refreshScreenshot() {
+  const url = '/api/obs/screenshot?' + Date.now();
+  const ov = document.getElementById('ov-obs-preview');
+  if (ov) ov.src = url;
+  const obs = document.getElementById('obs-preview');
+  if (obs) obs.src = url;
+}
+
+function renderOverview(s) {
+  // Proclaim thumbnails and now-playing
+  renderOverviewProclaim(s.proclaim);
+
+  // OBS: current scene label + stream/record status pills
+  const sceneEl = document.getElementById('ov-current-scene');
+  if (sceneEl) sceneEl.textContent = s.obs.currentScene || '';
+
+  const statusRow = document.getElementById('ov-stream-status');
+  if (statusRow) {
+    const pills = [];
+    if (s.obs.streaming) pills.push('<span class="ov-status-pill active">LIVE</span>');
+    if (s.obs.recording) pills.push('<span class="ov-status-pill active">REC</span>');
+    statusRow.innerHTML = pills.join('');
+  }
+
+  // Scene changed — refresh screenshot sooner
+  if (s.obs.currentScene !== lastObsScene) {
+    lastObsScene = s.obs.currentScene;
+    refreshScreenshot();
+  }
+
+  // X32 compact channel list — read-only fader bars + muted label
+  const chList = document.getElementById('ov-channels');
+  chList.innerHTML = s.x32.channels
+    .map(
+      (ch) => `
+    <div class="ov-channel-row">
+      <span class="ov-ch-label${ch.muted ? ' muted' : ''}">${esc(ch.label)}</span>
+      <div class="ov-fader-bar">
+        <div class="ov-fader-fill${ch.muted ? ' muted' : ''}" style="width:${(ch.fader * 100).toFixed(1)}%"></div>
+      </div>
+    </div>`
+    )
+    .join('');
+}
+
+function renderOverviewProclaim(p) {
+  const nowPlaying = document.getElementById('ov-now-playing');
+  if (!p.onAir || !p.currentItemId) {
+    nowPlaying.textContent = p.connected ? 'Not on air' : 'Disconnected';
+    document.getElementById('ov-thumb-prev').innerHTML = '';
+    document.getElementById('ov-thumb-current').innerHTML = '';
+    document.getElementById('ov-thumb-next').innerHTML = '';
+    return;
+  }
+
+  const typeLabel = p.currentItemType ? `<span class="item-type">${esc(p.currentItemType)}</span> ` : '';
+  const slideInfo = p.slideIndex !== null ? ` &mdash; Slide ${p.slideIndex + 1}` : '';
+  nowPlaying.innerHTML = `${typeLabel}<strong>${esc(p.currentItemTitle || '')}</strong>${slideInfo}`;
+
+  const items = p.serviceItems || [];
+  const currentItemIdx = items.findIndex((item) => item.id === p.currentItemId);
+  const currentItem = items[currentItemIdx];
+  const slideIndex = p.slideIndex !== null ? p.slideIndex : 0;
+
+  let prevItemId = null, prevSlideIndex = null;
+  let nextItemId = null, nextSlideIndex = null;
+
+  if (currentItem) {
+    if (slideIndex > 0) {
+      prevItemId = p.currentItemId;
+      prevSlideIndex = slideIndex - 1;
+    } else if (currentItemIdx > 0) {
+      const prevItem = items[currentItemIdx - 1];
+      prevItemId = prevItem.id;
+      prevSlideIndex = Math.max(0, (prevItem.slideCount || 1) - 1);
+    }
+
+    const slideCount = currentItem.slideCount || 1;
+    if (slideIndex < slideCount - 1) {
+      nextItemId = p.currentItemId;
+      nextSlideIndex = slideIndex + 1;
+    } else if (currentItemIdx < items.length - 1) {
+      nextItemId = items[currentItemIdx + 1].id;
+      nextSlideIndex = 0;
+    }
+  }
+
+  setThumb(document.getElementById('ov-thumb-prev'), prevItemId, prevSlideIndex);
+  setThumb(document.getElementById('ov-thumb-current'), p.currentItemId, slideIndex);
+  setThumb(document.getElementById('ov-thumb-next'), nextItemId, nextSlideIndex);
+}
+
+// Start/stop screenshot polling based on which tab is visible
+document.querySelectorAll('.tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    if (tab.dataset.tab === 'overview' || tab.dataset.tab === 'obs') {
+      startScreenshotPolling();
+    } else {
+      stopScreenshotPolling();
+    }
+  });
+});
+
+// Overview is the default tab, so start polling immediately
+startScreenshotPolling();
 
 // --- Utility ---
 function esc(str) {
