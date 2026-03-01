@@ -17,6 +17,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "binpack@0.1.0": "patches/binpack@0.1.0.patch",
+  },
   "packages": {
     "@julusian/midi": ["@julusian/midi@3.6.1", "", { "dependencies": { "node-addon-api": "^6.1.0", "pkg-prebuilds": "^1.0.0" } }, "sha512-sC6tTMAMZsHOQILAv/R0On5tKKhzBQUjdyYWzh9l0UQeNry12CFIyRWK1Mep5xCHWCTUB0w4gxngpciA5PgN/Q=="],
 
