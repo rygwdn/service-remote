@@ -4,6 +4,7 @@ require('./src/native-loader');
 const http = require('http');
 const express = require('express');
 const path = require('path');
+const { exec } = require('child_process');
 const config = require('./src/config');
 const state = require('./src/state');
 const { startTray } = require('./src/tray');
@@ -12,6 +13,47 @@ const { setupRoutes } = require('./src/routes');
 const obs = require('./src/connections/obs');
 const x32 = require('./src/connections/x32');
 const proclaim = require('./src/connections/proclaim');
+
+// ── Crash / unexpected-shutdown logging ──────────────────────────────────────
+
+process.on('uncaughtException', (err) => {
+  console.error('[Server] Uncaught exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[Server] Unhandled promise rejection:', reason);
+});
+
+function shutdown(signal) {
+  console.log(`[Server] Received ${signal}, shutting down...`);
+  server.close(() => {
+    console.log('[Server] Shutdown complete');
+    process.exit(0);
+  });
+  // Force-exit if active connections prevent a clean close within 5 s
+  setTimeout(() => {
+    console.warn('[Server] Forced exit after shutdown timeout');
+    process.exit(1);
+  }, 5000).unref();
+}
+
+process.on('SIGINT',  () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function openBrowser(url) {
+  const cmd =
+    process.platform === 'win32'  ? `start "" "${url}"` :
+    process.platform === 'darwin' ? `open "${url}"` :
+    `xdg-open "${url}"`;
+  exec(cmd, (err) => {
+    if (err) console.warn('[Server] Could not open browser:', err.message);
+  });
+}
+
+// ── App setup ────────────────────────────────────────────────────────────────
 
 const app = express();
 const server = http.createServer(app);
@@ -43,7 +85,9 @@ x32.connect();
 proclaim.connect();
 
 const port = config.server.port;
+const url = `http://localhost:${port}`;
 server.listen(port, () => {
-  console.log(`Service Remote running at http://localhost:${port}`);
+  console.log(`[Server] Service Remote running at ${url}`);
+  openBrowser(url);
   startTray(port, state);
 });
