@@ -2,14 +2,15 @@
   "name": "service-remote",
   "version": "1.0.0",
   "description": "Mobile-friendly church service control panel for Proclaim, OBS, and X32",
-  "main": "server.js",
+  "main": "server.ts",
   "scripts": {
-    "start": "bun server.js",
-    "dev": "bun --watch server.js",
+    "start": "bun server.ts",
+    "dev": "bun --watch server.ts",
     "test": "bun test",
     "test:unit": "bun test test/unit",
     "test:e2e": "bun test test/e2e",
-    "build": "bun scripts/build.js"
+    "build": "bun scripts/build.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "express": "^4.21.0",
@@ -18,6 +19,12 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "supertest": "^7.2.2"
-  },
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.3.3",
+    "@types/supertest": "^7.2.0",
+    "@types/ws": "^8.18.1",
+    "bun-types": "^1.3.10",
+    "supertest": "^7.2.2",
+    "typescript": "^5.9.3"
+  }
 }

@@ -1,26 +1,35 @@
-const config = require('../config');
-const state = require('../state');
+import config = require('../config');
+import state = require('../state');
+import type { ServiceItem } from '../types';
 
-let authToken = null;
-let pollTimer = null;
-let reconnectTimer = null;
-let presentationCache = null;
+let authToken: string | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let presentationCache: {
+  presentationId?: string;
+  serviceItems?: Array<{
+    id: string;
+    title: string;
+    kind: string;
+    slides?: unknown[];
+  }>;
+} | null = null;
 let presentationLocalRevision = 0;
-let statusChangedAbortController = null;
+let statusChangedAbortController: AbortController | null = null;
 
-function baseUrl() {
+function baseUrl(): string {
   return `http://${config.proclaim.host}:${config.proclaim.port}`;
 }
 
-function getToken() {
+function getToken(): string | null {
   return authToken;
 }
 
-function getThumbUrl(itemId, slideIndex, localRevision) {
+function getThumbUrl(itemId: string | undefined, slideIndex: string | undefined, localRevision: string | undefined): string {
   return `${baseUrl()}/presentations/slide/thumbnail?itemId=${itemId}&slideIndex=${slideIndex}&localRevision=${localRevision}`;
 }
 
-async function authenticate() {
+async function authenticate(): Promise<string> {
   const res = await fetch(`${baseUrl()}/appCommand/authenticate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -29,14 +38,14 @@ async function authenticate() {
   if (!res.ok) {
     throw new Error(`Proclaim auth failed: ${res.status}`);
   }
-  const data = await res.json();
+  const data = await res.json() as { token?: string };
   if (!data.token) {
     throw new Error('Proclaim auth: no token in response');
   }
   return data.token;
 }
 
-async function sendAction(commandName, index) {
+async function sendAction(commandName: string, index?: number): Promise<boolean> {
   if (!authToken) {
     console.log('[Proclaim] Not authenticated');
     return false;
@@ -67,22 +76,22 @@ async function sendAction(commandName, index) {
   return true;
 }
 
-function startPolling() {
+function startPolling(): void {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(pollStatus, config.proclaim.pollInterval);
   pollStatus();
 }
 
-async function pollStatus() {
+async function pollStatus(): Promise<void> {
   try {
     const res = await fetch(`${baseUrl()}/onair/session`, {
-      headers: { ProclaimAuthToken: authToken },
+      headers: { ProclaimAuthToken: authToken! },
     });
 
     if (res.status === 401) {
       console.log('[Proclaim] pollStatus got 401, re-authenticating');
       authToken = null;
-      clearInterval(pollTimer);
+      if (pollTimer) clearInterval(pollTimer);
       pollTimer = null;
       scheduleReconnect();
       return;
@@ -110,9 +119,9 @@ async function pollStatus() {
     state.update('proclaim', { connected: true, onAir: true });
     fetchDetailedStatus();
   } catch (err) {
-    console.log('[Proclaim] pollStatus network error:', err.message);
+    console.log('[Proclaim] pollStatus network error:', (err as Error).message);
     state.update('proclaim', { connected: false });
-    clearInterval(pollTimer);
+    if (pollTimer) clearInterval(pollTimer);
     pollTimer = null;
     scheduleReconnect();
   }
@@ -120,14 +129,13 @@ async function pollStatus() {
 
 const EXCLUDED_KINDS = new Set(['Grouping', 'StageDirectionCue']);
 
-async function fetchDetailedStatus() {
+async function fetchDetailedStatus(): Promise<void> {
   try {
     const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
-      headers: { ProclaimAuthToken: authToken },
+      headers: { ProclaimAuthToken: authToken! },
     });
     if (presRes.ok) {
-      const presData = await presRes.json();
-      presentationCache = presData;
+      presentationCache = await presRes.json() as typeof presentationCache;
     }
   } catch (_) {
     // best-effort
@@ -141,13 +149,13 @@ async function fetchDetailedStatus() {
   pollStatusChanged(statusChangedAbortController.signal);
 }
 
-async function pollStatusChanged(signal) {
+async function pollStatusChanged(signal: AbortSignal): Promise<void> {
   while (!signal.aborted) {
     try {
       const res = await fetch(
         `${baseUrl()}/onair/statusChanged?localrevision=${presentationLocalRevision}&step=250`,
         {
-          headers: { ProclaimAuthToken: authToken },
+          headers: { ProclaimAuthToken: authToken! },
           signal,
         }
       );
@@ -159,7 +167,14 @@ async function pollStatusChanged(signal) {
         break;
       }
 
-      const data = await res.json();
+      const data = await res.json() as {
+        localRevision?: number;
+        status?: {
+          presentationId?: string;
+          itemId?: string;
+          slideIndex?: number;
+        };
+      };
       if (data && data.localRevision !== undefined) {
         presentationLocalRevision = data.localRevision;
       }
@@ -175,18 +190,25 @@ async function pollStatusChanged(signal) {
       ) {
         try {
           const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
-            headers: { ProclaimAuthToken: authToken },
+            headers: { ProclaimAuthToken: authToken! },
           });
           if (presRes.ok) {
-            presentationCache = await presRes.json();
+            presentationCache = await presRes.json() as typeof presentationCache;
           }
         } catch (_) {
           // best-effort
         }
       }
 
-      const serviceItems = presentationCache && presentationCache.serviceItems
-        ? presentationCache.serviceItems.filter((item) => !EXCLUDED_KINDS.has(item.kind))
+      const serviceItems: ServiceItem[] = presentationCache && presentationCache.serviceItems
+        ? presentationCache.serviceItems
+            .filter((item) => !EXCLUDED_KINDS.has(item.kind))
+            .map((item) => ({
+              id: item.id,
+              title: item.title,
+              kind: item.kind,
+              slideCount: item.slides ? item.slides.length : 0,
+            }))
         : [];
 
       const currentItem = serviceItems.find((item) => item.id === status.itemId);
@@ -196,12 +218,7 @@ async function pollStatusChanged(signal) {
         currentItemTitle: currentItem ? currentItem.title : null,
         currentItemType: currentItem ? currentItem.kind : null,
         slideIndex: status.slideIndex !== undefined ? status.slideIndex : null,
-        serviceItems: serviceItems.map((item) => ({
-          id: item.id,
-          title: item.title,
-          kind: item.kind,
-          slideCount: item.slides ? item.slides.length : 0,
-        })),
+        serviceItems,
       });
     } catch (err) {
       if (signal.aborted) break;
@@ -211,7 +228,7 @@ async function pollStatusChanged(signal) {
   }
 }
 
-function scheduleReconnect() {
+function scheduleReconnect(): void {
   if (reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
@@ -219,20 +236,20 @@ function scheduleReconnect() {
   }, 5000);
 }
 
-async function connect() {
+async function connect(): Promise<void> {
   try {
     authToken = await authenticate();
     console.log('[Proclaim] Authenticated');
     state.update('proclaim', { connected: true });
     startPolling();
   } catch (err) {
-    console.log('[Proclaim] Connection failed:', err.message);
+    console.log('[Proclaim] Connection failed:', (err as Error).message);
     state.update('proclaim', { connected: false });
     scheduleReconnect();
   }
 }
 
-module.exports = {
+export = {
   connect,
   sendAction,
   getThumbUrl,

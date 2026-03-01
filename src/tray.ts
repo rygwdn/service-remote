@@ -1,9 +1,12 @@
 'use strict';
 
-const { spawn, exec } = require('child_process');
-const path = require('path');
+import childProcess = require('child_process');
+import path = require('path');
+import type { ChangeEvent } from './types';
 
-function startTray(port, state) {
+const { spawn, exec } = childProcess;
+
+function startTray(port: number, state: { on: (event: 'change', listener: (ev: ChangeEvent) => void) => void }): void {
   if (process.platform !== 'win32') return;
 
   const ps1 = path.join(__dirname, 'tray.ps1');
@@ -15,18 +18,18 @@ function startTray(port, state) {
     stdio: ['pipe', 'pipe', 'inherit'],
   });
 
-  child.on('error', err => console.warn('[Tray] failed to start PowerShell:', err.message));
+  child.on('error', (err: Error) => console.warn('[Tray] failed to start PowerShell:', err.message));
 
   // Parse newline-delimited JSON events from the tray process
   let buf = '';
-  child.stdout.on('data', chunk => {
+  child.stdout!.on('data', (chunk: Buffer) => {
     buf += chunk.toString();
     const lines = buf.split('\n');
-    buf = lines.pop(); // keep incomplete line
+    buf = lines.pop()!; // keep incomplete line
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
-      let msg;
+      let msg: { event?: string };
       try { msg = JSON.parse(trimmed); } catch { continue; }
       if (msg.event === 'open') {
         exec(`start http://localhost:${port}`);
@@ -36,14 +39,14 @@ function startTray(port, state) {
     }
   });
 
-  function send(obj) {
+  function send(obj: unknown): void {
     if (!child.killed) {
-      child.stdin.write(JSON.stringify(obj) + '\n');
+      child.stdin!.write(JSON.stringify(obj) + '\n');
     }
   }
 
   // Update the status item whenever any connection state changes
-  state.on('change', ({ state: s }) => {
+  state.on('change', ({ state: s }: ChangeEvent) => {
     const obs  = s.obs.connected      ? 'OBS:on'  : 'OBS:off';
     const x32  = s.x32.connected      ? 'X32:on'  : 'X32:off';
     const midi = s.proclaim.connected ? 'MIDI:on' : 'MIDI:off';
@@ -56,4 +59,4 @@ function startTray(port, state) {
   });
 }
 
-module.exports = { startTray };
+export = { startTray };

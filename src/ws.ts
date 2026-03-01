@@ -1,6 +1,9 @@
-const { WebSocketServer } = require('ws');
+import ws = require('ws');
+import http = require('http');
 
-function setupWebSocket(server, state) {
+const { WebSocketServer } = ws;
+
+function setupWebSocket(server: http.Server, state: ReturnType<typeof require>): void {
   const wss = new WebSocketServer({ server });
 
   wss.on('connection', (ws) => {
@@ -9,7 +12,7 @@ function setupWebSocket(server, state) {
   });
 
   // Broadcast state changes to all connected browsers
-  state.on('change', ({ section, state: fullState }) => {
+  state.on('change', ({ section, state: fullState }: { section: string; state: unknown }) => {
     const msg = JSON.stringify({ type: 'state', data: fullState });
     for (const ws of wss.clients) {
       if (ws.readyState === 1) {
@@ -19,4 +22,4 @@ function setupWebSocket(server, state) {
   });
 }
 
-module.exports = { setupWebSocket };
+export = { setupWebSocket };

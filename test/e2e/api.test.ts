@@ -1,16 +1,21 @@
-const assert = require('node:assert/strict');
-const supertest = require('supertest');
-const { createTestApp } = require('../helpers/app');
+import assert = require('node:assert/strict');
+import supertest = require('supertest');
+const { createTestApp, startServer } = require('../helpers/app');
 
 describe('API routes', () => {
-  let app, server, state, calls, request;
+  let server: import('http').Server;
+  let state: InstanceType<typeof import('../../src/state').State>;
+  let calls: { obs: Record<string, unknown>; x32: Record<string, unknown>; proclaim: Record<string, unknown> };
+  let stubs: import('../../src/types').Connections;
+  let request: ReturnType<typeof supertest>;
 
-  beforeAll(() => {
-    ({ app, server, state, calls } = createTestApp());
-    request = supertest(app);
+  beforeAll(async () => {
+    ({ server, state, calls, stubs } = createTestApp());
+    await startServer(server);
+    request = supertest(server);
   });
 
-  afterAll(() => new Promise((resolve) => server.close(resolve)));
+  afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
   // Reset recorded calls before each test by wiping the call objects
   const resetCalls = () => {
@@ -46,12 +51,7 @@ describe('API routes', () => {
     });
 
     test('returns 500 when setScene throws', async () => {
-      const { createTestApp } = require('../helpers/app');
-      const { app: errApp } = createTestApp();
-      // Override setScene to throw
-      const errRequest = supertest(errApp);
-      // We'll simulate this by testing the error path exists; a separate stub handles it
-      // (covered by the stub design — errors propagate from the stub to the route handler)
+      // placeholder — covered by error handling suite below
     });
   });
 
@@ -141,8 +141,6 @@ describe('API routes', () => {
 
   describe('GET /api/proclaim/thumb', () => {
     test('proxies thumb request and returns image', async () => {
-      // The stub getThumbUrl returns a fake path; fetch will fail so we just check
-      // that the route exists and attempts to proxy (errors gracefully as 500)
       const res = await request.get('/api/proclaim/thumb?itemId=abc&slideIndex=0&localRevision=1');
       // Route exists (not 404); will be 500 since fake URL is not reachable
       assert.notEqual(res.status, 404);
@@ -151,13 +149,14 @@ describe('API routes', () => {
 
   describe('error handling', () => {
     test('returns 500 when a backend call throws', async () => {
-      // Build a one-off app whose obs.setScene throws
-      const { createTestApp } = require('../helpers/app');
-      const { app: errApp, stubs } = createTestApp();
-      stubs.obs.setScene = async () => { throw new Error('OBS not connected'); };
-      const errReq = supertest(errApp);
+      const { createTestApp, startServer } = require('../helpers/app');
+      const { server: errServer, stubs: errStubs } = createTestApp();
+      await startServer(errServer);
+      errStubs.obs.setScene = async () => { throw new Error('OBS not connected'); };
+      const errReq = supertest(errServer);
 
       const res = await errReq.post('/api/obs/scene').send({ scene: 'Main' });
+      errServer.close();
       assert.equal(res.status, 500);
       assert.equal(res.body.error, 'OBS not connected');
     });

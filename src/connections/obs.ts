@@ -1,26 +1,28 @@
-const OBSWebSocket = require('obs-websocket-js').default;
-const config = require('../config');
-const state = require('../state');
+import obsWebSocketJs = require('obs-websocket-js');
+import config = require('../config');
+import state = require('../state');
+
+const OBSWebSocket = obsWebSocketJs.default;
 
 const obs = new OBSWebSocket();
-let reconnectTimer = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-async function connect() {
-  clearTimeout(reconnectTimer);
+async function connect(): Promise<void> {
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   try {
     await obs.connect(config.obs.address, config.obs.password || undefined);
     console.log('[OBS] Connected');
     state.update('obs', { connected: true });
     await refreshState();
   } catch (err) {
-    console.log('[OBS] Connection failed:', err.message);
+    console.log('[OBS] Connection failed:', (err as Error).message);
     state.update('obs', { connected: false });
     scheduleReconnect();
   }
 }
 
-function scheduleReconnect() {
-  clearTimeout(reconnectTimer);
+function scheduleReconnect(): void {
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = setTimeout(connect, 5000);
 }
 
@@ -36,7 +38,7 @@ obs.on('CurrentProgramSceneChanged', ({ sceneName }) => {
 
 obs.on('SceneListChanged', async () => {
   const { scenes } = await obs.call('GetSceneList');
-  state.update('obs', { scenes: scenes.map((s) => s.sceneName).reverse() });
+  state.update('obs', { scenes: scenes.map((s) => s.sceneName as string).reverse() });
 });
 
 obs.on('StreamStateChanged', ({ outputActive }) => {
@@ -61,7 +63,7 @@ obs.on('InputMuteStateChanged', ({ inputName, inputMuted }) => {
   state.update('obs', { audioSources: sources });
 });
 
-async function refreshState() {
+async function refreshState(): Promise<void> {
   try {
     const [sceneList, streamStatus, recordStatus] = await Promise.all([
       obs.call('GetSceneList'),
@@ -69,24 +71,24 @@ async function refreshState() {
       obs.call('GetRecordStatus'),
     ]);
 
-    const scenes = sceneList.scenes.map((s) => s.sceneName).reverse();
-    const currentScene = sceneList.currentProgramSceneName;
+    const scenes = sceneList.scenes.map((s) => s.sceneName as string).reverse();
+    const currentScene = sceneList.currentProgramSceneName as string;
 
     // Get audio sources
     const { inputs } = await obs.call('GetInputList');
-    const audioSources = [];
+    const audioSources: Array<{ name: string; volume: number; muted: boolean }> = [];
     for (const input of inputs) {
       try {
         const vol = await obs.call('GetInputVolume', {
-          inputName: input.inputName,
+          inputName: input.inputName as string,
         });
         const mute = await obs.call('GetInputMute', {
-          inputName: input.inputName,
+          inputName: input.inputName as string,
         });
         audioSources.push({
-          name: input.inputName,
-          volume: mulToDb(vol.inputVolumeMul),
-          muted: mute.inputMuted,
+          name: input.inputName as string,
+          volume: mulToDb(vol.inputVolumeMul as number),
+          muted: mute.inputMuted as boolean,
         });
       } catch {
         // Not all inputs have audio
@@ -101,44 +103,44 @@ async function refreshState() {
       audioSources,
     });
   } catch (err) {
-    console.log('[OBS] Failed to refresh state:', err.message);
+    console.log('[OBS] Failed to refresh state:', (err as Error).message);
   }
 }
 
-function mulToDb(mul) {
+function mulToDb(mul: number): number {
   if (mul === 0) return -Infinity;
   return 20 * Math.log10(mul);
 }
 
-function dbToMul(db) {
+function dbToMul(db: number): number {
   return Math.pow(10, db / 20);
 }
 
-module.exports = {
+export = {
   connect,
 
-  async setScene(sceneName) {
+  async setScene(sceneName: string): Promise<void> {
     await obs.call('SetCurrentProgramScene', {
       sceneName,
     });
   },
 
-  async setInputVolume(inputName, volumeDb) {
+  async setInputVolume(inputName: string, volumeDb: number): Promise<void> {
     await obs.call('SetInputVolume', {
       inputName,
       inputVolumeMul: dbToMul(volumeDb),
     });
   },
 
-  async toggleMute(inputName) {
+  async toggleMute(inputName: string): Promise<void> {
     await obs.call('ToggleInputMute', { inputName });
   },
 
-  async toggleStream() {
+  async toggleStream(): Promise<void> {
     await obs.call('ToggleStream');
   },
 
-  async toggleRecord() {
+  async toggleRecord(): Promise<void> {
     await obs.call('ToggleRecord');
   },
 };

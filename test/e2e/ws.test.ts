@@ -1,33 +1,38 @@
-const assert = require('node:assert/strict');
-const { WebSocket } = require('ws');
+import assert = require('node:assert/strict');
+import wsModule = require('ws');
 const { createTestApp, startServer } = require('../helpers/app');
 
+const { WebSocket } = wsModule;
+type WsClient = InstanceType<typeof wsModule.WebSocket>;
+
 // Helper: open a WebSocket and wait for the first message.
-function connectAndReceive(port) {
+function connectAndReceive(port: number): Promise<{ ws: WsClient; data: { type: string; data: Record<string, unknown> } }> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://localhost:${port}`);
-    ws.once('message', (raw) => resolve({ ws, data: JSON.parse(raw) }));
+    ws.once('message', (raw: Buffer | string) => resolve({ ws, data: JSON.parse(raw.toString()) }));
     ws.once('error', reject);
   });
 }
 
 // Helper: wait for the next message on an already-open WebSocket.
-function nextMessage(ws) {
+function nextMessage(ws: WsClient): Promise<{ type: string; data: Record<string, unknown> }> {
   return new Promise((resolve, reject) => {
-    ws.once('message', (raw) => resolve(JSON.parse(raw)));
+    ws.once('message', (raw: Buffer | string) => resolve(JSON.parse(raw.toString())));
     ws.once('error', reject);
   });
 }
 
 describe('WebSocket', () => {
-  let server, state, port;
+  let server: import('http').Server;
+  let state: InstanceType<typeof import('../../src/state').State>;
+  let port: number;
 
   beforeAll(async () => {
     ({ server, state } = createTestApp());
     port = await startServer(server);
   });
 
-  afterAll(() => new Promise((resolve) => server.close(resolve)));
+  afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
   test('new client receives full state immediately on connect', async () => {
     const { ws, data } = await connectAndReceive(port);
@@ -49,8 +54,8 @@ describe('WebSocket', () => {
     ws.close();
 
     assert.equal(update.type, 'state');
-    assert.equal(update.data.obs.connected, true);
-    assert.equal(update.data.obs.currentScene, 'Camera 2');
+    assert.equal((update.data as any).obs.connected, true);
+    assert.equal((update.data as any).obs.currentScene, 'Camera 2');
   });
 
   test('broadcast reaches all connected clients', async () => {
@@ -68,8 +73,8 @@ describe('WebSocket', () => {
     c1.ws.close();
     c2.ws.close();
 
-    assert.equal(m1.data.x32.connected, true);
-    assert.equal(m2.data.x32.connected, true);
+    assert.equal((m1.data as any).x32.connected, true);
+    assert.equal((m2.data as any).x32.connected, true);
   });
 
   test('late-connecting client receives the current (updated) state', async () => {
@@ -79,6 +84,6 @@ describe('WebSocket', () => {
     const { ws, data } = await connectAndReceive(port);
     ws.close();
 
-    assert.equal(data.data.proclaim.connected, true);
+    assert.equal((data.data as any).proclaim.connected, true);
   });
 });

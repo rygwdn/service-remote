@@ -1,5 +1,7 @@
-const assert = require('node:assert/strict');
-const { merge } = require('../../src/config');
+import assert = require('node:assert/strict');
+import config = require('../../src/config');
+
+const { merge } = config;
 
 describe('config merge()', () => {
   test('returns base fields when override is empty', () => {

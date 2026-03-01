@@ -1,5 +1,7 @@
-const assert = require('node:assert/strict');
-const { State } = require('../../src/state');
+import assert = require('node:assert/strict');
+import stateModule = require('../../src/state');
+
+const { State } = stateModule;
 
 describe('State', () => {
   test('get() returns the initial shape', () => {
@@ -45,7 +47,7 @@ describe('State', () => {
     assert.equal(s.get().obs.currentScene, 'Main');
   });
 
-  test('update() emits a change event with section and full state', (done) => {
+  test('update() emits a change event with section and full state', (done: () => void) => {
     const s = new State();
     s.once('change', ({ section, state }) => {
       assert.equal(section, 'x32');

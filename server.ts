@@ -1,31 +1,33 @@
 // Must be first: extracts embedded native binaries in compiled mode.
 require('./src/native-loader');
 
-const http = require('http');
-const express = require('express');
-const path = require('path');
-const { exec } = require('child_process');
-const config = require('./src/config');
-const state = require('./src/state');
+import http = require('http');
+import express = require('express');
+import path = require('path');
+import childProcess = require('child_process');
+import config = require('./src/config');
+
+const { exec } = childProcess;
+import state = require('./src/state');
 const { startTray } = require('./src/tray');
 const { setupWebSocket } = require('./src/ws');
 const { setupRoutes } = require('./src/routes');
-const obs = require('./src/connections/obs');
-const x32 = require('./src/connections/x32');
-const proclaim = require('./src/connections/proclaim');
+import obs = require('./src/connections/obs');
+import x32 = require('./src/connections/x32');
+import proclaim = require('./src/connections/proclaim');
 
 // ── Crash / unexpected-shutdown logging ──────────────────────────────────────
 
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', (err: Error) => {
   console.error('[Server] Uncaught exception:', err);
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason) => {
+process.on('unhandledRejection', (reason: unknown) => {
   console.error('[Server] Unhandled promise rejection:', reason);
 });
 
-function shutdown(signal) {
+function shutdown(signal: string): void {
   console.log(`[Server] Received ${signal}, shutting down...`);
   server.close(() => {
     console.log('[Server] Shutdown complete');
@@ -43,7 +45,7 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function openBrowser(url) {
+function openBrowser(url: string): void {
   const cmd =
     process.platform === 'win32'  ? `start "" "${url}"` :
     process.platform === 'darwin' ? `open "${url}"` :
@@ -62,7 +64,7 @@ app.use(express.json());
 
 // In compiled mode the public/ files are baked in via scripts/embed-public.js;
 // fall back to serving from the filesystem during development.
-let embeddedPublic = {};
+let embeddedPublic: Record<string, { mimeType: string; content: Buffer }> = {};
 try { embeddedPublic = require('./src/embedded-public'); } catch (_) {}
 
 if (Object.keys(embeddedPublic).length > 0) {
