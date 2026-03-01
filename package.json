@@ -15,7 +15,6 @@
     "express": "^4.21.0",
     "node-osc": "^11.2.2",
     "obs-websocket-js": "^5.0.6",
-    "systray": "^1.0.5",
     "ws": "^8.18.0"
   },
   "devDependencies": {
