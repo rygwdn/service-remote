@@ -1,9 +1,9 @@
-const dgram = require('dgram');
-const osc = require('osc-min');
+const { Client, Server } = require('node-osc');
 const config = require('../config');
 const state = require('../state');
 
-const client = dgram.createSocket('udp4');
+let client = null;
+let server = null;
 let connected = false;
 let keepAliveInterval = null;
 let subscribeInterval = null;
@@ -22,8 +22,13 @@ function connect() {
   clearInterval(keepAliveInterval);
   clearInterval(subscribeInterval);
 
-  client.removeAllListeners('message');
-  client.on('message', handleMessage);
+  if (server) server.close();
+  if (client) client.close();
+
+  server = new Server(0, '0.0.0.0');
+  server.on('message', (msg) => handleMessage(msg));
+
+  client = new Client(config.x32.address, config.x32.port);
 
   // X32 requires /xremote every <10s to stay connected
   sendOsc('/xremote');
@@ -60,10 +65,11 @@ function channelPrefix(index) {
 }
 
 function sendOsc(address, args) {
-  const msg = args
-    ? osc.toBuffer({ address, args })
-    : osc.toBuffer({ address, args: [] });
-  client.send(msg, 0, msg.length, config.x32.port, config.x32.address);
+  if (args && args.length > 0) {
+    client.send(address, ...args.map((a) => a.value), () => {});
+  } else {
+    client.send(address, () => {});
+  }
 }
 
 // Pure function: parse an OSC address + args into a channel state patch.
@@ -89,20 +95,17 @@ function parseOscMessage(address, args) {
   return null;
 }
 
-function handleMessage(buf) {
-  let msg;
-  try {
-    msg = osc.fromBuffer(buf);
-  } catch {
-    return;
-  }
+function handleMessage(msg) {
+  // node-osc delivers messages as [address, arg1, arg2, ...]
+  const [address, ...rawArgs] = msg;
+  const args = rawArgs.map((v) => ({ value: v }));
 
   if (!connected) {
     connected = true;
     console.log('[X32] Connected');
   }
 
-  const result = parseOscMessage(msg.address, msg.args);
+  const result = parseOscMessage(address, args);
   if (result) {
     updateChannel(result.index, result.patch);
   }
