@@ -5,12 +5,7 @@
  *
  * Steps:
  *   1. Embed public/ assets into src/embedded-public.js
- *   2. Embed native binaries into src/embedded-natives.js
- *   3. Run `bun build --compile` to bundle all JS + the Bun runtime
- *
- * The systray Go binary is base64-encoded into src/embedded-natives.js at
- * step 2.  At runtime, src/native-loader.js extracts it to a per-user cache
- * directory so it is found transparently.
+ *   2. Run `bun build --compile` to bundle all JS + the Bun runtime
  */
 
 const { execSync } = require('child_process');
@@ -28,12 +23,8 @@ function run(cmd) {
 console.log('Step 1: Embedding public/ assets …');
 run('bun scripts/embed-public.js');
 
-// 2. Embed native binaries
-console.log('\nStep 2: Embedding native binaries …');
-run('bun scripts/embed-natives.js');
-
-// 3. Compile
-console.log('\nStep 3: Compiling single executable …');
+// 2. Compile
+console.log('\nStep 2: Compiling single executable …');
 fs.mkdirSync(dist, { recursive: true });
 
 const exeName = 'service-remote' + (process.platform === 'win32' ? '.exe' : '');
@@ -50,10 +41,4 @@ run(
   ].join(' ')
 );
 
-console.log(`
-Build complete → ${outfile}
-
-Embedded:  all JS modules + public/ UI assets + Bun runtime
-           + systray binary (current platform)
-At runtime: native-loader.js extracts systray binary to ~/.cache/node-systray/
-`);
+console.log(`\nBuild complete → ${outfile}`);

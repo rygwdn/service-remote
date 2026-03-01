@@ -1,6 +1,3 @@
-// Must be first: extracts embedded native binaries in compiled mode.
-require('./src/native-loader');
-
 import http = require('http');
 import express = require('express');
 import path = require('path');
