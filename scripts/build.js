@@ -8,10 +8,9 @@
  *   2. Embed native binaries into src/embedded-natives.js
  *   3. Run `bun build --compile` to bundle all JS + the Bun runtime
  *
- * The native .node addon (easymidi/midi) and the systray Go binary are
- * base64-encoded into src/embedded-natives.js at step 2.  At runtime,
- * src/native-loader.js extracts them to a per-user cache directory and
- * patches the module loader so they are found transparently.
+ * The systray Go binary is base64-encoded into src/embedded-natives.js at
+ * step 2.  At runtime, src/native-loader.js extracts it to a per-user cache
+ * directory so it is found transparently.
  */
 
 const { execSync } = require('child_process');
@@ -55,6 +54,6 @@ console.log(`
 Build complete → ${outfile}
 
 Embedded:  all JS modules + public/ UI assets + Bun runtime
-           + midi .node addon + systray binary (current platform)
-At runtime: native-loader.js extracts binaries to ~/.service-remote/natives/
+           + systray binary (current platform)
+At runtime: native-loader.js extracts systray binary to ~/.cache/node-systray/
 `);

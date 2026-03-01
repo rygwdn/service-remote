@@ -32,7 +32,12 @@ function createTestApp() {
       toggleMute: (channel) => { calls.x32.toggleMute = channel; },
     },
     proclaim: {
-      sendAction: (action) => { calls.proclaim.sendAction = action; return true; },
+      sendAction: async (action, index) => {
+        calls.proclaim.sendAction = { action, index };
+        return true;
+      },
+      getThumbUrl: (itemId, slideIndex, localRevision) => `/fake-thumb/${itemId}/${slideIndex}`,
+      getToken: () => 'test-token',
     },
   };
 

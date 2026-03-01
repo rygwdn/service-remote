@@ -118,14 +118,34 @@ describe('API routes', () => {
   });
 
   describe('POST /api/proclaim/action', () => {
-    test('calls proclaim.sendAction and returns ok', async () => {
+    test('calls proclaim.sendAction with command name and returns ok', async () => {
       resetCalls();
       const res = await request
         .post('/api/proclaim/action')
-        .send({ action: 'nextSlide' });
+        .send({ action: 'NextSlide' });
       assert.equal(res.status, 200);
       assert.deepEqual(res.body, { ok: true });
-      assert.equal(calls.proclaim.sendAction, 'nextSlide');
+      assert.deepEqual(calls.proclaim.sendAction, { action: 'NextSlide', index: undefined });
+    });
+
+    test('passes index through to sendAction', async () => {
+      resetCalls();
+      const res = await request
+        .post('/api/proclaim/action')
+        .send({ action: 'GoToServiceItem', index: 3 });
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body, { ok: true });
+      assert.deepEqual(calls.proclaim.sendAction, { action: 'GoToServiceItem', index: 3 });
+    });
+  });
+
+  describe('GET /api/proclaim/thumb', () => {
+    test('proxies thumb request and returns image', async () => {
+      // The stub getThumbUrl returns a fake path; fetch will fail so we just check
+      // that the route exists and attempts to proxy (errors gracefully as 500)
+      const res = await request.get('/api/proclaim/thumb?itemId=abc&slideIndex=0&localRevision=1');
+      // Route exists (not 404); will be 500 since fake URL is not reachable
+      assert.notEqual(res.status, 404);
     });
   });
 

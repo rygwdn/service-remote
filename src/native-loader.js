@@ -2,29 +2,14 @@
 
 /**
  * Native binary extractor — must be required before any module that uses
- * easymidi or systray.
+ * systray.
  *
- * In a `bun build --compile` binary the native .node addon and the systray
- * Go binary are embedded as base64 inside src/embedded-natives.js.  This
- * module extracts them to a per-user cache directory on first run and then
- * patches Node/Bun's module machinery so the rest of the code loads them
- * transparently from there.
+ * In a `bun build --compile` binary the systray Go binary is embedded as
+ * base64 inside src/embedded-natives.js.  This module extracts it to a
+ * per-user cache directory on first run so systray finds it transparently.
  *
  * When embedded-natives.js is absent (normal `bun dev` / `bun start`) this
  * module is a no-op: native modules are resolved from node_modules/ as usual.
- *
- * ── How the easymidi intercept works ────────────────────────────────────────
- *
- * pkg-prebuilds (used by @julusian/midi) locates the .node addon by calling
- * fs.existsSync / fs.statSync on a candidate path constructed from __dirname
- * (the build-machine path baked into the bundle).  In the compiled binary
- * that path no longer exists on disk, so we:
- *
- *   1. Patch fs.existsSync + fs.statSync to return truthy results for any
- *      path whose basename matches the embedded addon filename.
- *   2. Patch Module._extensions['.node'] so that when require() tries to
- *      dlopen that (non-existent) original path it loads our extracted copy
- *      instead.
  *
  * ── How the systray intercept works ─────────────────────────────────────────
  *
@@ -34,10 +19,9 @@
  * the existing code finds it without any patching.
  */
 
-const Module = require('module');
-const path   = require('path');
-const os     = require('os');
-const fs     = require('fs');
+const path = require('path');
+const os   = require('os');
+const fs   = require('fs');
 
 // ── load embedded natives ────────────────────────────────────────────────────
 
@@ -49,60 +33,7 @@ try {
   return;
 }
 
-if (!natives || (!natives.midi && !natives.systray)) return;
-
-const CACHE_DIR = path.join(os.homedir(), '.service-remote', 'natives');
-
-// ── midi: extract .node addon ────────────────────────────────────────────────
-
-if (natives.midi) {
-  const { filename, content } = natives.midi;
-  const extractedPath = path.join(CACHE_DIR, filename);
-
-  try {
-    fs.mkdirSync(CACHE_DIR, { recursive: true });
-    if (!fs.existsSync(extractedPath)) {
-      fs.writeFileSync(extractedPath, content);
-    }
-  } catch (err) {
-    console.warn('[native-loader] Could not extract midi addon:', err.message);
-    // If extraction fails the graceful fallback in proclaim.js still applies.
-    return;
-  }
-
-  // 1. Patch fs so pkg-prebuilds' candidate-path checks succeed.
-  //    We only intercept paths whose final component matches the addon filename
-  //    to minimise side-effects on the rest of the filesystem code.
-  const realExistsSync = fs.existsSync.bind(fs);
-  const realStatSync   = fs.statSync.bind(fs);
-
-  fs.existsSync = function patchedExistsSync(p, ...rest) {
-    if (typeof p === 'string' && path.basename(p) === filename) {
-      return realExistsSync(extractedPath);
-    }
-    return realExistsSync(p, ...rest);
-  };
-
-  fs.statSync = function patchedStatSync(p, ...rest) {
-    if (typeof p === 'string' && path.basename(p) === filename) {
-      return realStatSync(extractedPath, ...rest);
-    }
-    return realStatSync(p, ...rest);
-  };
-
-  // 2. Patch Module._extensions['.node'] so the actual dlopen call loads
-  //    our extracted file regardless of the (non-existent) source path.
-  const realNodeExt = Module._extensions['.node'] || function (mod, fp) {
-    process.dlopen(mod, path.resolve(fp));
-  };
-
-  Module._extensions['.node'] = function patchedNodeExt(mod, fp) {
-    if (path.basename(fp) === filename) {
-      fp = extractedPath;
-    }
-    realNodeExt(mod, fp);
-  };
-}
+if (!natives || !natives.systray) return;
 
 // ── systray: pre-extract Go binary to the expected cache location ─────────────
 

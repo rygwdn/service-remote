@@ -1,62 +1,242 @@
 const config = require('../config');
 const state = require('../state');
 
-let midi = null;
-let output = null;
+let authToken = null;
+let pollTimer = null;
+let reconnectTimer = null;
+let presentationCache = null;
+let presentationLocalRevision = 0;
+let statusChangedAbortController = null;
 
-function connect() {
+function baseUrl() {
+  return `http://${config.proclaim.host}:${config.proclaim.port}`;
+}
+
+function getToken() {
+  return authToken;
+}
+
+function getThumbUrl(itemId, slideIndex, localRevision) {
+  return `${baseUrl()}/presentations/slide/thumbnail?itemId=${itemId}&slideIndex=${slideIndex}&localRevision=${localRevision}`;
+}
+
+async function authenticate() {
+  const res = await fetch(`${baseUrl()}/appCommand/authenticate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ Password: config.proclaim.password }),
+  });
+  if (!res.ok) {
+    throw new Error(`Proclaim auth failed: ${res.status}`);
+  }
+  const data = await res.json();
+  if (!data.token) {
+    throw new Error('Proclaim auth: no token in response');
+  }
+  return data.token;
+}
+
+async function sendAction(commandName, index) {
+  if (!authToken) {
+    console.log('[Proclaim] Not authenticated');
+    return false;
+  }
+
+  let url = `${baseUrl()}/appCommand/perform?appCommandName=${encodeURIComponent(commandName)}`;
+  if (index !== undefined && index !== null) {
+    url += `&index=${encodeURIComponent(index)}`;
+  }
+
+  const res = await fetch(url, {
+    headers: { ProclaimAuthToken: authToken },
+  });
+
+  if (res.status === 401) {
+    console.log('[Proclaim] sendAction got 401, re-authenticating');
+    authToken = null;
+    scheduleReconnect();
+    return false;
+  }
+
+  if (!res.ok) {
+    console.log(`[Proclaim] sendAction failed: ${res.status}`);
+    return false;
+  }
+
+  console.log(`[Proclaim] Sent: ${commandName}${index !== undefined ? ` index=${index}` : ''}`);
+  return true;
+}
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(pollStatus, config.proclaim.pollInterval);
+  pollStatus();
+}
+
+async function pollStatus() {
   try {
-    // easymidi requires native MIDI support — gracefully handle if unavailable
-    midi = require('easymidi');
-    output = new midi.Output(config.proclaim.midiPortName, true);
-    console.log(`[Proclaim] Virtual MIDI port created: "${config.proclaim.midiPortName}"`);
-    state.update('proclaim', { connected: true });
+    const res = await fetch(`${baseUrl()}/onair/session`, {
+      headers: { ProclaimAuthToken: authToken },
+    });
+
+    if (res.status === 401) {
+      console.log('[Proclaim] pollStatus got 401, re-authenticating');
+      authToken = null;
+      clearInterval(pollTimer);
+      pollTimer = null;
+      scheduleReconnect();
+      return;
+    }
+
+    if (!res.ok) {
+      console.log(`[Proclaim] pollStatus error: ${res.status}`);
+      return;
+    }
+
+    const text = await res.text();
+    if (!text || text.trim() === '' || text.trim() === 'null') {
+      state.update('proclaim', {
+        connected: true,
+        onAir: false,
+        currentItemId: null,
+        currentItemTitle: null,
+        currentItemType: null,
+        slideIndex: null,
+        serviceItems: [],
+      });
+      return;
+    }
+
+    state.update('proclaim', { connected: true, onAir: true });
+    fetchDetailedStatus();
   } catch (err) {
-    console.log('[Proclaim] MIDI not available:', err.message);
-    console.log('[Proclaim] Install system MIDI support or run on a machine with MIDI capability');
+    console.log('[Proclaim] pollStatus network error:', err.message);
     state.update('proclaim', { connected: false });
+    clearInterval(pollTimer);
+    pollTimer = null;
+    scheduleReconnect();
   }
 }
 
-function sendAction(actionName) {
-  const action = config.proclaim.actions[actionName];
-  if (!action) {
-    console.log(`[Proclaim] Unknown action: ${actionName}`);
-    return false;
+const EXCLUDED_KINDS = new Set(['Grouping', 'StageDirectionCue']);
+
+async function fetchDetailedStatus() {
+  try {
+    const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
+      headers: { ProclaimAuthToken: authToken },
+    });
+    if (presRes.ok) {
+      const presData = await presRes.json();
+      presentationCache = presData;
+    }
+  } catch (_) {
+    // best-effort
   }
 
-  if (!output) {
-    console.log('[Proclaim] MIDI not connected');
-    return false;
+  // Start/restart the long-poll loop for statusChanged
+  if (statusChangedAbortController) {
+    statusChangedAbortController.abort();
   }
+  statusChangedAbortController = new AbortController();
+  pollStatusChanged(statusChangedAbortController.signal);
+}
 
-  if (action.type === 'cc') {
-    output.send('cc', {
-      controller: action.controller,
-      value: action.value,
-      channel: action.channel,
-    });
-  } else if (action.type === 'noteon') {
-    output.send('noteon', {
-      note: action.note,
-      velocity: action.velocity || 127,
-      channel: action.channel,
-    });
-    // Send note off after a short delay
-    setTimeout(() => {
-      output.send('noteoff', {
-        note: action.note,
-        velocity: 0,
-        channel: action.channel,
+async function pollStatusChanged(signal) {
+  while (!signal.aborted) {
+    try {
+      const res = await fetch(
+        `${baseUrl()}/onair/statusChanged?localrevision=${presentationLocalRevision}&step=250`,
+        {
+          headers: { ProclaimAuthToken: authToken },
+          signal,
+        }
+      );
+
+      if (signal.aborted) break;
+
+      if (!res.ok) {
+        // Stop on auth failure; outer pollStatus handles reconnect
+        break;
+      }
+
+      const data = await res.json();
+      if (data && data.localRevision !== undefined) {
+        presentationLocalRevision = data.localRevision;
+      }
+
+      const status = data && data.status;
+      if (!status) continue;
+
+      // If presentation changed, refresh the presentation cache
+      if (
+        status.presentationId &&
+        presentationCache &&
+        presentationCache.presentationId !== status.presentationId
+      ) {
+        try {
+          const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
+            headers: { ProclaimAuthToken: authToken },
+          });
+          if (presRes.ok) {
+            presentationCache = await presRes.json();
+          }
+        } catch (_) {
+          // best-effort
+        }
+      }
+
+      const serviceItems = presentationCache && presentationCache.serviceItems
+        ? presentationCache.serviceItems.filter((item) => !EXCLUDED_KINDS.has(item.kind))
+        : [];
+
+      const currentItem = serviceItems.find((item) => item.id === status.itemId);
+
+      state.update('proclaim', {
+        currentItemId: status.itemId || null,
+        currentItemTitle: currentItem ? currentItem.title : null,
+        currentItemType: currentItem ? currentItem.kind : null,
+        slideIndex: status.slideIndex !== undefined ? status.slideIndex : null,
+        serviceItems: serviceItems.map((item) => ({
+          id: item.id,
+          title: item.title,
+          kind: item.kind,
+          slideCount: item.slides ? item.slides.length : 0,
+        })),
       });
-    }, 100);
+    } catch (err) {
+      if (signal.aborted) break;
+      // best-effort: silently ignore errors in status long-poll
+      await new Promise((r) => setTimeout(r, 2000));
+    }
   }
+}
 
-  console.log(`[Proclaim] Sent: ${actionName}`);
-  return true;
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect();
+  }, 5000);
+}
+
+async function connect() {
+  try {
+    authToken = await authenticate();
+    console.log('[Proclaim] Authenticated');
+    state.update('proclaim', { connected: true });
+    startPolling();
+  } catch (err) {
+    console.log('[Proclaim] Connection failed:', err.message);
+    state.update('proclaim', { connected: false });
+    scheduleReconnect();
+  }
 }
 
 module.exports = {
   connect,
   sendAction,
+  getThumbUrl,
+  getToken,
+  _authenticate: authenticate,
+  _pollStatus: pollStatus,
 };

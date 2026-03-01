@@ -11,6 +11,12 @@ describe('State', () => {
     assert.equal(data.x32.connected, false);
     assert.deepEqual(data.x32.channels, []);
     assert.equal(data.proclaim.connected, false);
+    assert.equal(data.proclaim.onAir, false);
+    assert.equal(data.proclaim.currentItemId, null);
+    assert.equal(data.proclaim.currentItemTitle, null);
+    assert.equal(data.proclaim.currentItemType, null);
+    assert.equal(data.proclaim.slideIndex, null);
+    assert.deepEqual(data.proclaim.serviceItems, []);
   });
 
   test('update() merges a patch into the named section', () => {

@@ -19,12 +19,9 @@
     ]
   },
   "proclaim": {
-    "midiPortName": "Service Remote",
-    "actions": {
-      "nextSlide": { "type": "cc", "channel": 0, "controller": 1, "value": 127 },
-      "prevSlide": { "type": "cc", "channel": 0, "controller": 2, "value": 127 },
-      "nextItem": { "type": "cc", "channel": 0, "controller": 3, "value": 127 },
-      "prevItem": { "type": "cc", "channel": 0, "controller": 4, "value": 127 }
-    }
+    "host": "127.0.0.1",
+    "port": 52195,
+    "password": "proclaim",
+    "pollInterval": 10000
   }
 }

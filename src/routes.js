@@ -66,9 +66,25 @@ function setupRoutes(app, { obs, x32, proclaim }, stateOverride) {
   });
 
   // --- Proclaim ---
-  app.post('/api/proclaim/action', (req, res) => {
-    const ok = proclaim.sendAction(req.body.action);
-    res.json({ ok });
+  app.post('/api/proclaim/action', async (req, res) => {
+    try {
+      const ok = await proclaim.sendAction(req.body.action, req.body.index);
+      res.json({ ok });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/proclaim/thumb', async (req, res) => {
+    try {
+      const url = proclaim.getThumbUrl(req.query.itemId, req.query.slideIndex, req.query.localRevision);
+      const r = await fetch(url, { headers: { ProclaimAuthToken: proclaim.getToken() } });
+      if (!r.ok) return res.status(r.status).end();
+      res.set('Content-Type', 'image/png');
+      res.send(Buffer.from(await r.arrayBuffer()));
+    } catch (err) {
+      res.status(500).end();
+    }
   });
 
   // --- State (for initial page load) ---

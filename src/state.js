@@ -18,6 +18,12 @@ class State extends EventEmitter {
       },
       proclaim: {
         connected: false,
+        onAir: false,
+        currentItemId: null,
+        currentItemTitle: null,
+        currentItemType: null,
+        slideIndex: null,
+        serviceItems: [],
       },
     };
   }

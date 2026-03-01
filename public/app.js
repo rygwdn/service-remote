@@ -45,8 +45,10 @@ function post(url, body) {
 }
 
 // --- Actions ---
-function sendAction(action) {
-  post('/api/proclaim/action', { action });
+function sendAction(action, index) {
+  const body = { action };
+  if (index !== undefined) body.index = index;
+  post('/api/proclaim/action', body);
 }
 
 function setScene(scene) {
@@ -86,6 +88,7 @@ function renderState(s) {
 
   renderObs(s.obs);
   renderX32(s.x32);
+  renderProclaim(s.proclaim);
 }
 
 function setDot(id, connected) {
@@ -165,6 +168,93 @@ function handleFader(el, channel) {
   faderDebounce[channel] = setTimeout(() => {
     setX32Fader(channel, parseFloat(el.value));
   }, 50);
+}
+
+// --- Proclaim rendering ---
+let thumbRevision = 0;
+
+function thumbUrl(itemId, slideIndex) {
+  return `/api/proclaim/thumb?itemId=${encodeURIComponent(itemId)}&slideIndex=${encodeURIComponent(slideIndex)}&localRevision=${thumbRevision}`;
+}
+
+function setThumb(el, itemId, slideIndex) {
+  if (itemId === null || itemId === undefined || slideIndex === null || slideIndex === undefined) {
+    el.innerHTML = '';
+    return;
+  }
+  const img = document.createElement('img');
+  img.src = thumbUrl(itemId, slideIndex);
+  // Retry up to 3 times with 300ms delay if 202 (still rendering)
+  let retries = 0;
+  function tryLoad() {
+    img.onerror = () => {
+      if (retries++ < 3) setTimeout(tryLoad, 300);
+    };
+  }
+  tryLoad();
+  el.innerHTML = '';
+  el.appendChild(img);
+}
+
+function renderProclaim(p) {
+  const nowPlaying = document.getElementById('proclaim-now-playing');
+  const itemsEl = document.getElementById('proclaim-items');
+
+  if (!p.onAir || !p.currentItemId) {
+    nowPlaying.textContent = p.connected ? 'Not on air' : 'Disconnected';
+    document.getElementById('proclaim-thumb-prev').innerHTML = '';
+    document.getElementById('proclaim-thumb-current').innerHTML = '';
+    document.getElementById('proclaim-thumb-next').innerHTML = '';
+    itemsEl.innerHTML = '';
+    return;
+  }
+
+  // Now playing
+  const typeLabel = p.currentItemType ? `<span class="item-type">${esc(p.currentItemType)}</span> ` : '';
+  const slideInfo = p.slideIndex !== null ? ` &mdash; Slide ${p.slideIndex + 1}` : '';
+  nowPlaying.innerHTML = `${typeLabel}<strong>${esc(p.currentItemTitle || '')}</strong>${slideInfo}`;
+
+  // Thumbnails: find current item's slide neighbours
+  const items = p.serviceItems || [];
+  const currentItemIdx = items.findIndex((item) => item.id === p.currentItemId);
+  const currentItem = items[currentItemIdx];
+  const slideIndex = p.slideIndex !== null ? p.slideIndex : 0;
+
+  let prevItemId = null, prevSlideIndex = null;
+  let nextItemId = null, nextSlideIndex = null;
+
+  if (currentItem) {
+    if (slideIndex > 0) {
+      prevItemId = p.currentItemId;
+      prevSlideIndex = slideIndex - 1;
+    } else if (currentItemIdx > 0) {
+      const prevItem = items[currentItemIdx - 1];
+      prevItemId = prevItem.id;
+      prevSlideIndex = Math.max(0, (prevItem.slideCount || 1) - 1);
+    }
+
+    const slideCount = currentItem.slideCount || 1;
+    if (slideIndex < slideCount - 1) {
+      nextItemId = p.currentItemId;
+      nextSlideIndex = slideIndex + 1;
+    } else if (currentItemIdx < items.length - 1) {
+      nextItemId = items[currentItemIdx + 1].id;
+      nextSlideIndex = 0;
+    }
+  }
+
+  setThumb(document.getElementById('proclaim-thumb-prev'), prevItemId, prevSlideIndex);
+  setThumb(document.getElementById('proclaim-thumb-current'), p.currentItemId, slideIndex);
+  setThumb(document.getElementById('proclaim-thumb-next'), nextItemId, nextSlideIndex);
+
+  // Service item list — find position in full (unfiltered) list for GoToServiceItem
+  // We pass 1-based index into the filtered list (Proclaim uses 1-based)
+  itemsEl.innerHTML = items
+    .map((item, i) => {
+      const isActive = item.id === p.currentItemId;
+      return `<button class="item-btn${isActive ? ' active' : ''}" onclick="sendAction('GoToServiceItem', ${i + 1})">${esc(item.title || item.kind)}</button>`;
+    })
+    .join('');
 }
 
 // --- Utility ---

@@ -151,11 +151,93 @@ main {
 }
 
 /* Proclaim */
+.slide-strip {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  justify-content: center;
+}
+
+.slide-thumb {
+  flex: 1;
+  max-width: 33%;
+  aspect-ratio: 16 / 9;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  overflow: hidden;
+  opacity: 0.5;
+}
+
+.slide-thumb.active {
+  opacity: 1;
+  border-color: var(--primary);
+}
+
+.slide-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.proclaim-now-playing {
+  text-align: center;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-dim);
+  min-height: 20px;
+}
+
+.proclaim-now-playing .item-type {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+
+.proclaim-now-playing strong {
+  color: var(--text);
+}
+
 .proclaim-controls {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding-top: 20px;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.proclaim-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 40vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.item-btn {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.item-btn:active {
+  background: var(--surface-light);
+}
+
+.item-btn.active {
+  background: var(--accent);
+  border-color: var(--primary);
+  font-weight: 600;
 }
 
 /* OBS */
