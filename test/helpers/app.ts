@@ -52,6 +52,8 @@ function createTestApp(): TestApp {
       setFader: (channel: number, value: number, _type?: 'ch' | 'bus') => { calls.x32.setFader = { channel, value }; },
       toggleMute: (channel: number, _type?: 'ch' | 'bus') => { calls.x32.toggleMute = channel; },
       parseOscMessage: () => null,
+      startMeterUpdates: () => { calls.x32.startMeterUpdates = (calls.x32.startMeterUpdates as number || 0) + 1; },
+      stopMeterUpdates: () => { calls.x32.stopMeterUpdates = (calls.x32.stopMeterUpdates as number || 0) + 1; },
     },
     proclaim: {
       connect: async () => { calls.proclaim.connect = (calls.proclaim.connect as number || 0) as number + 1; },
@@ -74,7 +76,7 @@ function createTestApp(): TestApp {
   setupRoutes(app, stubs, state, testConfigPath);
 
   const server = http.createServer(app);
-  setupWebSocket(server, state);
+  setupWebSocket(server, state, stubs.x32);
 
   return { app, server, state, stubs, calls };
 }

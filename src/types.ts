@@ -10,6 +10,7 @@ export interface Channel {
   label: string;
   fader: number;
   muted: boolean;
+  level: number; // Linear peak level 0.0–1.0 (updated when a WS client is connected)
 }
 
 export interface ServiceItem {
@@ -87,6 +88,8 @@ export interface X32Connection {
   setFader(channelIndex: number, value: number, type?: 'ch' | 'bus'): void;
   toggleMute(channelIndex: number, type?: 'ch' | 'bus'): void;
   parseOscMessage(address: string, args: Array<{ value: unknown }>): { index: number; type: 'ch' | 'bus'; patch: Partial<Channel> } | null;
+  startMeterUpdates(): void;
+  stopMeterUpdates(): void;
 }
 
 export interface ProclaimConnection {

@@ -12,6 +12,8 @@ let connected = false;
 let keepAliveInterval: ReturnType<typeof setInterval> | null = null;
 let subscribeInterval: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let meterInterval: ReturnType<typeof setInterval> | null = null;
+let metersActive = false;
 
 interface OscArg {
   value: unknown;
@@ -34,6 +36,7 @@ function connect(): void {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (keepAliveInterval) clearInterval(keepAliveInterval);
   if (subscribeInterval) clearInterval(subscribeInterval);
+  if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
 
   if (server) server.close();
   if (client) client.close();
@@ -58,6 +61,12 @@ function connect(): void {
   }
   for (let i = 1; i <= BUS_COUNT; i++) {
     sendOsc(`${channelPrefix(i, 'bus')}/config/name`);
+  }
+
+  // Restart meter updates immediately if they were active before reconnect
+  if (metersActive) {
+    requestMeterUpdates();
+    meterInterval = setInterval(requestMeterUpdates, 1500);
   }
 
   // If we get responses, we're connected
@@ -86,6 +95,53 @@ function sendOsc(address: string, args?: OscArg[]): void {
     client.send(address, ...args.map((a) => a.value as number | string), () => {});
   } else {
     client.send(address, () => {});
+  }
+}
+
+// Parse a meter blob into an array of float32 values.
+// X32 blob format: 4-byte big-endian uint32 count, followed by count × 4-byte big-endian float32.
+// Values are linear peak level 0.0–1.0 (1.0 = 0 dBFS).
+function parseMeterBlob(blob: Buffer): number[] {
+  if (blob.length < 4) return [];
+  const count = blob.readUInt32BE(0);
+  const values: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const offset = 4 + i * 4;
+    if (offset + 4 > blob.length) break;
+    values.push(blob.readFloatBE(offset));
+  }
+  return values;
+}
+
+// Send /meters subscription requests to the X32 for input channels and mix buses.
+// The X32 responds with /meters/0 and /meters/2 blobs every 100 ms for the given duration.
+// We renew every 1.5 s to keep the stream active (duration = 20 × 100 ms = 2 s).
+function requestMeterUpdates(): void {
+  // Bank 0: input channel pre-fader levels (positions 0–31 = ch 1–32)
+  sendOsc('/meters', [{ value: 0 }, { value: 20 }]);
+  // Bank 2: mix bus output levels (positions 0–15 = bus 1–16)
+  sendOsc('/meters', [{ value: 2 }, { value: 20 }]);
+}
+
+function handleMeterMessage(address: string, args: OscArg[]): void {
+  const blob = args[0]?.value;
+  if (!Buffer.isBuffer(blob)) return;
+  const values = parseMeterBlob(blob);
+  let updated = false;
+  for (const ch of channels) {
+    let level: number | undefined;
+    if (address === '/meters/0' && ch.type === 'ch') {
+      level = values[ch.index - 1]; // ch.index is 1-based; bank 0 pos 0 = ch 1
+    } else if (address === '/meters/2' && ch.type === 'bus') {
+      level = values[ch.index - 1]; // bank 2 pos 0 = bus 1
+    }
+    if (level !== undefined && isFinite(level)) {
+      ch.level = level;
+      updated = true;
+    }
+  }
+  if (updated) {
+    state.update('x32', { connected: true, channels: [...channels] });
   }
 }
 
@@ -141,6 +197,11 @@ function handleMessage(msg: unknown[]): void {
     logger.log('[X32] Connected');
   }
 
+  if (address === '/meters/0' || address === '/meters/2') {
+    handleMeterMessage(address, args);
+    return;
+  }
+
   const result = parseOscMessage(address, args);
   if (result) {
     updateChannel(result.index, result.type, result.patch);
@@ -152,7 +213,7 @@ function updateChannel(index: number, type: 'ch' | 'bus', patch: Partial<Channel
   if (!ch) {
     // Only create a new channel entry when a name is received (auto-discovery)
     if (!patch.label) return;
-    ch = { index, type, label: patch.label, fader: 0, muted: false };
+    ch = { index, type, label: patch.label, fader: 0, muted: false, level: 0 };
     channels.push(ch);
     channels.sort((a, b) => {
       if (a.type !== b.type) return a.type === 'ch' ? -1 : 1;
@@ -185,16 +246,32 @@ function subscribeToChanges(): void {
 function disconnect(): void {
   if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
   if (subscribeInterval) { clearInterval(subscribeInterval); subscribeInterval = null; }
+  if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   if (server) { server.close(); server = null; }
   if (client) { client.close(); client = null; }
   connected = false;
+  metersActive = false;
 }
 
 export = {
   parseOscMessage,
+  parseMeterBlob,
   connect,
   disconnect,
+
+  startMeterUpdates(): void {
+    metersActive = true;
+    if (!connected) return;
+    requestMeterUpdates();
+    if (meterInterval) clearInterval(meterInterval);
+    meterInterval = setInterval(requestMeterUpdates, 1500);
+  },
+
+  stopMeterUpdates(): void {
+    metersActive = false;
+    if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
+  },
 
   setFader(channelIndex: number, value: number, type: 'ch' | 'bus' = 'ch'): void {
     const clamped = Math.max(0, Math.min(1, value));
