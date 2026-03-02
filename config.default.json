@@ -9,15 +9,7 @@
   },
   "x32": {
     "address": "192.168.1.100",
-    "port": 10023,
-    "channels": [
-      { "index": 1, "label": "Vocal 1" },
-      { "index": 2, "label": "Vocal 2" },
-      { "index": 3, "label": "Guitar" },
-      { "index": 4, "label": "Keys" },
-      { "index": 5, "label": "Bass" },
-      { "index": 6, "label": "Drums" }
-    ]
+    "port": 10023
   },
   "proclaim": {
     "host": "127.0.0.1",

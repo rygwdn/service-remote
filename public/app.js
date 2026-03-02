@@ -75,12 +75,12 @@ function toggleRecord() {
   post('/api/obs/record', {});
 }
 
-function setX32Fader(channel, value) {
-  post('/api/x32/fader', { channel, value });
+function setX32Fader(channel, type, value) {
+  post('/api/x32/fader', { channel, type, value });
 }
 
-function toggleX32Mute(channel) {
-  post('/api/x32/mute', { channel });
+function toggleX32Mute(channel, type) {
+  post('/api/x32/mute', { channel, type });
 }
 
 // --- Render state ---
@@ -139,6 +139,10 @@ function renderObs(obs) {
 // --- X32 rendering ---
 let faderTouched = {};
 
+function chKey(ch) {
+  return `${ch.type}/${ch.index}`;
+}
+
 function renderX32(x32) {
   const grid = document.getElementById('x32-channels');
   grid.innerHTML = x32.channels
@@ -150,13 +154,14 @@ function renderX32(x32) {
         <input type="range" min="0" max="1" step="0.005"
           value="${ch.fader}"
           data-ch="${ch.index}"
-          oninput="handleFader(this, ${ch.index})"
-          ontouchstart="faderTouched[${ch.index}]=true"
-          ontouchend="setTimeout(()=>faderTouched[${ch.index}]=false, 500)"
-          onmousedown="faderTouched[${ch.index}]=true"
-          onmouseup="setTimeout(()=>faderTouched[${ch.index}]=false, 500)">
+          data-type="${ch.type}"
+          oninput="handleFader(this, ${ch.index}, '${ch.type}')"
+          ontouchstart="faderTouched['${chKey(ch)}']=true"
+          ontouchend="setTimeout(()=>faderTouched['${chKey(ch)}']=false, 500)"
+          onmousedown="faderTouched['${chKey(ch)}']=true"
+          onmouseup="setTimeout(()=>faderTouched['${chKey(ch)}']=false, 500)">
       </div>
-      <button class="ch-mute${ch.muted ? ' muted' : ''}" onclick="toggleX32Mute(${ch.index})">
+      <button class="ch-mute${ch.muted ? ' muted' : ''}" onclick="toggleX32Mute(${ch.index}, '${ch.type}')">
         ${ch.muted ? 'MUTED' : 'ON'}
       </button>
     </div>`
@@ -168,10 +173,11 @@ function renderX32(x32) {
 }
 
 let faderDebounce = {};
-function handleFader(el, channel) {
-  clearTimeout(faderDebounce[channel]);
-  faderDebounce[channel] = setTimeout(() => {
-    setX32Fader(channel, parseFloat(el.value));
+function handleFader(el, channel, type) {
+  const key = `${type}/${channel}`;
+  clearTimeout(faderDebounce[key]);
+  faderDebounce[key] = setTimeout(() => {
+    setX32Fader(channel, type, parseFloat(el.value));
   }, 50);
 }
 
@@ -400,36 +406,6 @@ function populateConfigForm(cfg) {
   document.getElementById('cfg-proclaim-port').value = cfg.proclaim.port || '';
   document.getElementById('cfg-proclaim-password').value = cfg.proclaim.password || '';
   document.getElementById('cfg-proclaim-poll-interval').value = cfg.proclaim.pollInterval || 1000;
-  renderX32ChannelEditor(cfg.x32.channels || []);
-}
-
-function renderX32ChannelEditor(channels) {
-  const container = document.getElementById('cfg-x32-channels');
-  container.innerHTML = channels.map((ch, i) => `
-    <div class="channel-row">
-      <input type="number" class="ch-index-input" value="${ch.index}" min="1" max="32" data-i="${i}" placeholder="#" oninput="updateX32Channel(${i}, 'index', parseInt(this.value))">
-      <input type="text" class="ch-label-input" value="${esc(ch.label)}" data-i="${i}" placeholder="Label" oninput="updateX32Channel(${i}, 'label', this.value)">
-      <button class="btn" onclick="removeX32Channel(${i})">&#10005;</button>
-    </div>
-  `).join('');
-}
-
-function updateX32Channel(i, key, value) {
-  if (!currentConfig) return;
-  currentConfig.x32.channels[i][key] = value;
-}
-
-function addX32Channel() {
-  if (!currentConfig) return;
-  const maxIndex = currentConfig.x32.channels.reduce((m, ch) => Math.max(m, ch.index), 0);
-  currentConfig.x32.channels.push({ index: maxIndex + 1, label: '' });
-  renderX32ChannelEditor(currentConfig.x32.channels);
-}
-
-function removeX32Channel(i) {
-  if (!currentConfig) return;
-  currentConfig.x32.channels.splice(i, 1);
-  renderX32ChannelEditor(currentConfig.x32.channels);
 }
 
 async function saveConfig() {
@@ -445,7 +421,6 @@ async function saveConfig() {
       x32: {
         address: document.getElementById('cfg-x32-address').value.trim(),
         port: parseInt(document.getElementById('cfg-x32-port').value) || 10023,
-        channels: currentConfig ? currentConfig.x32.channels : [],
       },
       proclaim: {
         host: document.getElementById('cfg-proclaim-host').value.trim(),

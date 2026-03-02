@@ -49,8 +49,8 @@ function createTestApp(): TestApp {
     x32: {
       connect: () => { calls.x32.connect = (calls.x32.connect as number || 0) as number + 1; },
       disconnect: () => { calls.x32.disconnect = (calls.x32.disconnect as number || 0) as number + 1; },
-      setFader: (channel: number, value: number) => { calls.x32.setFader = { channel, value }; },
-      toggleMute: (channel: number) => { calls.x32.toggleMute = channel; },
+      setFader: (channel: number, value: number, _type?: 'ch' | 'bus') => { calls.x32.setFader = { channel, value }; },
+      toggleMute: (channel: number, _type?: 'ch' | 'bus') => { calls.x32.toggleMute = channel; },
       parseOscMessage: () => null,
     },
     proclaim: {
