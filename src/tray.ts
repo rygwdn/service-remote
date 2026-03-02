@@ -2,6 +2,7 @@
 
 import childProcess = require('child_process');
 import path = require('path');
+import logger = require('./logger');
 import type { ChangeEvent } from './types';
 
 const { spawn, exec } = childProcess;
@@ -18,7 +19,7 @@ function startTray(port: number, state: { on: (event: 'change', listener: (ev: C
     stdio: ['pipe', 'pipe', 'inherit'],
   });
 
-  child.on('error', (err: Error) => console.warn('[Tray] failed to start PowerShell:', err.message));
+  child.on('error', (err: Error) => logger.warn('[Tray] failed to start PowerShell:', err.message));
 
   // Parse newline-delimited JSON events from the tray process
   let buf = '';

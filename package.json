@@ -10,7 +10,8 @@
     "test:unit": "bun test test/unit",
     "test:e2e": "bun test test/e2e",
     "build": "bun scripts/build.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "bun scripts/check-no-console.ts"
   },
   "dependencies": {
     "express": "^4.21.0",
