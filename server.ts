@@ -3,6 +3,7 @@ import express = require('express');
 import path = require('path');
 import childProcess = require('child_process');
 import config = require('./src/config');
+import logger = require('./src/logger');
 
 const { exec } = childProcess;
 import state = require('./src/state');
@@ -16,23 +17,23 @@ import proclaim = require('./src/connections/proclaim');
 // ── Crash / unexpected-shutdown logging ──────────────────────────────────────
 
 process.on('uncaughtException', (err: Error) => {
-  console.error('[Server] Uncaught exception:', err);
+  logger.error('[Server] Uncaught exception:', err);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason: unknown) => {
-  console.error('[Server] Unhandled promise rejection:', reason);
+  logger.error('[Server] Unhandled promise rejection:', reason);
 });
 
 function shutdown(signal: string): void {
-  console.log(`[Server] Received ${signal}, shutting down...`);
+  logger.log(`[Server] Received ${signal}, shutting down...`);
   server.close(() => {
-    console.log('[Server] Shutdown complete');
+    logger.log('[Server] Shutdown complete');
     process.exit(0);
   });
   // Force-exit if active connections prevent a clean close within 5 s
   setTimeout(() => {
-    console.warn('[Server] Forced exit after shutdown timeout');
+    logger.warn('[Server] Forced exit after shutdown timeout');
     process.exit(1);
   }, 5000).unref();
 }
@@ -48,7 +49,7 @@ function openBrowser(url: string): void {
     process.platform === 'darwin' ? `open "${url}"` :
     `xdg-open "${url}"`;
   exec(cmd, (err) => {
-    if (err) console.warn('[Server] Could not open browser:', err.message);
+    if (err) logger.warn('[Server] Could not open browser:', err.message);
   });
 }
 
@@ -79,6 +80,10 @@ if (Object.keys(embeddedPublic).length > 0) {
 setupRoutes(app, { obs, x32, proclaim });
 setupWebSocket(server, state);
 
+// Set up file logging next to config.json
+const logFile = path.join(path.dirname(config.userConfigPath), 'service-remote.log');
+logger.setLogFile(logFile);
+
 obs.connect();
 x32.connect();
 proclaim.connect();
@@ -86,7 +91,7 @@ proclaim.connect();
 const port = config.server.port;
 const url = `http://localhost:${port}`;
 server.listen(port, () => {
-  console.log(`[Server] Service Remote running at ${url}`);
+  logger.log(`[Server] Service Remote running at ${url}`);
   openBrowser(url);
   startTray(port, state);
 });

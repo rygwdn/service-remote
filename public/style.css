@@ -658,3 +658,36 @@ main {
   gap: 12px;
   padding: 8px 0 16px;
 }
+
+.log-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.log-output {
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 11px;
+  font-family: monospace;
+  line-height: 1.5;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-dim);
+}
+
+.log-output .log-error {
+  color: var(--red);
+}
+
+.log-output .log-warn {
+  color: var(--yellow);
+}
+
+.log-output .log-info {
+  color: var(--text-dim);
+}

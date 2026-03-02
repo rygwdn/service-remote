@@ -1,5 +1,6 @@
 import config = require('../config');
 import state = require('../state');
+import logger = require('../logger');
 import type { ServiceItem } from '../types';
 
 let authToken: string | null = null;
@@ -47,7 +48,7 @@ async function authenticate(): Promise<string> {
 
 async function sendAction(commandName: string, index?: number): Promise<boolean> {
   if (!authToken) {
-    console.log('[Proclaim] Not authenticated');
+    logger.log('[Proclaim] Not authenticated');
     return false;
   }
 
@@ -61,18 +62,18 @@ async function sendAction(commandName: string, index?: number): Promise<boolean>
   });
 
   if (res.status === 401) {
-    console.log('[Proclaim] sendAction got 401, re-authenticating');
+    logger.log('[Proclaim] sendAction got 401, re-authenticating');
     authToken = null;
     scheduleReconnect();
     return false;
   }
 
   if (!res.ok) {
-    console.log(`[Proclaim] sendAction failed: ${res.status}`);
+    logger.log(`[Proclaim] sendAction failed: ${res.status}`);
     return false;
   }
 
-  console.log(`[Proclaim] Sent: ${commandName}${index !== undefined ? ` index=${index}` : ''}`);
+  logger.log(`[Proclaim] Sent: ${commandName}${index !== undefined ? ` index=${index}` : ''}`);
   return true;
 }
 
@@ -89,7 +90,7 @@ async function pollStatus(): Promise<void> {
     });
 
     if (res.status === 401) {
-      console.log('[Proclaim] pollStatus got 401, re-authenticating');
+      logger.log('[Proclaim] pollStatus got 401, re-authenticating');
       authToken = null;
       if (pollTimer) clearInterval(pollTimer);
       pollTimer = null;
@@ -98,12 +99,12 @@ async function pollStatus(): Promise<void> {
     }
 
     if (!res.ok) {
-      console.log(`[Proclaim] pollStatus error: ${res.status}`);
+      logger.log(`[Proclaim] pollStatus error: ${res.status}`);
       return;
     }
 
     const text = await res.text();
-    console.log('[Proclaim] onair/session response:', JSON.stringify(text.trim().slice(0, 200)));
+    logger.log('[Proclaim] onair/session response:', JSON.stringify(text.trim().slice(0, 200)));
     if (!text || text.trim() === '' || text.trim() === 'null') {
       state.update('proclaim', {
         connected: true,
@@ -120,7 +121,7 @@ async function pollStatus(): Promise<void> {
     state.update('proclaim', { connected: true, onAir: true });
     fetchDetailedStatus();
   } catch (err) {
-    console.log('[Proclaim] pollStatus network error:', (err as Error).message);
+    logger.log('[Proclaim] pollStatus network error:', (err as Error).message);
     state.update('proclaim', { connected: false });
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = null;
@@ -135,13 +136,13 @@ async function fetchDetailedStatus(): Promise<void> {
     const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
       headers: { ProclaimAuthToken: authToken! },
     });
-    console.log('[Proclaim] presentations/onair status:', presRes.status);
+    logger.log('[Proclaim] presentations/onair status:', presRes.status);
     if (presRes.ok) {
       presentationCache = await presRes.json() as typeof presentationCache;
-      console.log('[Proclaim] presentations/onair cache:', JSON.stringify(presentationCache).slice(0, 300));
+      logger.log('[Proclaim] presentations/onair cache:', JSON.stringify(presentationCache).slice(0, 300));
     }
   } catch (err) {
-    console.log('[Proclaim] presentations/onair error:', (err as Error).message);
+    logger.log('[Proclaim] presentations/onair error:', (err as Error).message);
   }
 
   // Start/restart the long-poll loop for statusChanged
@@ -182,7 +183,7 @@ async function pollStatusChanged(signal: AbortSignal): Promise<void> {
         presentationLocalRevision = data.localRevision;
       }
 
-      console.log('[Proclaim] statusChanged data:', JSON.stringify(data).slice(0, 300));
+      logger.log('[Proclaim] statusChanged data:', JSON.stringify(data).slice(0, 300));
 
       const status = data && data.status;
       if (!status) continue;
@@ -243,11 +244,11 @@ function scheduleReconnect(): void {
 async function connect(): Promise<void> {
   try {
     authToken = await authenticate();
-    console.log('[Proclaim] Authenticated');
+    logger.log('[Proclaim] Authenticated');
     state.update('proclaim', { connected: true });
     startPolling();
   } catch (err) {
-    console.log('[Proclaim] Connection failed:', (err as Error).message);
+    logger.log('[Proclaim] Connection failed:', (err as Error).message);
     state.update('proclaim', { connected: false });
     scheduleReconnect();
   }

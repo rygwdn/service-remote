@@ -156,6 +156,15 @@
         <button class="btn btn-primary" onclick="saveConfig()">Save &amp; Apply</button>
         <span class="discover-status" id="settings-save-status"></span>
       </div>
+
+      <div class="settings-section">
+        <h2>Logs</h2>
+        <div class="log-toolbar">
+          <button class="btn" onclick="loadLogs()">Refresh</button>
+          <button class="btn" onclick="clearLogDisplay()">Clear display</button>
+        </div>
+        <pre id="log-output" class="log-output"></pre>
+      </div>
     </section>
   </main>
 
