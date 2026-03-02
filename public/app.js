@@ -32,7 +32,10 @@ document.querySelectorAll('.tab').forEach((tab) => {
     document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
-    if (tab.dataset.tab === 'settings') loadConfig();
+    if (tab.dataset.tab === 'settings') {
+      loadConfig();
+      loadLogs();
+    }
   });
 });
 
@@ -513,6 +516,45 @@ async function discoverProclaim() {
   } catch (err) {
     status.textContent = 'Error';
   }
+}
+
+// --- Logs ---
+async function loadLogs() {
+  const el = document.getElementById('log-output');
+  if (!el) return;
+  try {
+    const res = await fetch('/api/logs');
+    const data = await res.json();
+    renderLogs(data.logs || []);
+  } catch (err) {
+    el.textContent = 'Error loading logs: ' + err.message;
+  }
+}
+
+function renderLogs(logs) {
+  const el = document.getElementById('log-output');
+  if (!el) return;
+  if (!logs.length) {
+    el.textContent = '(no log entries yet)';
+    return;
+  }
+  el.innerHTML = logs.map((entry) => {
+    const cls = entry.level === 'error' ? 'log-error' : entry.level === 'warn' ? 'log-warn' : 'log-info';
+    const time = entry.ts.replace('T', ' ').replace(/\.\d+Z$/, 'Z');
+    return `<span class="${cls}">${escText(time)} ${escText(entry.msg)}</span>`;
+  }).join('\n');
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLogDisplay() {
+  const el = document.getElementById('log-output');
+  if (el) el.textContent = '';
+}
+
+function escText(str) {
+  const div = document.createElement('div');
+  div.textContent = String(str);
+  return div.innerHTML;
 }
 
 // --- Utility ---

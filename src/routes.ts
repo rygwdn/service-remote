@@ -3,6 +3,7 @@ import fs = require('fs');
 import type { Connections } from './types';
 import discovery = require('./discovery');
 import config = require('./config');
+import logger = require('./logger');
 
 const userConfigPath = config.userConfigPath;
 
@@ -99,7 +100,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
       res.set('Content-Type', 'image/png');
       res.send(Buffer.from(await r.arrayBuffer()));
     } catch (err) {
-      console.error('[Proclaim] Thumb fetch failed:', (err as Error).message);
+      logger.error('[Proclaim] Thumb fetch failed:', (err as Error).message);
       res.status(500).end();
     }
   });
@@ -115,7 +116,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
       res.set('Cache-Control', 'no-store');
       res.send(buf);
     } catch (err) {
-      console.error('[OBS] Screenshot failed:', (err as Error).message);
+      logger.error('[OBS] Screenshot failed:', (err as Error).message);
       res.status(500).json({ error: (err as Error).message });
     }
   });
@@ -123,6 +124,11 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
   // --- State (for initial page load) ---
   app.get('/api/state', (req: Request, res: Response) => {
     res.json(state.get());
+  });
+
+  // --- Logs ---
+  app.get('/api/logs', (req: Request, res: Response) => {
+    res.json({ logs: logger.getLogs() });
   });
 
   // --- Config ---

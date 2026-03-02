@@ -1,6 +1,7 @@
 import nodeOsc = require('node-osc');
 import config = require('../config');
 import state = require('../state');
+import logger = require('../logger');
 import type { Channel } from '../types';
 
 const { Client, Server } = nodeOsc;
@@ -62,7 +63,7 @@ function connect(): void {
   // If we get responses, we're connected
   setTimeout(() => {
     if (!connected) {
-      console.log('[X32] No response, will retry...');
+      logger.log('[X32] No response, will retry...');
       state.update('x32', { connected: false, channels });
       scheduleReconnect();
     }
@@ -118,7 +119,7 @@ function handleMessage(msg: unknown[]): void {
 
   if (!connected) {
     connected = true;
-    console.log('[X32] Connected');
+    logger.log('[X32] Connected');
   }
 
   const result = parseOscMessage(address, args);

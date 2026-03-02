@@ -1,6 +1,7 @@
 import obsWebSocketJs = require('obs-websocket-js');
 import config = require('../config');
 import state = require('../state');
+import logger = require('../logger');
 
 const OBSWebSocket = obsWebSocketJs.default;
 
@@ -11,11 +12,11 @@ async function connect(): Promise<void> {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   try {
     await obs.connect(config.obs.address, config.obs.password || undefined);
-    console.log('[OBS] Connected');
+    logger.log('[OBS] Connected');
     state.update('obs', { connected: true });
     await refreshState();
   } catch (err) {
-    console.log('[OBS] Connection failed:', (err as Error).message);
+    logger.log('[OBS] Connection failed:', (err as Error).message);
     state.update('obs', { connected: false });
     scheduleReconnect();
   }
@@ -27,7 +28,7 @@ function scheduleReconnect(): void {
 }
 
 obs.on('ConnectionClosed', () => {
-  console.log('[OBS] Disconnected');
+  logger.log('[OBS] Disconnected');
   state.update('obs', { connected: false });
   scheduleReconnect();
 });
@@ -103,7 +104,7 @@ async function refreshState(): Promise<void> {
       audioSources,
     });
   } catch (err) {
-    console.log('[OBS] Failed to refresh state:', (err as Error).message);
+    logger.log('[OBS] Failed to refresh state:', (err as Error).message);
   }
 }
 

@@ -229,4 +229,26 @@ describe('API routes', () => {
       assert.ok(typeof res.body.found === 'boolean');
     });
   });
+
+  describe('GET /api/logs', () => {
+    test('returns a logs array', async () => {
+      const res = await request.get('/api/logs');
+      assert.equal(res.status, 200);
+      assert.ok(Array.isArray(res.body.logs));
+    });
+
+    test('log entries have ts, level, and msg fields', async () => {
+      // Trigger a log entry via an API call
+      await request.post('/api/obs/scene').send({ scene: 'TestScene' });
+      const res = await request.get('/api/logs');
+      assert.equal(res.status, 200);
+      // There may be entries from other tests; just check the shape if any exist
+      if (res.body.logs.length > 0) {
+        const entry = res.body.logs[0];
+        assert.ok(typeof entry.ts === 'string');
+        assert.ok(['info', 'warn', 'error'].includes(entry.level));
+        assert.ok(typeof entry.msg === 'string');
+      }
+    });
+  });
 });

@@ -1,5 +1,6 @@
 import config = require('../config');
 import state = require('../state');
+import logger = require('../logger');
 import type { ServiceItem } from '../types';
 
 // --- App Command API (official) ---
@@ -106,7 +107,7 @@ async function authenticateRemote(): Promise<{ onAirSessionId: string; connectio
 
 async function sendAction(commandName: string, index?: number): Promise<boolean> {
   if (!appCommandToken) {
-    console.log('[Proclaim] Not authenticated');
+    logger.log('[Proclaim] Not authenticated');
     return false;
   }
 
@@ -120,18 +121,18 @@ async function sendAction(commandName: string, index?: number): Promise<boolean>
   });
 
   if (res.status === 401) {
-    console.log('[Proclaim] sendAction got 401, re-authenticating');
+    logger.log('[Proclaim] sendAction got 401, re-authenticating');
     appCommandToken = null;
     scheduleReconnect();
     return false;
   }
 
   if (!res.ok) {
-    console.log(`[Proclaim] sendAction failed: ${res.status}`);
+    logger.log(`[Proclaim] sendAction failed: ${res.status}`);
     return false;
   }
 
-  console.log(`[Proclaim] Sent: ${commandName}${index !== undefined ? ` index=${index}` : ''}`);
+  logger.log(`[Proclaim] Sent: ${commandName}${index !== undefined ? ` index=${index}` : ''}`);
   return true;
 }
 
@@ -146,11 +147,12 @@ async function pollStatus(): Promise<void> {
     const res = await fetch(`${baseUrl()}/onair/session`);
 
     if (!res.ok) {
-      console.log(`[Proclaim] pollStatus error: ${res.status}`);
+      logger.log(`[Proclaim] pollStatus error: ${res.status}`);
       return;
     }
 
     const text = await res.text();
+    logger.log('[Proclaim] onair/session response:', JSON.stringify(text.trim().slice(0, 200)));
     const sessionId = text.trim();
     if (!sessionId || sessionId === 'null') {
       state.update('proclaim', {
@@ -167,13 +169,13 @@ async function pollStatus(): Promise<void> {
 
     // Session active — ensure remote auth is valid for this session
     if (sessionId !== onAirSessionId) {
-      console.log('[Proclaim] Session changed, re-authenticating remote control');
+      logger.log('[Proclaim] Session changed, re-authenticating remote control');
       try {
         const auth = await authenticateRemote();
         onAirSessionId = auth.onAirSessionId;
         connectionId = auth.connectionId;
       } catch (err) {
-        console.log('[Proclaim] Remote auth failed:', (err as Error).message);
+        logger.log('[Proclaim] Remote auth failed:', (err as Error).message);
         return;
       }
     }
@@ -181,7 +183,7 @@ async function pollStatus(): Promise<void> {
     state.update('proclaim', { connected: true, onAir: true });
     fetchDetailedStatus();
   } catch (err) {
-    console.log('[Proclaim] pollStatus network error:', (err as Error).message);
+    logger.log('[Proclaim] pollStatus network error:', (err as Error).message);
     state.update('proclaim', { connected: false });
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = null;
@@ -196,14 +198,15 @@ async function fetchDetailedStatus(): Promise<void> {
     const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
       headers: { 'OnAirSessionId': onAirSessionId! },
     });
+    logger.log('[Proclaim] presentations/onair status:', presRes.status);
     if (presRes.ok) {
       presentationCache = await presRes.json() as typeof presentationCache;
-      console.log('[Proclaim] presentations/onair loaded, items:', (presentationCache as any)?.serviceItems?.length ?? 0);
+      logger.log('[Proclaim] presentations/onair loaded, items:', (presentationCache as any)?.serviceItems?.length ?? 0);
     } else {
-      console.log('[Proclaim] presentations/onair failed:', presRes.status);
+      logger.log('[Proclaim] presentations/onair failed:', presRes.status);
     }
   } catch (err) {
-    console.log('[Proclaim] presentations/onair error:', (err as Error).message);
+    logger.log('[Proclaim] presentations/onair error:', (err as Error).message);
   }
 
   // Start/restart the long-poll loop for statusChanged
@@ -227,7 +230,7 @@ async function pollStatusChanged(signal: AbortSignal): Promise<void> {
       if (signal.aborted) break;
 
       if (!res.ok) {
-        console.log('[Proclaim] statusChanged error:', res.status);
+        logger.log('[Proclaim] statusChanged error:', res.status);
         break;
       }
 
@@ -239,6 +242,8 @@ async function pollStatusChanged(signal: AbortSignal): Promise<void> {
           slideIndex?: number;
         };
       };
+
+      logger.log('[Proclaim] statusChanged data:', JSON.stringify(data).slice(0, 300));
 
       if (data && data.presentationLocalRevision !== undefined) {
         presentationLocalRevision = data.presentationLocalRevision;
@@ -301,11 +306,11 @@ function scheduleReconnect(): void {
 async function connect(): Promise<void> {
   try {
     appCommandToken = await authenticateAppCommand();
-    console.log('[Proclaim] Authenticated');
+    logger.log('[Proclaim] Authenticated');
     state.update('proclaim', { connected: true });
     startPolling();
   } catch (err) {
-    console.log('[Proclaim] Connection failed:', (err as Error).message);
+    logger.log('[Proclaim] Connection failed:', (err as Error).message);
     state.update('proclaim', { connected: false });
     scheduleReconnect();
   }
