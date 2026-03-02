@@ -1,11 +1,10 @@
 import type { Application, Request, Response } from 'express';
 import fs = require('fs');
-import path = require('path');
 import type { Connections } from './types';
 import discovery = require('./discovery');
 import config = require('./config');
 
-const userConfigPath = path.join(__dirname, '..', 'config.json');
+const userConfigPath = config.userConfigPath;
 
 function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stateOverride?: ReturnType<typeof require>, configPathOverride?: string): void {
   const state = stateOverride || require('./state');

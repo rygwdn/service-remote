@@ -4,8 +4,14 @@ import type { Config } from './types';
 
 const defaultConfig = require('../config.default.json') as Config;
 
+// When compiled to a single executable (`bun build --compile`), __dirname points
+// into the embedded bundle, not the real filesystem.  In that case store config
+// next to the exe so the user can find and edit it.
+const isCompiledExe = process.execPath !== process.argv[0] || !__filename.endsWith('.ts');
+const configDir = isCompiledExe ? path.dirname(process.execPath) : path.join(__dirname, '..');
+
 let userConfig: Record<string, unknown> = {};
-const userConfigPath = path.join(__dirname, '..', 'config.json');
+const userConfigPath = path.join(configDir, 'config.json');
 if (fs.existsSync(userConfigPath)) {
   userConfig = JSON.parse(fs.readFileSync(userConfigPath, 'utf-8')) as Record<string, unknown>;
 }
@@ -45,8 +51,8 @@ function reload(): void {
   Object.assign(config.proclaim, merged.proclaim);
 }
 
-const config: Config & { merge: typeof merge; reload: typeof reload } = Object.assign(
+const config: Config & { merge: typeof merge; reload: typeof reload; userConfigPath: string } = Object.assign(
   merge(defaultConfig as unknown as Record<string, unknown>, userConfig) as unknown as Config,
-  { merge, reload }
+  { merge, reload, userConfigPath }
 );
 export = config;
