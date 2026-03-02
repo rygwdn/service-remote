@@ -37,6 +37,10 @@ function getToken(): string | null {
   return appCommandToken;
 }
 
+function getOnAirSessionId(): string | null {
+  return onAirSessionId;
+}
+
 function getThumbUrl(itemId: string | undefined, slideIndex: string | undefined, localRevision: string | undefined): string {
   return `${baseUrl()}/presentations/onair/items/${itemId}/slides/${slideIndex}/image?localrevision=${localRevision}&width=480`;
 }
@@ -322,6 +326,7 @@ export = {
   sendAction,
   getThumbUrl,
   getToken,
+  getOnAirSessionId,
   _authenticateAppCommand: authenticateAppCommand,
   _authenticateRemote: authenticateRemote,
   _pollStatus: pollStatus,

@@ -16,7 +16,11 @@ function setupWebSocket(server: http.Server, state: ReturnType<typeof require>):
     const msg = JSON.stringify({ type: 'state', data: fullState });
     for (const ws of wss.clients) {
       if (ws.readyState === 1) {
-        ws.send(msg);
+        try {
+          ws.send(msg);
+        } catch {
+          // Client disconnected between readyState check and send
+        }
       }
     }
   });

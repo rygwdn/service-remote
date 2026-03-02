@@ -99,6 +99,7 @@ export interface ProclaimConnection {
   sendAction(commandName: string, index?: number): Promise<boolean>;
   getThumbUrl(itemId: string | undefined, slideIndex: string | undefined, localRevision: string | undefined): string;
   getToken(): string | null;
+  getOnAirSessionId(): string | null;
 }
 
 export interface Connections {
