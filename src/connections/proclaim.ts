@@ -182,11 +182,10 @@ async function pollStatusChanged(signal: AbortSignal): Promise<void> {
       const status = data && data.status;
       if (!status) continue;
 
-      // If presentation changed, refresh the presentation cache
+      // If presentation cache is missing or presentation changed, refresh it
       if (
         status.presentationId &&
-        presentationCache &&
-        presentationCache.presentationId !== status.presentationId
+        (!presentationCache || presentationCache.presentationId !== status.presentationId)
       ) {
         try {
           const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
