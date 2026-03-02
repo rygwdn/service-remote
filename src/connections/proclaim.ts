@@ -196,6 +196,16 @@ async function pollStatus(): Promise<void> {
   }
 }
 
+// JSON.parse loses precision on Proclaim's large localRevision integers (> MAX_SAFE_INTEGER).
+// Quote them in the raw text before parsing so they survive as strings.
+function parseProclaimJson(text: string): any {
+  const safe = text.replace(
+    /"(localRevision|localrevision|presentationLocalRevision)"\s*:\s*(-?\d+)/g,
+    '"$1":"$2"'
+  );
+  return JSON.parse(safe);
+}
+
 const EXCLUDED_KINDS = new Set(['Grouping', 'StageDirectionCue']);
 
 async function fetchDetailedStatus(): Promise<void> {
@@ -206,7 +216,7 @@ async function fetchDetailedStatus(): Promise<void> {
         headers: { 'OnAirSessionId': onAirSessionId! },
       });
       if (presRes.ok) {
-        presentationCache = await presRes.json() as typeof presentationCache;
+        presentationCache = parseProclaimJson(await presRes.text());
         logger.log('[Proclaim] presentations/onair loaded, items:', (presentationCache as any)?.serviceItems?.length ?? 0);
       } else {
         logger.log('[Proclaim] presentations/onair failed:', presRes.status);
@@ -227,7 +237,7 @@ async function fetchDetailedStatus(): Promise<void> {
       return;
     }
 
-    const data = await res.json() as {
+    const data = parseProclaimJson(await res.text()) as {
       presentationId?: string;
       presentationLocalRevision?: number | string;
       status?: { itemId?: string; slideIndex?: number };
@@ -247,7 +257,7 @@ async function fetchDetailedStatus(): Promise<void> {
           headers: { 'OnAirSessionId': onAirSessionId! },
         });
         if (presRes.ok) {
-          presentationCache = await presRes.json() as typeof presentationCache;
+          presentationCache = parseProclaimJson(await presRes.text());
         }
       } catch (_) {
         // best-effort
