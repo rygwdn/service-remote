@@ -42,7 +42,13 @@ function getOnAirSessionId(): string | null {
 }
 
 function getThumbUrl(itemId: string | undefined, slideIndex: string | undefined, _localRevision: string | undefined): string {
-  return `${baseUrl()}/presentations/onair/items/${itemId}/slides/${slideIndex}/image?width=480`;
+  // Look up the per-slide localRevision from the presentation cache
+  const item = (presentationCache as any)?.serviceItems?.find((i: any) => i.id === itemId);
+  const slide = item?.slides?.find((s: any) => String(s.index) === String(slideIndex));
+  const localRevision = slide?.localRevision !== undefined ? String(slide.localRevision) : '';
+  const params = new URLSearchParams({ width: '480' });
+  if (localRevision) params.set('localrevision', localRevision);
+  return `${baseUrl()}/presentations/onair/items/${itemId}/slides/${slideIndex}/image?${params}`;
 }
 
 // --- App Command API auth ---
