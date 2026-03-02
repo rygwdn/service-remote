@@ -63,21 +63,31 @@ async function authenticateRemote(): Promise<{ onAirSessionId: string; connectio
   if (!sessionId) throw new Error('Proclaim onair/session: empty response');
 
   // Step 2: authenticate with password to get connectionId
+  const controlBody = JSON.stringify({
+    faithlifeUserId: 4429808,
+    userName: 'Ryan Wooden',
+    remoteDeviceName: '',
+    password: config.proclaim.password,
+  });
+  console.log('[Proclaim] auth/control request body:', controlBody);
+  console.log('[Proclaim] auth/control OnAirSessionId:', sessionId);
   const controlRes = await fetch(`${baseUrl()}/auth/control`, {
     method: 'POST',
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'OnAirSessionId': sessionId,
     },
-    body: JSON.stringify({
-      faithlifeUserId: 4429808,
-      userName: 'Ryan Wooden',
-      remoteDeviceName: '',
-      password: config.proclaim.password,
-    }),
+    body: controlBody,
   });
+  const controlText = await controlRes.text();
+  console.log('[Proclaim] auth/control response:', controlRes.status, controlText.slice(0, 300));
   if (!controlRes.ok) throw new Error(`Proclaim auth/control failed: ${controlRes.status}`);
-  const data = await controlRes.json() as { connectionId?: string };
+  let data: { connectionId?: string };
+  try {
+    data = JSON.parse(controlText);
+  } catch {
+    throw new Error('Proclaim auth/control: invalid JSON response');
+  }
   if (!data.connectionId) throw new Error('Proclaim auth/control: no connectionId in response');
 
   return { onAirSessionId: sessionId, connectionId: data.connectionId };

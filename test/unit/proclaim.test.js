@@ -72,9 +72,9 @@ describe('proclaim._authenticateRemote', () => {
       }
       if (url.includes('auth/control')) {
         capturedControlHeaders = opts && opts.headers;
-        return { ok: true, status: 200, json: async () => ({ connectionId: 'conn1' }), text: async () => '' };
+        return { ok: true, status: 200, json: async () => ({ connectionId: 'conn1' }), text: async () => JSON.stringify({ connectionId: 'conn1' }) };
       }
-      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
     };
     const proclaim = freshProclaim();
     const result = await proclaim._authenticateRemote();
@@ -92,7 +92,7 @@ describe('proclaim._authenticateRemote', () => {
   test('throws when auth/control returns no connectionId', async () => {
     globalThis.fetch = async (url) => {
       if (url.includes('onair/session')) return { ok: true, status: 200, json: async () => 'sess1', text: async () => 'sess1' };
-      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
     };
     const proclaim = freshProclaim();
     await assert.rejects(() => proclaim._authenticateRemote(), /no connectionId/);
