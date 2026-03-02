@@ -152,4 +152,15 @@ export = {
   async toggleRecord(): Promise<void> {
     await obs.call('ToggleRecord');
   },
+
+  async getSceneScreenshot(sceneName: string): Promise<Buffer> {
+    const result = await obs.call('GetSourceScreenshot', {
+      sourceName: sceneName,
+      imageFormat: 'jpeg',
+      imageWidth: 480,
+      imageCompressionQuality: 70,
+    });
+    const b64 = result.imageData.replace(/^data:image\/\w+;base64,/, '');
+    return Buffer.from(b64, 'base64');
+  },
 };

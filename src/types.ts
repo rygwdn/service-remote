@@ -82,6 +82,7 @@ export interface ObsConnection {
   toggleMute(inputName: string): Promise<void>;
   toggleStream(): Promise<void>;
   toggleRecord(): Promise<void>;
+  getSceneScreenshot(sceneName: string): Promise<Buffer>;
 }
 
 export interface X32Connection {

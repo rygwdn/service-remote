@@ -44,6 +44,7 @@ function createTestApp(): TestApp {
       setInputVolume: async (input: string, volumeDb: number) => { calls.obs.setInputVolume = { input, volumeDb }; },
       toggleStream: async () => { calls.obs.toggleStream = true; },
       toggleRecord: async () => { calls.obs.toggleRecord = true; },
+      getSceneScreenshot: async (_sceneName: string) => Buffer.alloc(0),
     },
     x32: {
       connect: () => { calls.x32.connect = (calls.x32.connect as number || 0) as number + 1; },

@@ -107,19 +107,13 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
       const currentState = state.get();
       const sceneName = currentState.obs.currentScene;
       if (!sceneName) return res.status(503).end();
-      const result = await (obs as any).call('GetSourceScreenshot', {
-        sourceName: sceneName,
-        imageFormat: 'jpeg',
-        imageWidth: 480,
-        imageCompressionQuality: 70,
-      });
-      const b64 = (result.imageData as string).replace(/^data:image\/\w+;base64,/, '');
-      const buf = Buffer.from(b64, 'base64');
+      const buf = await obs.getSceneScreenshot(sceneName);
       res.set('Content-Type', 'image/jpeg');
       res.set('Cache-Control', 'no-store');
       res.send(buf);
     } catch (err) {
-      res.status(500).end();
+      console.error('[OBS] Screenshot failed:', (err as Error).message);
+      res.status(500).json({ error: (err as Error).message });
     }
   });
 
