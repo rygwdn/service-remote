@@ -1,8 +1,15 @@
 import type { Application, Request, Response } from 'express';
+import fs = require('fs');
+import path = require('path');
 import type { Connections } from './types';
+import discovery = require('./discovery');
+import config = require('./config');
 
-function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stateOverride?: ReturnType<typeof require>): void {
+const userConfigPath = path.join(__dirname, '..', 'config.json');
+
+function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stateOverride?: ReturnType<typeof require>, configPathOverride?: string): void {
   const state = stateOverride || require('./state');
+  const cfgPath = configPathOverride ?? userConfigPath;
 
   // --- OBS ---
   app.post('/api/obs/scene', async (req: Request, res: Response) => {
@@ -120,6 +127,76 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
   // --- State (for initial page load) ---
   app.get('/api/state', (req: Request, res: Response) => {
     res.json(state.get());
+  });
+
+  // --- Config ---
+  app.get('/api/config', (req: Request, res: Response) => {
+    res.json({ obs: config.obs, x32: config.x32, proclaim: config.proclaim });
+  });
+
+  app.post('/api/config', async (req: Request, res: Response) => {
+    const body = req.body as {
+      obs?: { address?: string; password?: string };
+      x32?: { address?: string; port?: number; channels?: unknown[] };
+      proclaim?: { host?: string; port?: number; password?: string };
+    };
+    if (!body.obs || !body.x32 || !body.proclaim) {
+      res.status(400).json({ error: 'Request must include obs, x32, and proclaim keys' });
+      return;
+    }
+
+    // Detect changes against current config before applying
+    const obsChanged = body.obs.address !== config.obs.address || body.obs.password !== config.obs.password;
+    const x32Changed = body.x32.address !== config.x32.address || body.x32.port !== config.x32.port;
+    const proclaimChanged = body.proclaim.host !== config.proclaim.host || body.proclaim.port !== config.proclaim.port || body.proclaim.password !== config.proclaim.password;
+
+    try {
+      // Merge new connection config with existing server config (server port not exposed in UI)
+      const newConfig = {
+        server: config.server,
+        obs: body.obs,
+        x32: body.x32,
+        proclaim: body.proclaim,
+      };
+      fs.writeFileSync(cfgPath, JSON.stringify(newConfig, null, 2), 'utf-8');
+      config.reload();
+
+      if (obsChanged) { obs.disconnect(); await obs.connect(); }
+      if (x32Changed) { x32.disconnect(); x32.connect(); }
+      if (proclaimChanged) { proclaim.disconnect(); await proclaim.connect(); }
+
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // --- Discovery ---
+  app.post('/api/discover/x32', async (req: Request, res: Response) => {
+    try {
+      const result = await discovery.discoverX32();
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/discover/obs', async (req: Request, res: Response) => {
+    try {
+      const result = await discovery.discoverObs();
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/discover/proclaim', async (req: Request, res: Response) => {
+    try {
+      const result = await discovery.discoverProclaim();
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
   });
 }
 

@@ -27,6 +27,7 @@
     <button class="tab" data-tab="proclaim">Proclaim</button>
     <button class="tab" data-tab="obs">OBS</button>
     <button class="tab" data-tab="sound">Sound</button>
+    <button class="tab" data-tab="settings">Settings</button>
   </nav>
 
   <main>
@@ -117,6 +118,48 @@
     <!-- Sound (X32) Panel -->
     <section id="panel-sound" class="panel">
       <div id="x32-channels" class="channel-grid"></div>
+    </section>
+
+    <!-- Settings Panel -->
+    <section id="panel-settings" class="panel">
+      <div class="settings-section">
+        <h2>OBS</h2>
+        <label>Address <input type="text" id="cfg-obs-address" placeholder="ws://localhost:4455"></label>
+        <label>Password <input type="password" id="cfg-obs-password" placeholder="(leave blank if none)"></label>
+        <div class="discover-row">
+          <button class="btn" onclick="discoverObs()">Auto-detect</button>
+          <span class="discover-status" id="discover-obs-status"></span>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h2>X32</h2>
+        <label>Address <input type="text" id="cfg-x32-address" placeholder="192.168.1.100"></label>
+        <label>Port <input type="number" id="cfg-x32-port" placeholder="10023"></label>
+        <div class="discover-row">
+          <button class="btn" onclick="discoverX32()">Auto-detect</button>
+          <span class="discover-status" id="discover-x32-status"></span>
+        </div>
+        <h3>Channels</h3>
+        <div id="cfg-x32-channels"></div>
+        <button class="btn" style="margin-top:8px" onclick="addX32Channel()">+ Add Channel</button>
+      </div>
+
+      <div class="settings-section">
+        <h2>Proclaim</h2>
+        <label>Host <input type="text" id="cfg-proclaim-host" placeholder="127.0.0.1"></label>
+        <label>Port <input type="number" id="cfg-proclaim-port" placeholder="52195"></label>
+        <label>Password <input type="password" id="cfg-proclaim-password" placeholder="proclaim"></label>
+        <div class="discover-row">
+          <button class="btn" onclick="discoverProclaim()">Auto-detect</button>
+          <span class="discover-status" id="discover-proclaim-status"></span>
+        </div>
+      </div>
+
+      <div class="settings-footer">
+        <button class="btn btn-primary" onclick="saveConfig()">Save &amp; Apply</button>
+        <span class="discover-status" id="settings-save-status"></span>
+      </div>
     </section>
   </main>
 

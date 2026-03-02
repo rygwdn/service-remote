@@ -21,13 +21,8 @@ interface OscResult {
   patch: Partial<Channel>;
 }
 
-// Track configured channels with their state
-const channels: Channel[] = config.x32.channels.map((ch) => ({
-  index: ch.index,
-  label: ch.label,
-  fader: 0,
-  muted: false,
-}));
+// Track configured channels with their state — initialized in connect()
+let channels: Channel[] = [];
 
 function connect(): void {
   if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -36,6 +31,14 @@ function connect(): void {
 
   if (server) server.close();
   if (client) client.close();
+
+  // Re-read config so a reload() takes effect
+  channels = config.x32.channels.map((ch) => ({
+    index: ch.index,
+    label: ch.label,
+    fader: 0,
+    muted: false,
+  }));
 
   server = new Server(0, '0.0.0.0');
   server.on('message', (msg: unknown[]) => handleMessage(msg));
@@ -146,9 +149,19 @@ function subscribeToChanges(): void {
   }
 }
 
+function disconnect(): void {
+  if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
+  if (subscribeInterval) { clearInterval(subscribeInterval); subscribeInterval = null; }
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  if (server) { server.close(); server = null; }
+  if (client) { client.close(); client = null; }
+  connected = false;
+}
+
 export = {
   parseOscMessage,
   connect,
+  disconnect,
 
   setFader(channelIndex: number, value: number): void {
     const clamped = Math.max(0, Math.min(1, value));

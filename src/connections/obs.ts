@@ -116,8 +116,17 @@ function dbToMul(db: number): number {
   return Math.pow(10, db / 20);
 }
 
+function disconnect(): void {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  obs.disconnect();
+}
+
 export = {
   connect,
+  disconnect,
 
   async setScene(sceneName: string): Promise<void> {
     await obs.call('SetCurrentProgramScene', {

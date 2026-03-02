@@ -249,8 +249,16 @@ async function connect(): Promise<void> {
   }
 }
 
+function disconnect(): void {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  if (statusChangedAbortController) { statusChangedAbortController.abort(); statusChangedAbortController = null; }
+  authToken = null;
+}
+
 export = {
   connect,
+  disconnect,
   sendAction,
   getThumbUrl,
   getToken,

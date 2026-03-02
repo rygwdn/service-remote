@@ -161,4 +161,72 @@ describe('API routes', () => {
       assert.equal(res.body.error, 'OBS not connected');
     });
   });
+
+  describe('GET /api/config', () => {
+    test('returns obs, x32, and proclaim config sections', async () => {
+      const res = await request.get('/api/config');
+      assert.equal(res.status, 200);
+      assert.ok('obs' in res.body);
+      assert.ok('x32' in res.body);
+      assert.ok('proclaim' in res.body);
+      assert.ok('address' in res.body.obs);
+      assert.ok('address' in res.body.x32);
+      assert.ok(Array.isArray(res.body.x32.channels));
+    });
+  });
+
+  describe('POST /api/config', () => {
+    test('rejects request missing required keys', async () => {
+      const res = await request.post('/api/config').send({ obs: {} });
+      assert.equal(res.status, 400);
+      assert.ok(res.body.error);
+    });
+
+    test('saves and reconnects changed connections', async () => {
+      resetCalls();
+      const cfgRes = await request.get('/api/config');
+      const cfg = cfgRes.body as {
+        obs: { address: string; password: string };
+        x32: { address: string; port: number; channels: unknown[] };
+        proclaim: { host: string; port: number; password: string };
+      };
+
+      // Change OBS address to trigger reconnect
+      const newCfg = { ...cfg, obs: { ...cfg.obs, address: 'ws://localhost:9999' } };
+      const res = await request.post('/api/config').send(newCfg);
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body, { ok: true });
+
+      // OBS should have been disconnected and reconnected
+      assert.ok((calls.obs.disconnect as number) >= 1, 'obs.disconnect should have been called');
+      assert.ok((calls.obs.connect as number) >= 1, 'obs.connect should have been called');
+      // X32 and proclaim were not changed, so they should not reconnect
+      assert.equal(calls.x32.disconnect, undefined);
+      assert.equal(calls.proclaim.disconnect, undefined);
+    });
+  });
+
+  describe('POST /api/discover/x32', () => {
+    test('returns a result with found boolean', async () => {
+      const res = await request.post('/api/discover/x32');
+      assert.equal(res.status, 200);
+      assert.ok(typeof res.body.found === 'boolean');
+    });
+  });
+
+  describe('POST /api/discover/obs', () => {
+    test('returns a result with found boolean', async () => {
+      const res = await request.post('/api/discover/obs');
+      assert.equal(res.status, 200);
+      assert.ok(typeof res.body.found === 'boolean');
+    });
+  });
+
+  describe('POST /api/discover/proclaim', () => {
+    test('returns a result with found boolean', async () => {
+      const res = await request.post('/api/discover/proclaim');
+      assert.equal(res.status, 200);
+      assert.ok(typeof res.body.found === 'boolean');
+    });
+  });
 });

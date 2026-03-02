@@ -1,4 +1,5 @@
 import http = require('http');
+import path = require('path');
 import express = require('express');
 import stateModule = require('../../src/state');
 const { setupRoutes } = require('../../src/routes');
@@ -36,7 +37,8 @@ function createTestApp(): TestApp {
 
   const stubs: Connections = {
     obs: {
-      connect: async () => {},
+      connect: async () => { calls.obs.connect = (calls.obs.connect as number || 0) as number + 1; },
+      disconnect: () => { calls.obs.disconnect = (calls.obs.disconnect as number || 0) as number + 1; },
       setScene: async (scene: string) => { calls.obs.setScene = scene; },
       toggleMute: async (input: string) => { calls.obs.toggleMute = input; },
       setInputVolume: async (input: string, volumeDb: number) => { calls.obs.setInputVolume = { input, volumeDb }; },
@@ -44,13 +46,15 @@ function createTestApp(): TestApp {
       toggleRecord: async () => { calls.obs.toggleRecord = true; },
     },
     x32: {
-      connect: () => {},
+      connect: () => { calls.x32.connect = (calls.x32.connect as number || 0) as number + 1; },
+      disconnect: () => { calls.x32.disconnect = (calls.x32.disconnect as number || 0) as number + 1; },
       setFader: (channel: number, value: number) => { calls.x32.setFader = { channel, value }; },
       toggleMute: (channel: number) => { calls.x32.toggleMute = channel; },
       parseOscMessage: () => null,
     },
     proclaim: {
-      connect: async () => {},
+      connect: async () => { calls.proclaim.connect = (calls.proclaim.connect as number || 0) as number + 1; },
+      disconnect: () => { calls.proclaim.disconnect = (calls.proclaim.disconnect as number || 0) as number + 1; },
       sendAction: async (action: string, index?: number) => {
         calls.proclaim.sendAction = { action, index };
         return true;
@@ -60,9 +64,12 @@ function createTestApp(): TestApp {
     },
   };
 
+  // Use a temp path for config writes during tests to avoid touching real config.json
+  const testConfigPath = path.join(require('os').tmpdir(), `test-config-${Date.now()}.json`);
+
   const app = express();
   app.use(express.json());
-  setupRoutes(app, stubs, state);
+  setupRoutes(app, stubs, state, testConfigPath);
 
   const server = http.createServer(app);
   setupWebSocket(server, state);

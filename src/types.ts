@@ -76,6 +76,7 @@ export interface Config {
 
 export interface ObsConnection {
   connect(): Promise<void>;
+  disconnect(): void;
   setScene(sceneName: string): Promise<void>;
   setInputVolume(inputName: string, volumeDb: number): Promise<void>;
   toggleMute(inputName: string): Promise<void>;
@@ -85,6 +86,7 @@ export interface ObsConnection {
 
 export interface X32Connection {
   connect(): void;
+  disconnect(): void;
   setFader(channelIndex: number, value: number): void;
   toggleMute(channelIndex: number): void;
   parseOscMessage(address: string, args: Array<{ value: unknown }>): { index: number; patch: Partial<Channel> } | null;
@@ -92,6 +94,7 @@ export interface X32Connection {
 
 export interface ProclaimConnection {
   connect(): Promise<void>;
+  disconnect(): void;
   sendAction(commandName: string, index?: number): Promise<boolean>;
   getThumbUrl(itemId: string | undefined, slideIndex: string | undefined, localRevision: string | undefined): string;
   getToken(): string | null;

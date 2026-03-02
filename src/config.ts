@@ -33,8 +33,20 @@ function merge<T extends Record<string, unknown>>(base: T, override: Record<stri
   return result;
 }
 
-const config: Config & { merge: typeof merge } = Object.assign(
+function reload(): void {
+  let freshUserConfig: Record<string, unknown> = {};
+  if (fs.existsSync(userConfigPath)) {
+    freshUserConfig = JSON.parse(fs.readFileSync(userConfigPath, 'utf-8')) as Record<string, unknown>;
+  }
+  const merged = merge(defaultConfig as unknown as Record<string, unknown>, freshUserConfig) as unknown as Config;
+  Object.assign(config.obs, merged.obs);
+  Object.assign(config.x32, merged.x32);
+  config.x32.channels = merged.x32.channels;
+  Object.assign(config.proclaim, merged.proclaim);
+}
+
+const config: Config & { merge: typeof merge; reload: typeof reload } = Object.assign(
   merge(defaultConfig as unknown as Record<string, unknown>, userConfig) as unknown as Config,
-  { merge }
+  { merge, reload }
 );
 export = config;

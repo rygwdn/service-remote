@@ -32,6 +32,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
     document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'settings') loadConfig();
   });
 });
 
@@ -378,6 +379,144 @@ document.querySelectorAll('.tab').forEach((tab) => {
 
 // Overview is the default tab, so start polling immediately
 startScreenshotPolling();
+
+// --- Settings ---
+let currentConfig = null;
+
+async function loadConfig() {
+  const res = await fetch('/api/config');
+  currentConfig = await res.json();
+  populateConfigForm(currentConfig);
+}
+
+function populateConfigForm(cfg) {
+  document.getElementById('cfg-obs-address').value = cfg.obs.address || '';
+  document.getElementById('cfg-obs-password').value = cfg.obs.password || '';
+  document.getElementById('cfg-x32-address').value = cfg.x32.address || '';
+  document.getElementById('cfg-x32-port').value = cfg.x32.port || '';
+  document.getElementById('cfg-proclaim-host').value = cfg.proclaim.host || '';
+  document.getElementById('cfg-proclaim-port').value = cfg.proclaim.port || '';
+  document.getElementById('cfg-proclaim-password').value = cfg.proclaim.password || '';
+  renderX32ChannelEditor(cfg.x32.channels || []);
+}
+
+function renderX32ChannelEditor(channels) {
+  const container = document.getElementById('cfg-x32-channels');
+  container.innerHTML = channels.map((ch, i) => `
+    <div class="channel-row">
+      <input type="number" class="ch-index-input" value="${ch.index}" min="1" max="32" data-i="${i}" placeholder="#" oninput="updateX32Channel(${i}, 'index', parseInt(this.value))">
+      <input type="text" class="ch-label-input" value="${esc(ch.label)}" data-i="${i}" placeholder="Label" oninput="updateX32Channel(${i}, 'label', this.value)">
+      <button class="btn" onclick="removeX32Channel(${i})">&#10005;</button>
+    </div>
+  `).join('');
+}
+
+function updateX32Channel(i, key, value) {
+  if (!currentConfig) return;
+  currentConfig.x32.channels[i][key] = value;
+}
+
+function addX32Channel() {
+  if (!currentConfig) return;
+  const maxIndex = currentConfig.x32.channels.reduce((m, ch) => Math.max(m, ch.index), 0);
+  currentConfig.x32.channels.push({ index: maxIndex + 1, label: '' });
+  renderX32ChannelEditor(currentConfig.x32.channels);
+}
+
+function removeX32Channel(i) {
+  if (!currentConfig) return;
+  currentConfig.x32.channels.splice(i, 1);
+  renderX32ChannelEditor(currentConfig.x32.channels);
+}
+
+async function saveConfig() {
+  const status = document.getElementById('settings-save-status');
+  status.textContent = 'Saving…';
+  try {
+    const body = {
+      obs: {
+        address: document.getElementById('cfg-obs-address').value.trim(),
+        password: document.getElementById('cfg-obs-password').value,
+      },
+      x32: {
+        address: document.getElementById('cfg-x32-address').value.trim(),
+        port: parseInt(document.getElementById('cfg-x32-port').value) || 10023,
+        channels: currentConfig ? currentConfig.x32.channels : [],
+      },
+      proclaim: {
+        host: document.getElementById('cfg-proclaim-host').value.trim(),
+        port: parseInt(document.getElementById('cfg-proclaim-port').value) || 52195,
+        password: document.getElementById('cfg-proclaim-password').value,
+      },
+    };
+    const res = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      status.textContent = 'Saved!';
+    } else {
+      status.textContent = 'Error: ' + (data.error || 'unknown');
+    }
+  } catch (err) {
+    status.textContent = 'Error: ' + err.message;
+  }
+  setTimeout(() => { status.textContent = ''; }, 3000);
+}
+
+async function discoverX32() {
+  const status = document.getElementById('discover-x32-status');
+  status.textContent = 'Scanning…';
+  try {
+    const res = await fetch('/api/discover/x32', { method: 'POST' });
+    const data = await res.json();
+    if (data.found) {
+      document.getElementById('cfg-x32-address').value = data.address;
+      status.textContent = 'Found: ' + data.address;
+    } else {
+      status.textContent = 'Not found';
+    }
+  } catch (err) {
+    status.textContent = 'Error';
+  }
+}
+
+async function discoverObs() {
+  const status = document.getElementById('discover-obs-status');
+  status.textContent = 'Checking…';
+  try {
+    const res = await fetch('/api/discover/obs', { method: 'POST' });
+    const data = await res.json();
+    if (data.found) {
+      document.getElementById('cfg-obs-address').value = data.address;
+      status.textContent = 'Found';
+    } else {
+      status.textContent = 'Not found';
+    }
+  } catch (err) {
+    status.textContent = 'Error';
+  }
+}
+
+async function discoverProclaim() {
+  const status = document.getElementById('discover-proclaim-status');
+  status.textContent = 'Checking…';
+  try {
+    const res = await fetch('/api/discover/proclaim', { method: 'POST' });
+    const data = await res.json();
+    if (data.found) {
+      document.getElementById('cfg-proclaim-host').value = data.address;
+      document.getElementById('cfg-proclaim-port').value = data.port;
+      status.textContent = 'Found';
+    } else {
+      status.textContent = 'Not found';
+    }
+  } catch (err) {
+    status.textContent = 'Error';
+  }
+}
 
 // --- Utility ---
 function esc(str) {
