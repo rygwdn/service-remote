@@ -38,7 +38,7 @@ describe('proclaim._authenticate', () => {
   });
 
   test('returns token on success', async () => {
-    mockFetch([{ status: 200, body: { token: 'abc123' } }]);
+    mockFetch([{ status: 200, body: { proclaimAuthToken: 'abc123' } }]);
     const proclaim = freshProclaim();
     const token = await proclaim._authenticate();
     assert.equal(token, 'abc123');
@@ -75,7 +75,7 @@ describe('proclaim.sendAction', () => {
     let capturedUrl, capturedHeaders;
     globalThis.fetch = async (url, opts) => {
       if (url.includes('authenticate')) {
-        return { ok: true, status: 200, json: async () => ({ token: 'tok1' }), text: async () => '' };
+        return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok1' }), text: async () => '' };
       }
       capturedUrl = url;
       capturedHeaders = opts && opts.headers;
@@ -97,7 +97,7 @@ describe('proclaim.sendAction', () => {
     globalThis.fetch = async (url, opts) => {
       fetchCalls.push({ url, headers: opts && opts.headers });
       if (url.includes('authenticate')) {
-        return { ok: true, status: 200, json: async () => ({ token: 'tok1' }), text: async () => '' };
+        return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok1' }), text: async () => '' };
       }
       if (url.includes('onair/session')) {
         return { ok: true, status: 200, json: async () => null, text: async () => '' };
@@ -126,7 +126,7 @@ describe('proclaim.sendAction', () => {
     globalThis.fetch = async (url, opts) => {
       fetchCalls.push({ url, headers: opts && opts.headers });
       if (url.includes('authenticate')) {
-        return { ok: true, status: 200, json: async () => ({ token: 'tok2' }), text: async () => '' };
+        return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok2' }), text: async () => '' };
       }
       if (url.includes('onair/session')) {
         return { ok: true, status: 200, json: async () => null, text: async () => '' };
@@ -158,7 +158,7 @@ describe('proclaim._pollStatus', () => {
   test('sets connected=true, onAir=false when session returns empty', async () => {
     globalThis.fetch = async (url) => {
       if (url.includes('authenticate')) {
-        return { ok: true, status: 200, json: async () => ({ token: 'tok' }), text: async () => '' };
+        return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok' }), text: async () => '' };
       }
       if (url.includes('onair/session')) {
         return { ok: true, status: 200, json: async () => null, text: async () => '' };
@@ -186,7 +186,7 @@ describe('proclaim._pollStatus', () => {
     globalThis.fetch = async (url) => {
       callCount++;
       if (url.includes('authenticate')) {
-        return { ok: true, status: 200, json: async () => ({ token: 'tok' }), text: async () => '' };
+        return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok' }), text: async () => '' };
       }
       throw new Error('Network error');
     };
@@ -208,7 +208,7 @@ describe('proclaim._pollStatus', () => {
   test('clears token and schedules reconnect on 401', async () => {
     globalThis.fetch = async (url) => {
       if (url.includes('authenticate')) {
-        return { ok: true, status: 200, json: async () => ({ token: 'tok' }), text: async () => '' };
+        return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok' }), text: async () => '' };
       }
       return { ok: false, status: 401, json: async () => null, text: async () => '' };
     };
