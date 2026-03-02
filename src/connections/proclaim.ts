@@ -41,8 +41,8 @@ function getOnAirSessionId(): string | null {
   return onAirSessionId;
 }
 
-function getThumbUrl(itemId: string | undefined, slideIndex: string | undefined, localRevision: string | undefined): string {
-  return `${baseUrl()}/presentations/onair/items/${itemId}/slides/${slideIndex}/image?localrevision=${localRevision}&width=480`;
+function getThumbUrl(itemId: string | undefined, slideIndex: string | undefined, _localRevision: string | undefined): string {
+  return `${baseUrl()}/presentations/onair/items/${itemId}/slides/${slideIndex}/image?width=480`;
 }
 
 // --- App Command API auth ---

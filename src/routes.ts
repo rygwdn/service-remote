@@ -94,7 +94,8 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
         req.query.localRevision as string | undefined
       );
       const sessionId = proclaim.getOnAirSessionId();
-      const headers: Record<string, string> = sessionId ? { 'OnAirSessionId': sessionId } : {};
+      const headers: Record<string, string> = { 'Accept-Encoding': 'identity' };
+      if (sessionId) headers['OnAirSessionId'] = sessionId;
       const r = await fetch(url, { headers });
       if (!r.ok) return res.status(r.status).end();
       res.set('Content-Type', 'image/png');
