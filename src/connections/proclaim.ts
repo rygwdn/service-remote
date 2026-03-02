@@ -103,6 +103,7 @@ async function pollStatus(): Promise<void> {
     }
 
     const text = await res.text();
+    console.log('[Proclaim] onair/session response:', JSON.stringify(text.trim().slice(0, 200)));
     if (!text || text.trim() === '' || text.trim() === 'null') {
       state.update('proclaim', {
         connected: true,
@@ -134,11 +135,13 @@ async function fetchDetailedStatus(): Promise<void> {
     const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
       headers: { ProclaimAuthToken: authToken! },
     });
+    console.log('[Proclaim] presentations/onair status:', presRes.status);
     if (presRes.ok) {
       presentationCache = await presRes.json() as typeof presentationCache;
+      console.log('[Proclaim] presentations/onair cache:', JSON.stringify(presentationCache).slice(0, 300));
     }
-  } catch (_) {
-    // best-effort
+  } catch (err) {
+    console.log('[Proclaim] presentations/onair error:', (err as Error).message);
   }
 
   // Start/restart the long-poll loop for statusChanged
@@ -178,6 +181,8 @@ async function pollStatusChanged(signal: AbortSignal): Promise<void> {
       if (data && data.localRevision !== undefined) {
         presentationLocalRevision = data.localRevision;
       }
+
+      console.log('[Proclaim] statusChanged data:', JSON.stringify(data).slice(0, 300));
 
       const status = data && data.status;
       if (!status) continue;
