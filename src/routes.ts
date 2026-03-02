@@ -97,7 +97,10 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
       const headers: Record<string, string> = { 'Accept-Encoding': 'identity' };
       if (sessionId) headers['OnAirSessionId'] = sessionId;
       const r = await fetch(url, { headers });
-      if (!r.ok) return res.status(r.status).end();
+      if (!r.ok) {
+        logger.error(`[Proclaim] Thumb ${r.status} for: ${url} (sessionId=${sessionId})`);
+        return res.status(r.status).end();
+      }
       res.set('Content-Type', 'image/png');
       res.send(Buffer.from(await r.arrayBuffer()));
     } catch (err) {
