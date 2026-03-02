@@ -27,7 +27,7 @@ let presentationCache: {
     slides?: Array<{ localRevision: number; index: number }>;
   }>;
 } | null = null;
-let presentationLocalRevision = 0;
+let presentationLocalRevision = '0'; // kept as string — value exceeds JS safe integer range
 let statusChangedAbortController: AbortController | null = null;
 
 function baseUrl(): string {
@@ -231,12 +231,13 @@ async function pollStatusChanged(signal: AbortSignal): Promise<void> {
 
       if (!res.ok) {
         logger.log('[Proclaim] statusChanged error:', res.status);
+        await new Promise((r) => setTimeout(r, 2000));
         break;
       }
 
       const data = await res.json() as {
         presentationId?: string;
-        presentationLocalRevision?: number;
+        presentationLocalRevision?: number | string;
         status?: {
           itemId?: string;
           slideIndex?: number;
@@ -246,7 +247,7 @@ async function pollStatusChanged(signal: AbortSignal): Promise<void> {
       logger.log('[Proclaim] statusChanged data:', JSON.stringify(data).slice(0, 300));
 
       if (data && data.presentationLocalRevision !== undefined) {
-        presentationLocalRevision = data.presentationLocalRevision;
+        presentationLocalRevision = String(data.presentationLocalRevision);
       }
 
       const status = data && data.status;
