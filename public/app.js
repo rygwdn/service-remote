@@ -185,15 +185,12 @@ function setThumb(el, itemId, slideIndex) {
     return;
   }
   const img = document.createElement('img');
-  img.src = thumbUrl(itemId, slideIndex);
-  // Retry up to 3 times with 300ms delay if 202 (still rendering)
+  // Retry up to 5 times with 500ms delay if image fails (e.g. 202 still rendering)
   let retries = 0;
-  function tryLoad() {
-    img.onerror = () => {
-      if (retries++ < 3) setTimeout(tryLoad, 300);
-    };
-  }
-  tryLoad();
+  img.onerror = () => {
+    if (retries++ < 5) setTimeout(() => { img.src = thumbUrl(itemId, slideIndex); }, 500);
+  };
+  img.src = thumbUrl(itemId, slideIndex);
   el.innerHTML = '';
   el.appendChild(img);
 }

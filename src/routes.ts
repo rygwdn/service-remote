@@ -97,6 +97,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
       res.set('Content-Type', 'image/png');
       res.send(Buffer.from(await r.arrayBuffer()));
     } catch (err) {
+      console.error('[Proclaim] Thumb fetch failed:', (err as Error).message);
       res.status(500).end();
     }
   });
