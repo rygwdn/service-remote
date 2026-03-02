@@ -40,6 +40,7 @@ async function authenticate(): Promise<string> {
   }
   const data = await res.json() as { token?: string };
   if (!data.token) {
+    console.log('[Proclaim] Auth response body:', JSON.stringify(data));
     throw new Error('Proclaim auth: no token in response');
   }
   return data.token;
