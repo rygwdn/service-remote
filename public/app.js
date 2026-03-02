@@ -117,7 +117,7 @@ function renderObs(obs) {
     <div class="audio-source">
       <span class="name">${esc(src.name)}</span>
       <input type="range" min="-60" max="0" step="0.5"
-        value="${isFinite(src.volume) ? src.volume.toFixed(1) : -60}"
+        value="${src.volume != null && isFinite(src.volume) ? src.volume.toFixed(1) : -60}"
         oninput="setObsVolume('${esc(src.name)}', parseFloat(this.value))">
       <button class="mute-btn${src.muted ? ' muted' : ''}" onclick="toggleObsMute('${esc(src.name)}')">
         ${src.muted ? 'M' : '\u{1f50a}'}
