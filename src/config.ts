@@ -47,7 +47,6 @@ function reload(): void {
   const merged = merge(defaultConfig as unknown as Record<string, unknown>, freshUserConfig) as unknown as Config;
   Object.assign(config.obs, merged.obs);
   Object.assign(config.x32, merged.x32);
-  config.x32.channels = merged.x32.channels;
   Object.assign(config.proclaim, merged.proclaim);
 }
 

@@ -60,7 +60,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
   // --- X32 ---
   app.post('/api/x32/fader', (req: Request, res: Response) => {
     try {
-      x32.setFader(req.body.channel, req.body.value);
+      x32.setFader(req.body.channel, req.body.value, req.body.type || 'ch');
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -69,7 +69,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
 
   app.post('/api/x32/mute', (req: Request, res: Response) => {
     try {
-      x32.toggleMute(req.body.channel);
+      x32.toggleMute(req.body.channel, req.body.type || 'ch');
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -143,7 +143,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
   app.post('/api/config', async (req: Request, res: Response) => {
     const body = req.body as {
       obs?: { address?: string; password?: string; screenshotInterval?: number };
-      x32?: { address?: string; port?: number; channels?: unknown[] };
+      x32?: { address?: string; port?: number };
       proclaim?: { host?: string; port?: number; password?: string; pollInterval?: number };
     };
     if (!body.obs || !body.x32 || !body.proclaim) {

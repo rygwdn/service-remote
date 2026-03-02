@@ -42,7 +42,6 @@ Key settings:
 | `obs.password` | obs-websocket password (leave empty if auth is disabled) |
 | `x32.address` | IP address of the X32 mixer |
 | `x32.port` | UDP port of the X32 (default `10023`) |
-| `x32.channels` | Array of `{ index, label }` objects for channels to expose |
 | `proclaim.midiPortName` | Name of the virtual MIDI port to create |
 | `proclaim.actions` | MIDI CC/note-on definitions for each Proclaim action |
 
@@ -94,8 +93,8 @@ All endpoints return JSON. State changes are also pushed to browsers via WebSock
 
 | Method | Path | Body | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/x32/fader` | `{ "channel": 1, "value": 0.75 }` | Set fader level (0–1) |
-| `POST` | `/api/x32/mute` | `{ "channel": 1 }` | Toggle channel mute |
+| `POST` | `/api/x32/fader` | `{ "channel": 1, "type": "ch", "value": 0.75 }` | Set fader level (0–1); `type` is `"ch"` (input channel, default) or `"bus"` (mix bus) |
+| `POST` | `/api/x32/mute` | `{ "channel": 1, "type": "ch" }` | Toggle channel mute; `type` defaults to `"ch"` |
 
 ### Proclaim
 

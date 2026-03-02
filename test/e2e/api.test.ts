@@ -171,7 +171,6 @@ describe('API routes', () => {
       assert.ok('proclaim' in res.body);
       assert.ok('address' in res.body.obs);
       assert.ok('address' in res.body.x32);
-      assert.ok(Array.isArray(res.body.x32.channels));
     });
   });
 
@@ -187,7 +186,7 @@ describe('API routes', () => {
       const cfgRes = await request.get('/api/config');
       const cfg = cfgRes.body as {
         obs: { address: string; password: string };
-        x32: { address: string; port: number; channels: unknown[] };
+        x32: { address: string; port: number };
         proclaim: { host: string; port: number; password: string };
       };
 
