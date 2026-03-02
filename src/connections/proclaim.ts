@@ -62,14 +62,15 @@ async function authenticateRemote(): Promise<{ onAirSessionId: string; connectio
   const sessionId = (await sessionRes.text()).trim();
   if (!sessionId) throw new Error('Proclaim onair/session: empty response');
 
-  // Step 2: authenticate with password to get connectionId
+  // Step 2: try to authenticate with password to get connectionId.
+  // NOTE: Proclaim may reject /auth/control from localhost (same-machine requests
+  // use the App Command API instead). If it fails, fall back to using sessionId alone.
   const controlBody = JSON.stringify({
-    faithlifeUserId: 4429808,
-    userName: 'Ryan Wooden',
+    faithlifeUserId: 0,
+    userName: 'service-remote',
     remoteDeviceName: '',
     password: config.proclaim.password,
   });
-  console.log('[Proclaim] auth/control request body:', controlBody);
   console.log('[Proclaim] auth/control OnAirSessionId:', sessionId);
   const controlRes = await fetch(`${baseUrl()}/auth/control`, {
     method: 'POST',
@@ -81,7 +82,13 @@ async function authenticateRemote(): Promise<{ onAirSessionId: string; connectio
   });
   const controlText = await controlRes.text();
   console.log('[Proclaim] auth/control response:', controlRes.status, controlText.slice(0, 300));
-  if (!controlRes.ok) throw new Error(`Proclaim auth/control failed: ${controlRes.status}`);
+
+  if (!controlRes.ok) {
+    // Likely running on the same machine as Proclaim — proceed with sessionId only
+    console.log('[Proclaim] auth/control failed, proceeding with OnAirSessionId only (same-machine mode)');
+    return { onAirSessionId: sessionId, connectionId: '' };
+  }
+
   let data: { connectionId?: string };
   try {
     data = JSON.parse(controlText);
@@ -206,15 +213,11 @@ async function fetchDetailedStatus(): Promise<void> {
 async function pollStatusChanged(signal: AbortSignal): Promise<void> {
   while (!signal.aborted) {
     try {
+      const headers: Record<string, string> = { 'OnAirSessionId': onAirSessionId! };
+      if (connectionId) headers['ConnectionId'] = connectionId;
       const res = await fetch(
         `${baseUrl()}/onair/statusChanged?localrevision=${presentationLocalRevision}&step=250`,
-        {
-          headers: {
-            'OnAirSessionId': onAirSessionId!,
-            'ConnectionId': connectionId!,
-          },
-          signal,
-        }
+        { headers, signal }
       );
 
       if (signal.aborted) break;
