@@ -138,9 +138,9 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
 
   app.post('/api/config', async (req: Request, res: Response) => {
     const body = req.body as {
-      obs?: { address?: string; password?: string };
+      obs?: { address?: string; password?: string; screenshotInterval?: number };
       x32?: { address?: string; port?: number; channels?: unknown[] };
-      proclaim?: { host?: string; port?: number; password?: string };
+      proclaim?: { host?: string; port?: number; password?: string; pollInterval?: number };
     };
     if (!body.obs || !body.x32 || !body.proclaim) {
       res.status(400).json({ error: 'Request must include obs, x32, and proclaim keys' });
@@ -150,7 +150,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
     // Detect changes against current config before applying
     const obsChanged = body.obs.address !== config.obs.address || body.obs.password !== config.obs.password;
     const x32Changed = body.x32.address !== config.x32.address || body.x32.port !== config.x32.port;
-    const proclaimChanged = body.proclaim.host !== config.proclaim.host || body.proclaim.port !== config.proclaim.port || body.proclaim.password !== config.proclaim.password;
+    const proclaimChanged = body.proclaim.host !== config.proclaim.host || body.proclaim.port !== config.proclaim.port || body.proclaim.password !== config.proclaim.password || body.proclaim.pollInterval !== config.proclaim.pollInterval;
 
     try {
       // Merge new connection config with existing server config (server port not exposed in UI)

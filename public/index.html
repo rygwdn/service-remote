@@ -122,6 +122,7 @@
         <h2>OBS</h2>
         <label>Address <input type="text" id="cfg-obs-address" placeholder="ws://localhost:4455"></label>
         <label>Password <input type="password" id="cfg-obs-password" placeholder="(leave blank if none)"></label>
+        <label>Screenshot interval (ms) <input type="number" id="cfg-obs-screenshot-interval" placeholder="1000" min="200"></label>
         <div class="discover-row">
           <button class="btn" onclick="discoverObs()">Auto-detect</button>
           <span class="discover-status" id="discover-obs-status"></span>
@@ -146,6 +147,7 @@
         <label>Host <input type="text" id="cfg-proclaim-host" placeholder="127.0.0.1"></label>
         <label>Port <input type="number" id="cfg-proclaim-port" placeholder="52195"></label>
         <label>Password <input type="password" id="cfg-proclaim-password" placeholder="proclaim"></label>
+        <label>Poll interval (ms) <input type="number" id="cfg-proclaim-poll-interval" placeholder="1000" min="500"></label>
         <div class="discover-row">
           <button class="btn" onclick="discoverProclaim()">Auto-detect</button>
           <span class="discover-status" id="discover-proclaim-status"></span>

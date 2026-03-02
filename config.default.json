@@ -4,7 +4,8 @@
   },
   "obs": {
     "address": "ws://localhost:4455",
-    "password": ""
+    "password": "",
+    "screenshotInterval": 1000
   },
   "x32": {
     "address": "192.168.1.100",
@@ -22,6 +23,6 @@
     "host": "127.0.0.1",
     "port": 52195,
     "password": "proclaim",
-    "pollInterval": 10000
+    "pollInterval": 1000
   }
 }

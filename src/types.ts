@@ -60,6 +60,7 @@ export interface Config {
   obs: {
     address: string;
     password: string;
+    screenshotInterval: number;
   };
   x32: {
     address: string;

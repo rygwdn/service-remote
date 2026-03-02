@@ -264,8 +264,9 @@ let screenshotInterval = null;
 let lastObsScene = null;
 
 function startScreenshotPolling() {
-  if (screenshotInterval) return;
-  screenshotInterval = setInterval(refreshScreenshot, 2000);
+  stopScreenshotPolling();
+  const interval = (currentConfig && currentConfig.obs && currentConfig.obs.screenshotInterval) || 1000;
+  screenshotInterval = setInterval(refreshScreenshot, interval);
   refreshScreenshot();
 }
 
@@ -392,11 +393,13 @@ async function loadConfig() {
 function populateConfigForm(cfg) {
   document.getElementById('cfg-obs-address').value = cfg.obs.address || '';
   document.getElementById('cfg-obs-password').value = cfg.obs.password || '';
+  document.getElementById('cfg-obs-screenshot-interval').value = cfg.obs.screenshotInterval || 1000;
   document.getElementById('cfg-x32-address').value = cfg.x32.address || '';
   document.getElementById('cfg-x32-port').value = cfg.x32.port || '';
   document.getElementById('cfg-proclaim-host').value = cfg.proclaim.host || '';
   document.getElementById('cfg-proclaim-port').value = cfg.proclaim.port || '';
   document.getElementById('cfg-proclaim-password').value = cfg.proclaim.password || '';
+  document.getElementById('cfg-proclaim-poll-interval').value = cfg.proclaim.pollInterval || 1000;
   renderX32ChannelEditor(cfg.x32.channels || []);
 }
 
@@ -437,6 +440,7 @@ async function saveConfig() {
       obs: {
         address: document.getElementById('cfg-obs-address').value.trim(),
         password: document.getElementById('cfg-obs-password').value,
+        screenshotInterval: parseInt(document.getElementById('cfg-obs-screenshot-interval').value) || 1000,
       },
       x32: {
         address: document.getElementById('cfg-x32-address').value.trim(),
@@ -447,6 +451,7 @@ async function saveConfig() {
         host: document.getElementById('cfg-proclaim-host').value.trim(),
         port: parseInt(document.getElementById('cfg-proclaim-port').value) || 52195,
         password: document.getElementById('cfg-proclaim-password').value,
+        pollInterval: parseInt(document.getElementById('cfg-proclaim-poll-interval').value) || 1000,
       },
     };
     const res = await fetch('/api/config', {
