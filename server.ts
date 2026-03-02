@@ -16,7 +16,12 @@ import proclaim = require('./src/connections/proclaim');
 
 // ── Crash / unexpected-shutdown logging ──────────────────────────────────────
 
-process.on('uncaughtException', (err: Error) => {
+// Ignore EPIPE errors on stdout/stderr (happens when terminal is closed)
+process.stdout.on('error', (err: NodeJS.ErrnoException) => { if (err.code !== 'EPIPE') throw err; });
+process.stderr.on('error', (err: NodeJS.ErrnoException) => { if (err.code !== 'EPIPE') throw err; });
+
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EPIPE') return; // stdout/stderr closed, not a real crash
   logger.error('[Server] Uncaught exception:', err);
   process.exit(1);
 });

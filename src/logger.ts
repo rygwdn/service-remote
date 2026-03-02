@@ -1,6 +1,6 @@
 import fs = require('fs');
 
-export interface LogEntry {
+interface LogEntry {
   ts: string;
   level: 'info' | 'warn' | 'error';
   msg: string;
