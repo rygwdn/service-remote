@@ -28,9 +28,8 @@ function mockFetch(responses) {
   };
 }
 
-describe('proclaim._authenticate', () => {
+describe('proclaim._authenticateAppCommand', () => {
   afterEach(() => {
-    // Remove mock fetch
     delete globalThis.fetch;
     for (const key of Object.keys(require.cache)) {
       if (key.includes('connections/proclaim')) delete require.cache[key];
@@ -40,20 +39,63 @@ describe('proclaim._authenticate', () => {
   test('returns token on success', async () => {
     mockFetch([{ status: 200, body: { proclaimAuthToken: 'abc123' } }]);
     const proclaim = freshProclaim();
-    const token = await proclaim._authenticate();
+    const token = await proclaim._authenticateAppCommand();
     assert.equal(token, 'abc123');
   });
 
   test('throws on HTTP error', async () => {
     mockFetch([{ status: 403, body: {} }]);
     const proclaim = freshProclaim();
-    await assert.rejects(() => proclaim._authenticate(), /auth failed/);
+    await assert.rejects(() => proclaim._authenticateAppCommand(), /auth failed/);
   });
 
   test('throws when token is missing from response', async () => {
     mockFetch([{ status: 200, body: { other: 'field' } }]);
     const proclaim = freshProclaim();
-    await assert.rejects(() => proclaim._authenticate(), /no token/);
+    await assert.rejects(() => proclaim._authenticateAppCommand(), /no token/);
+  });
+});
+
+describe('proclaim._authenticateRemote', () => {
+  afterEach(() => {
+    delete globalThis.fetch;
+    for (const key of Object.keys(require.cache)) {
+      if (key.includes('connections/proclaim')) delete require.cache[key];
+    }
+  });
+
+  test('returns onAirSessionId and connectionId on success', async () => {
+    let capturedControlHeaders;
+    globalThis.fetch = async (url, opts) => {
+      if (url.includes('onair/session')) {
+        return { ok: true, status: 200, json: async () => 'sess1', text: async () => 'sess1' };
+      }
+      if (url.includes('auth/control')) {
+        capturedControlHeaders = opts && opts.headers;
+        return { ok: true, status: 200, json: async () => ({ connectionId: 'conn1' }), text: async () => '' };
+      }
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+    };
+    const proclaim = freshProclaim();
+    const result = await proclaim._authenticateRemote();
+    assert.equal(result.onAirSessionId, 'sess1');
+    assert.equal(result.connectionId, 'conn1');
+    assert.equal(capturedControlHeaders['OnAirSessionId'], 'sess1');
+  });
+
+  test('throws when onair/session fails', async () => {
+    mockFetch([{ status: 503, body: '' }]);
+    const proclaim = freshProclaim();
+    await assert.rejects(() => proclaim._authenticateRemote(), /onair\/session failed/);
+  });
+
+  test('throws when auth/control returns no connectionId', async () => {
+    globalThis.fetch = async (url) => {
+      if (url.includes('onair/session')) return { ok: true, status: 200, json: async () => 'sess1', text: async () => 'sess1' };
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+    };
+    const proclaim = freshProclaim();
+    await assert.rejects(() => proclaim._authenticateRemote(), /no connectionId/);
   });
 });
 
@@ -72,27 +114,6 @@ describe('proclaim.sendAction', () => {
   });
 
   test('sends correct URL and headers after auth', async () => {
-    let capturedUrl, capturedHeaders;
-    globalThis.fetch = async (url, opts) => {
-      if (url.includes('authenticate')) {
-        return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok1' }), text: async () => '' };
-      }
-      capturedUrl = url;
-      capturedHeaders = opts && opts.headers;
-      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
-    };
-
-    const proclaim = freshProclaim();
-    await proclaim._authenticate().then((t) => {
-      // Manually set internal token by connecting
-    });
-
-    // Use connect to set token, then sendAction
-    // Since connect calls authenticate and startPolling, we need a controlled approach
-    // Instead test authenticate result then sendAction via a fresh module with token set via connect
-    // Reset and use a simpler fetch mock that sets the token
-    delete globalThis.fetch;
-
     let fetchCalls = [];
     globalThis.fetch = async (url, opts) => {
       fetchCalls.push({ url, headers: opts && opts.headers });
@@ -102,17 +123,15 @@ describe('proclaim.sendAction', () => {
       if (url.includes('onair/session')) {
         return { ok: true, status: 200, json: async () => null, text: async () => '' };
       }
-      // perform endpoint
       return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
     };
 
-    const proclaim2 = freshProclaim();
-    await proclaim2.connect();
-    // Wait a tick for async startPolling
+    const proclaim = freshProclaim();
+    await proclaim.connect();
     await new Promise((r) => setTimeout(r, 10));
 
     fetchCalls = [];
-    const result = await proclaim2.sendAction('NextSlide');
+    const result = await proclaim.sendAction('NextSlide');
     assert.equal(result, true);
     assert.ok(fetchCalls.length > 0);
     const performCall = fetchCalls.find((c) => c.url.includes('perform'));
@@ -182,9 +201,7 @@ describe('proclaim._pollStatus', () => {
   });
 
   test('sets connected=false on network error and schedules reconnect', async () => {
-    let callCount = 0;
     globalThis.fetch = async (url) => {
-      callCount++;
       if (url.includes('authenticate')) {
         return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok' }), text: async () => '' };
       }
@@ -205,19 +222,27 @@ describe('proclaim._pollStatus', () => {
     assert.ok(disconnectedUpdate, 'Expected a disconnected state update');
   });
 
-  test('clears token and schedules reconnect on 401', async () => {
-    globalThis.fetch = async (url) => {
+  test('clears app command token on sendAction 401', async () => {
+    let tokenSet = false;
+    globalThis.fetch = async (url, opts) => {
       if (url.includes('authenticate')) {
         return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok' }), text: async () => '' };
       }
-      return { ok: false, status: 401, json: async () => null, text: async () => '' };
+      if (url.includes('onair/session')) {
+        return { ok: true, status: 200, json: async () => null, text: async () => '' };
+      }
+      if (url.includes('perform')) {
+        return { ok: false, status: 401, json: async () => null, text: async () => '' };
+      }
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
     };
 
     const proclaim = freshProclaim();
     await proclaim.connect();
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 10));
 
-    // After 401, token should be cleared and getToken returns null
+    assert.equal(proclaim.getToken(), 'tok');
+    await proclaim.sendAction('NextSlide');
     assert.equal(proclaim.getToken(), null);
   });
 });

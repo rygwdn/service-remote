@@ -92,7 +92,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
         req.query.slideIndex as string | undefined,
         req.query.localRevision as string | undefined
       );
-      const r = await fetch(url, { headers: { ProclaimAuthToken: proclaim.getToken() || '' } });
+      const r = await fetch(url);
       if (!r.ok) return res.status(r.status).end();
       res.set('Content-Type', 'image/png');
       res.send(Buffer.from(await r.arrayBuffer()));
