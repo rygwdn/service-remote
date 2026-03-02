@@ -70,8 +70,8 @@ async function authenticateRemote(): Promise<{ onAirSessionId: string; connectio
       'OnAirSessionId': sessionId,
     },
     body: JSON.stringify({
-      faithlifeUserId: 0,
-      userName: 'service-remote',
+      faithlifeUserId: 4429808,
+      userName: 'Ryan Wooden',
       remoteDeviceName: '',
       password: config.proclaim.password,
     }),
