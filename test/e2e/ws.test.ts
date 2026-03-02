@@ -130,8 +130,10 @@ describe('WebSocket meter subscription lifecycle', () => {
     const { ws } = await connectAndReceive(testPort);
     await waitForClose(ws);
 
-    // Allow the server-side close event to propagate
-    await new Promise((resolve) => setImmediate(resolve));
+    // Allow the server-side close event to propagate.
+    // The server-side 'close' fires after the client-side 'close' (TCP FIN exchange
+    // needs one extra I/O poll cycle), so setImmediate alone is insufficient.
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
     assert.equal(calls.x32.stopMeterUpdates, 1, 'stopMeterUpdates should be called when last client leaves');
 
@@ -147,7 +149,7 @@ describe('WebSocket meter subscription lifecycle', () => {
 
     // Close only the first client
     await waitForClose(ws1);
-    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
     assert.equal(calls.x32.stopMeterUpdates, undefined, 'stopMeterUpdates should not be called while ws2 is still open');
 
