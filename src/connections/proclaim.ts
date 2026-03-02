@@ -38,12 +38,11 @@ async function authenticate(): Promise<string> {
   if (!res.ok) {
     throw new Error(`Proclaim auth failed: ${res.status}`);
   }
-  const data = await res.json() as { token?: string };
-  if (!data.token) {
-    console.log('[Proclaim] Auth response body:', JSON.stringify(data));
+  const data = await res.json() as { proclaimAuthToken?: string };
+  if (!data.proclaimAuthToken) {
     throw new Error('Proclaim auth: no token in response');
   }
-  return data.token;
+  return data.proclaimAuthToken;
 }
 
 async function sendAction(commandName: string, index?: number): Promise<boolean> {
