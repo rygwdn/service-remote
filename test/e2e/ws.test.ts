@@ -87,3 +87,73 @@ describe('WebSocket', () => {
     assert.equal((data.data as any).proclaim.connected, true);
   });
 });
+
+describe('WebSocket meter subscription lifecycle', () => {
+  // Each test in this suite gets its own isolated server so call counts are fresh.
+
+  function waitForClose(socket: InstanceType<typeof wsModule.WebSocket>): Promise<void> {
+    return new Promise((resolve) => {
+      if (socket.readyState === wsModule.WebSocket.CLOSED) { resolve(); return; }
+      socket.once('close', resolve);
+      socket.close();
+    });
+  }
+
+  test('startMeterUpdates is called when the first client connects', async () => {
+    const { server, calls } = createTestApp();
+    const testPort = await startServer(server);
+
+    const { ws } = await connectAndReceive(testPort);
+    assert.equal(calls.x32.startMeterUpdates, 1, 'startMeterUpdates should be called once');
+
+    await waitForClose(ws);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  test('startMeterUpdates is NOT called again when a second client connects', async () => {
+    const { server, calls } = createTestApp();
+    const testPort = await startServer(server);
+
+    const { ws: ws1 } = await connectAndReceive(testPort);
+    const { ws: ws2 } = await connectAndReceive(testPort);
+    assert.equal(calls.x32.startMeterUpdates, 1, 'startMeterUpdates should only be called for the first client');
+
+    await waitForClose(ws1);
+    await waitForClose(ws2);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  test('stopMeterUpdates is called when the last client disconnects', async () => {
+    const { server, calls } = createTestApp();
+    const testPort = await startServer(server);
+
+    const { ws } = await connectAndReceive(testPort);
+    await waitForClose(ws);
+
+    // Allow the server-side close event to propagate.
+    // The server-side 'close' fires after the client-side 'close' (TCP FIN exchange
+    // needs one extra I/O poll cycle), so setImmediate alone is insufficient.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.equal(calls.x32.stopMeterUpdates, 1, 'stopMeterUpdates should be called when last client leaves');
+
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  test('stopMeterUpdates is NOT called while other clients remain connected', async () => {
+    const { server, calls } = createTestApp();
+    const testPort = await startServer(server);
+
+    const { ws: ws1 } = await connectAndReceive(testPort);
+    const { ws: ws2 } = await connectAndReceive(testPort);
+
+    // Close only the first client
+    await waitForClose(ws1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.equal(calls.x32.stopMeterUpdates, undefined, 'stopMeterUpdates should not be called while ws2 is still open');
+
+    await waitForClose(ws2);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+});

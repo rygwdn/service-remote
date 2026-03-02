@@ -83,7 +83,7 @@ if (Object.keys(embeddedPublic).length > 0) {
 }
 
 setupRoutes(app, { obs, x32, proclaim });
-setupWebSocket(server, state);
+setupWebSocket(server, state, x32);
 
 // Set up file logging next to config.json
 const logFile = path.join(path.dirname(config.userConfigPath), 'service-remote.log');
