@@ -28,7 +28,6 @@ let presentationCache: {
   }>;
 } | null = null;
 let presentationLocalRevision = '0'; // kept as string — value exceeds JS safe integer range
-let statusChangedAbortController: AbortController | null = null;
 
 function baseUrl(): string {
   return `http://${config.proclaim.host}:${config.proclaim.port}`;
@@ -194,105 +193,82 @@ async function pollStatus(): Promise<void> {
 const EXCLUDED_KINDS = new Set(['Grouping', 'StageDirectionCue']);
 
 async function fetchDetailedStatus(): Promise<void> {
-  try {
-    const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
-      headers: { 'OnAirSessionId': onAirSessionId! },
-    });
-    logger.log('[Proclaim] presentations/onair status:', presRes.status);
-    if (presRes.ok) {
-      presentationCache = await presRes.json() as typeof presentationCache;
-      logger.log('[Proclaim] presentations/onair loaded, items:', (presentationCache as any)?.serviceItems?.length ?? 0);
-    } else {
-      logger.log('[Proclaim] presentations/onair failed:', presRes.status);
-    }
-  } catch (err) {
-    logger.log('[Proclaim] presentations/onair error:', (err as Error).message);
-  }
-
-  // Start/restart the long-poll loop for statusChanged
-  if (statusChangedAbortController) {
-    statusChangedAbortController.abort();
-  }
-  statusChangedAbortController = new AbortController();
-  pollStatusChanged(statusChangedAbortController.signal);
-}
-
-async function pollStatusChanged(signal: AbortSignal): Promise<void> {
-  while (!signal.aborted) {
+  // Fetch presentation cache if missing
+  if (!presentationCache) {
     try {
-      const headers: Record<string, string> = { 'OnAirSessionId': onAirSessionId! };
-      if (connectionId) headers['ConnectionId'] = connectionId;
-      const res = await fetch(
-        `${baseUrl()}/onair/statusChanged?localrevision=${presentationLocalRevision}&step=250`,
-        { headers, signal }
-      );
-
-      if (signal.aborted) break;
-
-      if (!res.ok) {
-        logger.log('[Proclaim] statusChanged error:', res.status);
-        await new Promise((r) => setTimeout(r, 2000));
-        break;
-      }
-
-      const data = await res.json() as {
-        presentationId?: string;
-        presentationLocalRevision?: number | string;
-        status?: {
-          itemId?: string;
-          slideIndex?: number;
-        };
-      };
-
-      logger.log('[Proclaim] statusChanged data:', JSON.stringify(data).slice(0, 300));
-
-      if (data && data.presentationLocalRevision !== undefined) {
-        presentationLocalRevision = String(data.presentationLocalRevision);
-      }
-
-      const status = data && data.status;
-      if (!status) continue;
-
-      // If presentation cache is missing or presentation changed, refresh it
-      if (
-        data.presentationId &&
-        (!presentationCache || (presentationCache as any).id !== data.presentationId)
-      ) {
-        try {
-          const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
-            headers: { 'OnAirSessionId': onAirSessionId! },
-          });
-          if (presRes.ok) {
-            presentationCache = await presRes.json() as typeof presentationCache;
-          }
-        } catch (_) {
-          // best-effort
-        }
-      }
-
-      const rawItems = (presentationCache as any)?.serviceItems ?? [];
-      const serviceItems: ServiceItem[] = rawItems
-        .filter((item: any) => !EXCLUDED_KINDS.has(item.kind))
-        .map((item: any) => ({
-          id: item.id,
-          title: item.title,
-          kind: item.kind,
-          slideCount: item.slides ? item.slides.length : 0,
-        }));
-
-      const currentItem = serviceItems.find((item) => item.id === status.itemId);
-
-      state.update('proclaim', {
-        currentItemId: status.itemId || null,
-        currentItemTitle: currentItem ? currentItem.title : null,
-        currentItemType: currentItem ? currentItem.kind : null,
-        slideIndex: status.slideIndex !== undefined ? status.slideIndex : null,
-        serviceItems,
+      const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
+        headers: { 'OnAirSessionId': onAirSessionId! },
       });
+      if (presRes.ok) {
+        presentationCache = await presRes.json() as typeof presentationCache;
+        logger.log('[Proclaim] presentations/onair loaded, items:', (presentationCache as any)?.serviceItems?.length ?? 0);
+      } else {
+        logger.log('[Proclaim] presentations/onair failed:', presRes.status);
+      }
     } catch (err) {
-      if (signal.aborted) break;
-      await new Promise((r) => setTimeout(r, 2000));
+      logger.log('[Proclaim] presentations/onair error:', (err as Error).message);
     }
+  }
+
+  // Fetch current status (not a long-poll — Proclaim returns immediately)
+  try {
+    const headers: Record<string, string> = { 'OnAirSessionId': onAirSessionId! };
+    if (connectionId) headers['ConnectionId'] = connectionId;
+    const res = await fetch(`${baseUrl()}/onair/statusChanged?localrevision=${presentationLocalRevision}&step=250`, { headers });
+
+    if (!res.ok) {
+      logger.log('[Proclaim] statusChanged error:', res.status);
+      return;
+    }
+
+    const data = await res.json() as {
+      presentationId?: string;
+      presentationLocalRevision?: number | string;
+      status?: { itemId?: string; slideIndex?: number };
+    };
+
+    if (data.presentationLocalRevision !== undefined) {
+      presentationLocalRevision = String(data.presentationLocalRevision);
+    }
+
+    const status = data.status;
+    if (!status) return;
+
+    // If presentation changed, refresh the cache
+    if (data.presentationId && (presentationCache as any)?.id !== data.presentationId) {
+      try {
+        const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
+          headers: { 'OnAirSessionId': onAirSessionId! },
+        });
+        if (presRes.ok) {
+          presentationCache = await presRes.json() as typeof presentationCache;
+        }
+      } catch (_) {
+        // best-effort
+      }
+    }
+
+    const rawItems = (presentationCache as any)?.serviceItems ?? [];
+    const serviceItems: ServiceItem[] = rawItems
+      .filter((item: any) => !EXCLUDED_KINDS.has(item.kind))
+      .map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        kind: item.kind,
+        slideCount: item.slides ? item.slides.length : 0,
+      }));
+
+    const currentItem = serviceItems.find((item) => item.id === status.itemId);
+
+    state.update('proclaim', {
+      currentItemId: status.itemId || null,
+      currentItemTitle: currentItem ? currentItem.title : null,
+      currentItemType: currentItem ? currentItem.kind : null,
+      slideIndex: status.slideIndex !== undefined ? status.slideIndex : null,
+      serviceItems,
+    });
+  } catch (err) {
+    logger.log('[Proclaim] statusChanged error:', (err as Error).message);
   }
 }
 
@@ -320,7 +296,6 @@ async function connect(): Promise<void> {
 function disconnect(): void {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-  if (statusChangedAbortController) { statusChangedAbortController.abort(); statusChangedAbortController = null; }
   appCommandToken = null;
   onAirSessionId = null;
   connectionId = null;
