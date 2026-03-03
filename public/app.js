@@ -117,7 +117,7 @@ function renderObs(obs) {
   audioEl.innerHTML = obs.audioSources
     .map(
       (src) => `
-    <div class="audio-source">
+    <div class="audio-source${src.live ? ' live' : ''}">
       <span class="name">${esc(src.name)}</span>
       <input type="range" min="-60" max="0" step="0.5"
         value="${src.volume != null && isFinite(src.volume) ? src.volume.toFixed(1) : -60}"

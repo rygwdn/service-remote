@@ -33,8 +33,9 @@ obs.on('ConnectionClosed', () => {
   scheduleReconnect();
 });
 
-obs.on('CurrentProgramSceneChanged', ({ sceneName }) => {
+obs.on('CurrentProgramSceneChanged', async ({ sceneName }) => {
   state.update('obs', { currentScene: sceneName });
+  await refreshLiveStatus(sceneName);
 });
 
 obs.on('SceneListChanged', async () => {
@@ -64,6 +65,56 @@ obs.on('InputMuteStateChanged', ({ inputName, inputMuted }) => {
   state.update('obs', { audioSources: sources });
 });
 
+obs.on('SceneItemEnableStateChanged', async ({ sceneName }) => {
+  if (sceneName === state.get().obs.currentScene) {
+    await refreshLiveStatus(sceneName);
+  }
+});
+
+// Returns source names that are enabled scene items in the given scene
+async function getSceneSourceNames(sceneName: string): Promise<Set<string>> {
+  try {
+    const { sceneItems } = await obs.call('GetSceneItemList', { sceneName });
+    const names = new Set<string>();
+    for (const item of sceneItems) {
+      if (item.sceneItemEnabled) {
+        names.add(item.sourceName as string);
+      }
+    }
+    return names;
+  } catch {
+    return new Set<string>();
+  }
+}
+
+// Returns true if the source is hidden from the OBS audio mixer panel
+async function isSourceHiddenFromMixer(sourceName: string): Promise<boolean> {
+  try {
+    // GetSourcePrivateSettings may not exist in all obs-websocket-js type definitions,
+    // so we use a runtime call with type assertion. Any failure defaults to not hidden.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (obs as any).call('GetSourcePrivateSettings', { sourceName });
+    const settings = (result?.sourcePrivateSettings ?? {}) as Record<string, unknown>;
+    return !!(settings?.audioMixerHidden);
+  } catch {
+    return false;
+  }
+}
+
+// Updates the live status of all audio sources based on the current scene's source list
+async function refreshLiveStatus(sceneName: string): Promise<void> {
+  try {
+    const liveSourceNames = await getSceneSourceNames(sceneName);
+    const sources = state.get().obs.audioSources.map((s) => ({
+      ...s,
+      live: liveSourceNames.has(s.name),
+    }));
+    state.update('obs', { audioSources: sources });
+  } catch (err) {
+    logger.log('[OBS] Failed to refresh live status:', (err as Error).message);
+  }
+}
+
 async function refreshState(): Promise<void> {
   try {
     const [sceneList, streamStatus, recordStatus] = await Promise.all([
@@ -75,21 +126,26 @@ async function refreshState(): Promise<void> {
     const scenes = sceneList.scenes.map((s) => s.sceneName as string).reverse();
     const currentScene = sceneList.currentProgramSceneName as string;
 
-    // Get audio sources
+    // Get the source names active in the current scene
+    const liveSourceNames = await getSceneSourceNames(currentScene);
+
+    // Get audio sources, filtering out those hidden from the OBS audio mixer
     const { inputs } = await obs.call('GetInputList');
-    const audioSources: Array<{ name: string; volume: number; muted: boolean }> = [];
+    const audioSources: Array<{ name: string; volume: number; muted: boolean; live: boolean }> = [];
     for (const input of inputs) {
       try {
-        const vol = await obs.call('GetInputVolume', {
-          inputName: input.inputName as string,
-        });
-        const mute = await obs.call('GetInputMute', {
-          inputName: input.inputName as string,
-        });
+        const inputName = input.inputName as string;
+        const [vol, mute, hidden] = await Promise.all([
+          obs.call('GetInputVolume', { inputName }),
+          obs.call('GetInputMute', { inputName }),
+          isSourceHiddenFromMixer(inputName),
+        ]);
+        if (hidden) continue;
         audioSources.push({
-          name: input.inputName as string,
+          name: inputName,
           volume: mulToDb(vol.inputVolumeMul as number),
           muted: mute.inputMuted as boolean,
+          live: liveSourceNames.has(inputName),
         });
       } catch {
         // Not all inputs have audio
