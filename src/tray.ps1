@@ -9,8 +9,12 @@
 #   { "event": "open" }
 #   { "event": "exit" }
 
+[Console]::Error.WriteLine('[Tray] PowerShell tray script starting')
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+
+[Console]::Error.WriteLine('[Tray] Assemblies loaded')
 
 # Build a 16x16 solid-blue bitmap as the tray icon (no external file needed)
 function New-TrayIcon {
@@ -22,11 +26,13 @@ function New-TrayIcon {
 }
 
 $icon = New-TrayIcon
+[Console]::Error.WriteLine('[Tray] Tray icon created')
 
 $tray = New-Object System.Windows.Forms.NotifyIcon
 $tray.Icon = $icon
 $tray.Text = 'service-remote'
 $tray.Visible = $true
+[Console]::Error.WriteLine('[Tray] Tray icon set visible')
 
 # Context menu
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
@@ -59,6 +65,7 @@ $exitItem.add_Click({
 $null = $menu.Items.Add($exitItem)
 
 $tray.ContextMenuStrip = $menu
+[Console]::Error.WriteLine('[Tray] Context menu configured')
 
 # Double-click also opens the browser
 $tray.add_DoubleClick({
@@ -70,11 +77,13 @@ $tray.add_DoubleClick({
 $stdin = [Console]::In
 $scriptBlock = {
     param($stdin, $statusItem, $tray, $menu)
+    [Console]::Error.WriteLine('[Tray] stdin reader thread started')
     while ($true) {
         $line = $stdin.ReadLine()
         if ($null -eq $line) { break }
         $line = $line.Trim()
         if ($line -eq '') { continue }
+        [Console]::Error.WriteLine("[Tray] stdin command: $line")
         try {
             $msg = $line | ConvertFrom-Json
         } catch { continue }
@@ -92,6 +101,7 @@ $scriptBlock = {
         }
     }
     # stdin closed — parent process gone
+    [Console]::Error.WriteLine('[Tray] stdin closed — exiting')
     $tray.Visible = $false
     [System.Windows.Forms.Application]::Exit()
 }
@@ -105,7 +115,9 @@ $ps.Runspace = $rs
 $null = $ps.AddScript($scriptBlock).AddArgument($stdin).AddArgument($statusItem).AddArgument($tray).AddArgument($menu)
 $null = $ps.BeginInvoke()
 
+[Console]::Error.WriteLine('[Tray] Starting Windows Forms message loop')
 [System.Windows.Forms.Application]::Run()
 
 $rs.Close()
 $tray.Dispose()
+[Console]::Error.WriteLine('[Tray] Message loop exited — script done')

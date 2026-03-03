@@ -98,5 +98,5 @@ const url = `http://localhost:${port}`;
 server.listen(port, () => {
   logger.log(`[Server] Service Remote running at ${url}`);
   openBrowser(url);
-  startTray(port, state);
+  startTray(port, state, () => shutdown('tray'));
 });
