@@ -83,15 +83,11 @@ if (Object.keys(embeddedPublic).length > 0) {
 }
 
 setupRoutes(app, { obs, x32, proclaim });
-setupWebSocket(server, state, x32);
+setupWebSocket(server, state, { obs, x32, proclaim });
 
 // Set up file logging next to config.json
 const logFile = path.join(path.dirname(config.userConfigPath), 'service-remote.log');
 logger.setLogFile(logFile);
-
-obs.connect();
-x32.connect();
-proclaim.connect();
 
 const port = config.server.port;
 const url = `http://localhost:${port}`;

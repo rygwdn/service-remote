@@ -157,3 +157,79 @@ describe('WebSocket meter subscription lifecycle', () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 });
+
+describe('WebSocket connection lifecycle', () => {
+  function waitForClose(socket: InstanceType<typeof wsModule.WebSocket>): Promise<void> {
+    return new Promise((resolve) => {
+      if (socket.readyState === wsModule.WebSocket.CLOSED) { resolve(); return; }
+      socket.once('close', resolve);
+      socket.close();
+    });
+  }
+
+  test('all connections are started when the first client connects', async () => {
+    const { server, calls } = createTestApp();
+    const testPort = await startServer(server);
+
+    const { ws } = await connectAndReceive(testPort);
+
+    assert.equal(calls.obs.connect, 1, 'obs.connect should be called once');
+    assert.equal(calls.x32.connect, 1, 'x32.connect should be called once');
+    assert.equal(calls.proclaim.connect, 1, 'proclaim.connect should be called once');
+
+    await waitForClose(ws);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  test('connections are NOT started again when a second client connects', async () => {
+    const { server, calls } = createTestApp();
+    const testPort = await startServer(server);
+
+    const { ws: ws1 } = await connectAndReceive(testPort);
+    const { ws: ws2 } = await connectAndReceive(testPort);
+
+    assert.equal(calls.obs.connect, 1, 'obs.connect should only be called for the first client');
+    assert.equal(calls.x32.connect, 1, 'x32.connect should only be called for the first client');
+    assert.equal(calls.proclaim.connect, 1, 'proclaim.connect should only be called for the first client');
+
+    await waitForClose(ws1);
+    await waitForClose(ws2);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  test('all connections are stopped when the last client disconnects', async () => {
+    const { server, calls } = createTestApp();
+    const testPort = await startServer(server);
+
+    const { ws } = await connectAndReceive(testPort);
+    await waitForClose(ws);
+
+    // Allow the server-side close event to propagate
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.equal(calls.obs.disconnect, 1, 'obs.disconnect should be called when last client leaves');
+    assert.equal(calls.x32.disconnect, 1, 'x32.disconnect should be called when last client leaves');
+    assert.equal(calls.proclaim.disconnect, 1, 'proclaim.disconnect should be called when last client leaves');
+
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  test('connections are NOT stopped while other clients remain connected', async () => {
+    const { server, calls } = createTestApp();
+    const testPort = await startServer(server);
+
+    const { ws: ws1 } = await connectAndReceive(testPort);
+    const { ws: ws2 } = await connectAndReceive(testPort);
+
+    // Close only the first client
+    await waitForClose(ws1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.equal(calls.obs.disconnect, undefined, 'obs.disconnect should not be called while ws2 is still open');
+    assert.equal(calls.x32.disconnect, undefined, 'x32.disconnect should not be called while ws2 is still open');
+    assert.equal(calls.proclaim.disconnect, undefined, 'proclaim.disconnect should not be called while ws2 is still open');
+
+    await waitForClose(ws2);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+});
