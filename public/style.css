@@ -344,6 +344,21 @@ main {
   background: var(--red);
 }
 
+.audio-source.live {
+  border-color: var(--green);
+}
+
+.audio-source.live .name::after {
+  content: ' \25CF';
+  color: var(--green);
+  font-size: 8px;
+  vertical-align: middle;
+}
+
+.audio-source:not(.live) {
+  opacity: 0.6;
+}
+
 /* Stream/Record buttons */
 #obs-stream-btn.active {
   background: var(--red);

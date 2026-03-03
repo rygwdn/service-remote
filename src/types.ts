@@ -2,6 +2,7 @@ export interface AudioSource {
   name: string;
   volume: number;
   muted: boolean;
+  live: boolean; // true if source appears as an enabled item in the current program scene
 }
 
 export interface Channel {
