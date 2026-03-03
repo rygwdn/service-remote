@@ -30,12 +30,18 @@ fs.mkdirSync(dist, { recursive: true });
 const exeName = 'service-remote' + (process.platform === 'win32' ? '.exe' : '');
 const outfile = path.join(dist, exeName);
 
+// --windows-hide-console suppresses the terminal window so the tray app runs
+// silently in the background. The flag requires building natively on Windows
+// (it cannot be used when cross-compiling).
+const windowsFlags = process.platform === 'win32' ? ['--windows-hide-console'] : [];
+
 run(
   [
     'bun build',
     '--compile',
     '--minify',
     '--target=bun',
+    ...windowsFlags,
     'server.ts',
     `--outfile=${outfile}`,
   ].join(' ')
