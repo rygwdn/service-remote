@@ -265,22 +265,39 @@ async function fetchDetailedStatus(): Promise<void> {
     }
 
     const rawItems = (presentationCache as any)?.serviceItems ?? [];
-    const serviceItems: ServiceItem[] = rawItems
-      .map((item: any, i: number) => ({ item, rawIndex: i + 1 }))
-      .filter(({ item }: { item: any }) =>
-        !EXCLUDED_KINDS.has(item.kind) &&
-        !(item.kind === 'Grouping' && item.title === 'Slide Group')
-      )
-      .map(({ item, rawIndex }: { item: any; rawIndex: number }) => ({
+    const cache = presentationCache as any;
+    const warmupStartIndex: number | null = cache?.warmupStartIndex ?? null;
+    const serviceStartIndex: number | null = cache?.serviceStartIndex ?? null;
+    const postServiceStartIndex: number | null = cache?.postServiceStartIndex ?? null;
+
+    function getSection(zeroBasedIdx: number): string {
+      if (postServiceStartIndex != null && zeroBasedIdx >= postServiceStartIndex) return 'Post-Service';
+      if (serviceStartIndex != null && zeroBasedIdx >= serviceStartIndex) return 'Service';
+      if (warmupStartIndex != null && zeroBasedIdx >= warmupStartIndex) return 'Warmup';
+      return 'Pre-Service';
+    }
+
+    let currentGroup: string | null = null;
+    const serviceItems: ServiceItem[] = [];
+    for (let i = 0; i < rawItems.length; i++) {
+      const item = rawItems[i];
+      if (EXCLUDED_KINDS.has(item.kind)) continue;
+      if (item.kind === 'Grouping') {
+        currentGroup = item.title === 'Slide Group' ? null : item.title;
+        continue;
+      }
+      serviceItems.push({
         id: item.id,
         title: item.title,
         kind: item.kind,
         slideCount: item.slides ? item.slides.length : 0,
-        index: rawIndex,
-      }));
+        index: i + 1,
+        section: getSection(i),
+        group: currentGroup,
+      });
+    }
 
     const currentItem = serviceItems.find((item) => item.id === status.itemId);
-    const cache = presentationCache as any;
 
     state.update('proclaim', {
       currentItemId: status.itemId || null,
@@ -288,9 +305,6 @@ async function fetchDetailedStatus(): Promise<void> {
       currentItemType: currentItem ? currentItem.kind : null,
       slideIndex: status.slideIndex !== undefined ? status.slideIndex : null,
       serviceItems,
-      warmupStartIndex: cache?.warmupStartIndex ?? null,
-      serviceStartIndex: cache?.serviceStartIndex ?? null,
-      postServiceStartIndex: cache?.postServiceStartIndex ?? null,
     });
   } catch (err) {
     logger.log('[Proclaim] statusChanged error:', (err as Error).message);

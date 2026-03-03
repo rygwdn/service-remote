@@ -256,27 +256,20 @@ function renderProclaim(p) {
   setThumb(document.getElementById('proclaim-thumb-next'), nextItemId, nextSlideIndex);
 
   // Service item list — use the original full-list 1-based index for GoToServiceItem
-  const hasTopLevelSections = p.warmupStartIndex != null || p.serviceStartIndex != null || p.postServiceStartIndex != null;
-  function getTopLevelSection(rawIdx) {
-    if (p.postServiceStartIndex != null && rawIdx >= p.postServiceStartIndex) return 'Post-Service';
-    if (p.serviceStartIndex != null && rawIdx >= p.serviceStartIndex) return 'Service';
-    if (p.warmupStartIndex != null && rawIdx >= p.warmupStartIndex) return 'Warmup';
-    return 'Pre-Service';
-  }
-
-  let currentTopSection = null;
+  let currentSection = null;
+  let currentGroup = null;
   const parts = [];
   for (const item of items) {
-    if (hasTopLevelSections) {
-      const section = getTopLevelSection(item.index - 1);
-      if (section !== currentTopSection) {
-        currentTopSection = section;
-        parts.push(`<div class="item-section-header">${esc(section)}</div>`);
-      }
+    if (item.section !== currentSection) {
+      currentSection = item.section;
+      currentGroup = null;
+      parts.push(`<div class="item-section-header">${esc(item.section)}</div>`);
     }
-    if (item.kind === 'Grouping') {
-      parts.push(`<div class="item-group-header">${esc(item.title || item.kind)}</div>`);
-      continue;
+    if (item.group !== currentGroup) {
+      currentGroup = item.group;
+      if (currentGroup) {
+        parts.push(`<div class="item-group-header">${esc(currentGroup)}</div>`);
+      }
     }
     const isActive = item.id === p.currentItemId;
     let slideCountLabel = '';
@@ -287,7 +280,8 @@ function renderProclaim(p) {
         slideCountLabel = ` <span class="item-slide-count">(${item.slideCount} slides)</span>`;
       }
     }
-    parts.push(`<button class="item-btn${isActive ? ' active' : ''}" onclick="sendAction('GoToServiceItem', ${item.index})">${esc(item.title || item.kind)}${slideCountLabel}</button>`);
+    const indentClass = item.group ? ' item-grouped' : '';
+    parts.push(`<button class="item-btn${isActive ? ' active' : ''}${indentClass}" onclick="sendAction('GoToServiceItem', ${item.index})">${esc(item.title || item.kind)}${slideCountLabel}</button>`);
   }
   itemsEl.innerHTML = parts.join('');
 }

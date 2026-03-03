@@ -19,6 +19,8 @@ export interface ServiceItem {
   kind: string;
   slideCount: number;
   index: number; // 1-based position in the full (unfiltered) Proclaim service item list
+  section: string; // e.g. 'Pre-Service', 'Warmup', 'Service', 'Post-Service'
+  group: string | null; // name of the containing Grouping item, or null
 }
 
 export interface ObsState {
@@ -43,9 +45,6 @@ export interface ProclaimState {
   currentItemType: string | null;
   slideIndex: number | null;
   serviceItems: ServiceItem[];
-  warmupStartIndex: number | null;
-  serviceStartIndex: number | null;
-  postServiceStartIndex: number | null;
 }
 
 export interface AppState {

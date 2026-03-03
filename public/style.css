@@ -257,18 +257,16 @@ main {
 }
 
 .item-group-header {
-  padding: 10px 16px 4px;
+  padding: 6px 16px 2px;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-dim);
-  border-top: 1px solid var(--accent);
   margin-top: 4px;
 }
 
-.item-group-header:first-child {
-  border-top: none;
-  margin-top: 0;
+.item-grouped {
+  margin-left: 12px;
 }
 
 .item-slide-count {

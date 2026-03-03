@@ -228,29 +228,30 @@ describe('proclaim service item indexing', () => {
     assert.ok(updateWithItems, 'Expected a state update with serviceItems');
 
     const items = updateWithItems.serviceItems;
-    assert.equal(items.length, 4, 'Should have 4 items after filtering out only StageDirectionCue (Grouping is included as section header)');
+    assert.equal(items.length, 3, 'Should have 3 items after filtering out StageDirectionCue and Grouping items');
 
-    // Song is at raw index 1
+    // Song is at raw index 1, 0-based index 0 < warmupStartIndex(2) → Pre-Service, no group
     assert.equal(items[0].id, 'item1');
     assert.equal(items[0].index, 1);
+    assert.equal(items[0].section, 'Pre-Service');
+    assert.equal(items[0].group, null);
 
-    // Grouping is at raw index 2 (now included as section header)
-    assert.equal(items[1].id, 'item2');
-    assert.equal(items[1].index, 2);
-    assert.equal(items[1].kind, 'Grouping');
+    // Prayer is at raw index 3, 0-based index 2 >= warmupStartIndex(2) → Warmup, group='Grouping' (set by item2)
+    assert.equal(items[1].id, 'item3');
+    assert.equal(items[1].index, 3);
+    assert.equal(items[1].section, 'Warmup');
+    assert.equal(items[1].group, 'Grouping');
 
-    // Prayer is at raw index 3
-    assert.equal(items[2].id, 'item3');
-    assert.equal(items[2].index, 3);
+    // Hymn is at raw index 5, 0-based index 4 >= serviceStartIndex(4) → Service, group='Grouping' (still active)
+    assert.equal(items[2].id, 'item5');
+    assert.equal(items[2].index, 5);
+    assert.equal(items[2].section, 'Service');
+    assert.equal(items[2].group, 'Grouping');
 
-    // Hymn is at raw index 5 (StageDirectionCue at index 4 was excluded)
-    assert.equal(items[3].id, 'item5');
-    assert.equal(items[3].index, 5);
-
-    // Section indices should be passed through to state
-    assert.equal(updateWithItems.warmupStartIndex, 2);
-    assert.equal(updateWithItems.serviceStartIndex, 4);
-    assert.equal(updateWithItems.postServiceStartIndex, 10);
+    // Section indices are no longer separate state fields
+    assert.equal(updateWithItems.warmupStartIndex, undefined);
+    assert.equal(updateWithItems.serviceStartIndex, undefined);
+    assert.equal(updateWithItems.postServiceStartIndex, undefined);
   });
 
   test('filters out Slide Group grouping items from serviceItems', async () => {
@@ -303,17 +304,23 @@ describe('proclaim service item indexing', () => {
     assert.ok(updateWithItems, 'Expected a state update with serviceItems');
 
     const items = updateWithItems.serviceItems;
-    assert.equal(items.length, 3, 'Should filter out Slide Group groupings but keep regular groupings');
+    assert.equal(items.length, 2, 'Should filter out both Slide Group and regular Grouping items');
     assert.ok(!items.find((i) => i.title === 'Slide Group'), 'Slide Group items should be filtered out');
-    assert.ok(items.find((i) => i.title === 'Worship'), 'Regular groupings should be included');
+    assert.ok(!items.find((i) => i.kind === 'Grouping'), 'All Grouping items should be filtered out');
 
-    // Slide Group at raw index 2 should be skipped; Worship is at raw index 3
-    const worshipItem = items.find((i) => i.title === 'Worship');
-    assert.equal(worshipItem.index, 3, 'Worship grouping should have raw index 3');
+    // Welcome is at raw index 1, no section indices → Pre-Service, no group
+    const welcomeItem = items.find((i) => i.title === 'Welcome');
+    assert.ok(welcomeItem, 'Welcome item should be present');
+    assert.equal(welcomeItem.index, 1);
+    assert.equal(welcomeItem.section, 'Pre-Service');
+    assert.equal(welcomeItem.group, null);
 
-    // Hymn is at raw index 4 (Slide Group at index 2 was excluded)
+    // Hymn is at raw index 4 (Slide Group at index 2 excluded, Worship at index 3 sets the group)
     const hymnItem = items.find((i) => i.title === 'Hymn');
+    assert.ok(hymnItem, 'Hymn should be present');
     assert.equal(hymnItem.index, 4, 'Hymn should retain its full-list index 4');
+    assert.equal(hymnItem.section, 'Pre-Service');
+    assert.equal(hymnItem.group, 'Worship', 'Hymn should be in the Worship group');
   });
 });
 
