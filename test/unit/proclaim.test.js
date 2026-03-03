@@ -225,19 +225,24 @@ describe('proclaim service item indexing', () => {
     assert.ok(updateWithItems, 'Expected a state update with serviceItems');
 
     const items = updateWithItems.serviceItems;
-    assert.equal(items.length, 3, 'Should have 3 items after filtering out Grouping and StageDirectionCue');
+    assert.equal(items.length, 4, 'Should have 4 items after filtering out only StageDirectionCue (Grouping is included as section header)');
 
     // Song is at raw index 1
     assert.equal(items[0].id, 'item1');
     assert.equal(items[0].index, 1);
 
-    // Prayer is at raw index 3 (Grouping at index 2 was excluded)
-    assert.equal(items[1].id, 'item3');
-    assert.equal(items[1].index, 3);
+    // Grouping is at raw index 2 (now included as section header)
+    assert.equal(items[1].id, 'item2');
+    assert.equal(items[1].index, 2);
+    assert.equal(items[1].kind, 'Grouping');
+
+    // Prayer is at raw index 3
+    assert.equal(items[2].id, 'item3');
+    assert.equal(items[2].index, 3);
 
     // Hymn is at raw index 5 (StageDirectionCue at index 4 was excluded)
-    assert.equal(items[2].id, 'item5');
-    assert.equal(items[2].index, 5);
+    assert.equal(items[3].id, 'item5');
+    assert.equal(items[3].index, 5);
   });
 });
 

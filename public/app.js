@@ -258,8 +258,19 @@ function renderProclaim(p) {
   // Service item list — use the original full-list 1-based index for GoToServiceItem
   itemsEl.innerHTML = items
     .map((item) => {
+      if (item.kind === 'Grouping') {
+        return `<div class="item-group-header">${esc(item.title || item.kind)}</div>`;
+      }
       const isActive = item.id === p.currentItemId;
-      return `<button class="item-btn${isActive ? ' active' : ''}" onclick="sendAction('GoToServiceItem', ${item.index})">${esc(item.title || item.kind)}</button>`;
+      let slideCountLabel = '';
+      if (item.slideCount > 1) {
+        if (isActive && p.slideIndex !== null) {
+          slideCountLabel = ` <span class="item-slide-count">(${p.slideIndex + 1} of ${item.slideCount})</span>`;
+        } else {
+          slideCountLabel = ` <span class="item-slide-count">(${item.slideCount} slides)</span>`;
+        }
+      }
+      return `<button class="item-btn${isActive ? ' active' : ''}" onclick="sendAction('GoToServiceItem', ${item.index})">${esc(item.title || item.kind)}${slideCountLabel}</button>`;
     })
     .join('');
 }

@@ -206,7 +206,7 @@ function parseProclaimJson(text: string): any {
   return JSON.parse(safe);
 }
 
-const EXCLUDED_KINDS = new Set(['Grouping', 'StageDirectionCue']);
+const EXCLUDED_KINDS = new Set(['StageDirectionCue']);
 
 async function fetchDetailedStatus(): Promise<void> {
   // Fetch presentation cache if missing

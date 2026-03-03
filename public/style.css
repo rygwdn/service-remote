@@ -240,6 +240,27 @@ main {
   font-weight: 600;
 }
 
+.item-group-header {
+  padding: 10px 16px 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--accent);
+  margin-top: 4px;
+}
+
+.item-group-header:first-child {
+  border-top: none;
+  margin-top: 0;
+}
+
+.item-slide-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: normal;
+}
+
 /* OBS */
 .obs-section {
   margin-bottom: 24px;
