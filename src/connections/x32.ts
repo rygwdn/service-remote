@@ -9,6 +9,7 @@ const { Client, Server } = nodeOsc;
 let client: InstanceType<typeof Client> | null = null;
 let server: InstanceType<typeof Server> | null = null;
 let connected = false;
+let wantConnected = false;
 let keepAliveInterval: ReturnType<typeof setInterval> | null = null;
 let subscribeInterval: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -33,6 +34,7 @@ const CH_COUNT = 32;
 const BUS_COUNT = 16;
 
 function connect(): void {
+  wantConnected = true;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (keepAliveInterval) clearInterval(keepAliveInterval);
   if (subscribeInterval) clearInterval(subscribeInterval);
@@ -71,7 +73,7 @@ function connect(): void {
 
   // If we get responses, we're connected
   setTimeout(() => {
-    if (!connected) {
+    if (wantConnected && !connected) {
       logger.log('[X32] No response, will retry...');
       state.update('x32', { connected: false, channels });
       scheduleReconnect();
@@ -80,6 +82,7 @@ function connect(): void {
 }
 
 function scheduleReconnect(): void {
+  if (!wantConnected) return;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = setTimeout(connect, 5000);
 }
@@ -244,6 +247,7 @@ function subscribeToChanges(): void {
 }
 
 function disconnect(): void {
+  wantConnected = false;
   if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
   if (subscribeInterval) { clearInterval(subscribeInterval); subscribeInterval = null; }
   if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }

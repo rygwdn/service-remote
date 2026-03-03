@@ -14,6 +14,7 @@ import type { ServiceItem } from '../types';
 let appCommandToken: string | null = null;
 let onAirSessionId: string | null = null;
 let connectionId: string | null = null;
+let wantConnected = false;
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -312,6 +313,7 @@ async function fetchDetailedStatus(): Promise<void> {
 }
 
 function scheduleReconnect(): void {
+  if (!wantConnected) return;
   if (reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
@@ -320,6 +322,7 @@ function scheduleReconnect(): void {
 }
 
 async function connect(): Promise<void> {
+  wantConnected = true;
   try {
     appCommandToken = await authenticateAppCommand();
     logger.log('[Proclaim] Authenticated');
@@ -333,6 +336,7 @@ async function connect(): Promise<void> {
 }
 
 function disconnect(): void {
+  wantConnected = false;
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   appCommandToken = null;

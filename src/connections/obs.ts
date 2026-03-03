@@ -7,8 +7,10 @@ const OBSWebSocket = obsWebSocketJs.default;
 
 const obs = new OBSWebSocket();
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let wantConnected = false;
 
 async function connect(): Promise<void> {
+  wantConnected = true;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   try {
     await obs.connect(config.obs.address, config.obs.password || undefined);
@@ -23,6 +25,7 @@ async function connect(): Promise<void> {
 }
 
 function scheduleReconnect(): void {
+  if (!wantConnected) return;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = setTimeout(connect, 5000);
 }
@@ -30,7 +33,7 @@ function scheduleReconnect(): void {
 obs.on('ConnectionClosed', () => {
   logger.log('[OBS] Disconnected');
   state.update('obs', { connected: false });
-  scheduleReconnect();
+  if (wantConnected) scheduleReconnect();
 });
 
 obs.on('CurrentProgramSceneChanged', async ({ sceneName }) => {
@@ -174,6 +177,7 @@ function dbToMul(db: number): number {
 }
 
 function disconnect(): void {
+  wantConnected = false;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
