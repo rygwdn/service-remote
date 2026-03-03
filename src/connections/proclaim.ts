@@ -266,12 +266,14 @@ async function fetchDetailedStatus(): Promise<void> {
 
     const rawItems = (presentationCache as any)?.serviceItems ?? [];
     const serviceItems: ServiceItem[] = rawItems
-      .filter((item: any) => !EXCLUDED_KINDS.has(item.kind))
-      .map((item: any) => ({
+      .map((item: any, i: number) => ({ item, rawIndex: i + 1 }))
+      .filter(({ item }: { item: any }) => !EXCLUDED_KINDS.has(item.kind))
+      .map(({ item, rawIndex }: { item: any; rawIndex: number }) => ({
         id: item.id,
         title: item.title,
         kind: item.kind,
         slideCount: item.slides ? item.slides.length : 0,
+        index: rawIndex,
       }));
 
     const currentItem = serviceItems.find((item) => item.id === status.itemId);
