@@ -178,6 +178,9 @@ describe('proclaim service item indexing', () => {
     const presentation = {
       id: 'pres1',
       localRevision: 1,
+      warmupStartIndex: 2,
+      serviceStartIndex: 4,
+      postServiceStartIndex: 10,
       serviceItems: [
         { id: 'item1', title: 'Song', kind: 'Song', slides: [{ index: 0, localRevision: 1 }] },
         { id: 'item2', title: 'Grouping', kind: 'Grouping', slides: [] },
@@ -243,6 +246,74 @@ describe('proclaim service item indexing', () => {
     // Hymn is at raw index 5 (StageDirectionCue at index 4 was excluded)
     assert.equal(items[3].id, 'item5');
     assert.equal(items[3].index, 5);
+
+    // Section indices should be passed through to state
+    assert.equal(updateWithItems.warmupStartIndex, 2);
+    assert.equal(updateWithItems.serviceStartIndex, 4);
+    assert.equal(updateWithItems.postServiceStartIndex, 10);
+  });
+
+  test('filters out Slide Group grouping items from serviceItems', async () => {
+    const presentation = {
+      id: 'pres2',
+      localRevision: 1,
+      serviceItems: [
+        { id: 'item1', title: 'Welcome', kind: 'Song', slides: [{ index: 0, localRevision: 1 }] },
+        { id: 'item2', title: 'Slide Group', kind: 'Grouping', slides: [] },
+        { id: 'item3', title: 'Worship', kind: 'Grouping', slides: [] },
+        { id: 'item4', title: 'Hymn', kind: 'Song', slides: [{ index: 0, localRevision: 2 }] },
+      ],
+    };
+    const statusResponse = {
+      presentationId: 'pres2',
+      presentationLocalRevision: 1,
+      status: { itemId: 'item1', slideIndex: 0 },
+    };
+
+    globalThis.fetch = async (url) => {
+      if (url.includes('authenticate')) {
+        return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok' }), text: async () => '' };
+      }
+      if (url.includes('onair/session')) {
+        return { ok: true, status: 200, json: async () => 'sess1', text: async () => 'sess1' };
+      }
+      if (url.includes('auth/control')) {
+        return { ok: true, status: 200, json: async () => ({ connectionId: 'conn1' }), text: async () => JSON.stringify({ connectionId: 'conn1' }) };
+      }
+      if (url.includes('presentations/onair') && !url.includes('items')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify(presentation) };
+      }
+      if (url.includes('statusChanged')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify(statusResponse) };
+      }
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
+    };
+
+    const proclaim = freshProclaim();
+    const state = require('../../src/state');
+    const updates = [];
+    state.on('change', ({ section, state: s }) => {
+      if (section === 'proclaim') updates.push(JSON.parse(JSON.stringify(s.proclaim)));
+    });
+
+    await proclaim.connect();
+    await new Promise((r) => setTimeout(r, 100));
+
+    const updateWithItems = updates.find((u) => u.serviceItems && u.serviceItems.length > 0);
+    assert.ok(updateWithItems, 'Expected a state update with serviceItems');
+
+    const items = updateWithItems.serviceItems;
+    assert.equal(items.length, 3, 'Should filter out Slide Group groupings but keep regular groupings');
+    assert.ok(!items.find((i) => i.title === 'Slide Group'), 'Slide Group items should be filtered out');
+    assert.ok(items.find((i) => i.title === 'Worship'), 'Regular groupings should be included');
+
+    // Slide Group at raw index 2 should be skipped; Worship is at raw index 3
+    const worshipItem = items.find((i) => i.title === 'Worship');
+    assert.equal(worshipItem.index, 3, 'Worship grouping should have raw index 3');
+
+    // Hymn is at raw index 4 (Slide Group at index 2 was excluded)
+    const hymnItem = items.find((i) => i.title === 'Hymn');
+    assert.equal(hymnItem.index, 4, 'Hymn should retain its full-list index 4');
   });
 });
 

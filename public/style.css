@@ -240,6 +240,22 @@ main {
   font-weight: 600;
 }
 
+.item-section-header {
+  padding: 10px 16px 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--primary);
+  border-top: 2px solid var(--accent);
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+.item-section-header:first-child {
+  border-top: none;
+  margin-top: 0;
+}
+
 .item-group-header {
   padding: 10px 16px 4px;
   font-size: 11px;

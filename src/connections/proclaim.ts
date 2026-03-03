@@ -267,7 +267,10 @@ async function fetchDetailedStatus(): Promise<void> {
     const rawItems = (presentationCache as any)?.serviceItems ?? [];
     const serviceItems: ServiceItem[] = rawItems
       .map((item: any, i: number) => ({ item, rawIndex: i + 1 }))
-      .filter(({ item }: { item: any }) => !EXCLUDED_KINDS.has(item.kind))
+      .filter(({ item }: { item: any }) =>
+        !EXCLUDED_KINDS.has(item.kind) &&
+        !(item.kind === 'Grouping' && item.title === 'Slide Group')
+      )
       .map(({ item, rawIndex }: { item: any; rawIndex: number }) => ({
         id: item.id,
         title: item.title,
@@ -277,6 +280,7 @@ async function fetchDetailedStatus(): Promise<void> {
       }));
 
     const currentItem = serviceItems.find((item) => item.id === status.itemId);
+    const cache = presentationCache as any;
 
     state.update('proclaim', {
       currentItemId: status.itemId || null,
@@ -284,6 +288,9 @@ async function fetchDetailedStatus(): Promise<void> {
       currentItemType: currentItem ? currentItem.kind : null,
       slideIndex: status.slideIndex !== undefined ? status.slideIndex : null,
       serviceItems,
+      warmupStartIndex: cache?.warmupStartIndex ?? null,
+      serviceStartIndex: cache?.serviceStartIndex ?? null,
+      postServiceStartIndex: cache?.postServiceStartIndex ?? null,
     });
   } catch (err) {
     logger.log('[Proclaim] statusChanged error:', (err as Error).message);

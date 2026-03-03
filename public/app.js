@@ -256,23 +256,40 @@ function renderProclaim(p) {
   setThumb(document.getElementById('proclaim-thumb-next'), nextItemId, nextSlideIndex);
 
   // Service item list — use the original full-list 1-based index for GoToServiceItem
-  itemsEl.innerHTML = items
-    .map((item) => {
-      if (item.kind === 'Grouping') {
-        return `<div class="item-group-header">${esc(item.title || item.kind)}</div>`;
+  const hasTopLevelSections = p.warmupStartIndex != null || p.serviceStartIndex != null || p.postServiceStartIndex != null;
+  function getTopLevelSection(rawIdx) {
+    if (p.postServiceStartIndex != null && rawIdx >= p.postServiceStartIndex) return 'Post-Service';
+    if (p.serviceStartIndex != null && rawIdx >= p.serviceStartIndex) return 'Service';
+    if (p.warmupStartIndex != null && rawIdx >= p.warmupStartIndex) return 'Warmup';
+    return 'Pre-Service';
+  }
+
+  let currentTopSection = null;
+  const parts = [];
+  for (const item of items) {
+    if (hasTopLevelSections) {
+      const section = getTopLevelSection(item.index - 1);
+      if (section !== currentTopSection) {
+        currentTopSection = section;
+        parts.push(`<div class="item-section-header">${esc(section)}</div>`);
       }
-      const isActive = item.id === p.currentItemId;
-      let slideCountLabel = '';
-      if (item.slideCount > 1) {
-        if (isActive && p.slideIndex !== null) {
-          slideCountLabel = ` <span class="item-slide-count">(${p.slideIndex + 1} of ${item.slideCount})</span>`;
-        } else {
-          slideCountLabel = ` <span class="item-slide-count">(${item.slideCount} slides)</span>`;
-        }
+    }
+    if (item.kind === 'Grouping') {
+      parts.push(`<div class="item-group-header">${esc(item.title || item.kind)}</div>`);
+      continue;
+    }
+    const isActive = item.id === p.currentItemId;
+    let slideCountLabel = '';
+    if (item.slideCount > 1) {
+      if (isActive && p.slideIndex !== null) {
+        slideCountLabel = ` <span class="item-slide-count">(${p.slideIndex + 1} of ${item.slideCount})</span>`;
+      } else {
+        slideCountLabel = ` <span class="item-slide-count">(${item.slideCount} slides)</span>`;
       }
-      return `<button class="item-btn${isActive ? ' active' : ''}" onclick="sendAction('GoToServiceItem', ${item.index})">${esc(item.title || item.kind)}${slideCountLabel}</button>`;
-    })
-    .join('');
+    }
+    parts.push(`<button class="item-btn${isActive ? ' active' : ''}" onclick="sendAction('GoToServiceItem', ${item.index})">${esc(item.title || item.kind)}${slideCountLabel}</button>`);
+  }
+  itemsEl.innerHTML = parts.join('');
 }
 
 // --- Overview rendering ---

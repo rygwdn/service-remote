@@ -43,6 +43,9 @@ export interface ProclaimState {
   currentItemType: string | null;
   slideIndex: number | null;
   serviceItems: ServiceItem[];
+  warmupStartIndex: number | null;
+  serviceStartIndex: number | null;
+  postServiceStartIndex: number | null;
 }
 
 export interface AppState {
