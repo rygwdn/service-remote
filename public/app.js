@@ -255,12 +255,11 @@ function renderProclaim(p) {
   setThumb(document.getElementById('proclaim-thumb-current'), p.currentItemId, slideIndex);
   setThumb(document.getElementById('proclaim-thumb-next'), nextItemId, nextSlideIndex);
 
-  // Service item list — find position in full (unfiltered) list for GoToServiceItem
-  // We pass 1-based index into the filtered list (Proclaim uses 1-based)
+  // Service item list — use the original full-list 1-based index for GoToServiceItem
   itemsEl.innerHTML = items
-    .map((item, i) => {
+    .map((item) => {
       const isActive = item.id === p.currentItemId;
-      return `<button class="item-btn${isActive ? ' active' : ''}" onclick="sendAction('GoToServiceItem', ${i + 1})">${esc(item.title || item.kind)}</button>`;
+      return `<button class="item-btn${isActive ? ' active' : ''}" onclick="sendAction('GoToServiceItem', ${item.index})">${esc(item.title || item.kind)}</button>`;
     })
     .join('');
 }

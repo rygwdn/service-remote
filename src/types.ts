@@ -18,6 +18,7 @@ export interface ServiceItem {
   title: string;
   kind: string;
   slideCount: number;
+  index: number; // 1-based position in the full (unfiltered) Proclaim service item list
 }
 
 export interface ObsState {
