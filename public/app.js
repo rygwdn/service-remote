@@ -324,6 +324,24 @@ function renderOverview(s) {
     </div>`
     )
     .join('');
+
+  // OBS audio compact levels — read-only volume bars (dB normalized to 0–1)
+  const obsAudioEl = document.getElementById('ov-obs-audio');
+  if (obsAudioEl) {
+    obsAudioEl.innerHTML = s.obs.audioSources
+      .map((src) => {
+        const vol = src.volume != null && isFinite(src.volume) ? src.volume : -60;
+        const barWidth = ((vol + 60) / 60 * 100).toFixed(1);
+        return `
+    <div class="ov-channel-row">
+      <span class="ov-ch-label${src.muted ? ' muted' : ''}">${esc(src.name)}</span>
+      <div class="ov-fader-bar">
+        <div class="ov-fader-fill${src.muted ? ' muted' : ''}" style="width:${barWidth}%"></div>
+      </div>
+    </div>`;
+      })
+      .join('');
+  }
 }
 
 function renderOverviewProclaim(p) {

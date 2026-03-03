@@ -34,34 +34,35 @@
     <!-- Overview Panel -->
     <section id="panel-overview" class="panel active">
       <div class="overview-grid">
-        <!-- Proclaim -->
-        <div class="ov-block ov-proclaim">
-          <div class="ov-title">Proclaim</div>
-          <div class="slide-strip">
-            <div class="slide-thumb" id="ov-thumb-prev"></div>
-            <div class="slide-thumb active" id="ov-thumb-current"></div>
-            <div class="slide-thumb" id="ov-thumb-next"></div>
-          </div>
-          <div id="ov-now-playing" class="proclaim-now-playing"></div>
-          <div class="control-row">
-            <button class="btn btn-large" onclick="sendAction('PreviousSlide')">&#8592; Slide</button>
-            <button class="btn btn-large" onclick="sendAction('NextSlide')">Slide &#8594;</button>
-          </div>
-        </div>
-
-        <!-- OBS preview (read-only) -->
-        <div class="ov-block ov-obs">
-          <div class="ov-title">OBS &mdash; <span id="ov-current-scene"></span></div>
-          <div class="ov-obs-preview-wrap">
-            <img id="ov-obs-preview" class="ov-obs-preview" src="" alt="Program">
-          </div>
+        <!-- Row 1: Slide description | OBS scene -->
+        <div class="ov-cell ov-slide-desc" id="ov-now-playing"></div>
+        <div class="ov-cell ov-scene-info">
+          <span id="ov-current-scene" class="ov-scene-name"></span>
           <div id="ov-stream-status" class="ov-status-row"></div>
         </div>
 
-        <!-- X32 mix levels (read-only) -->
-        <div class="ov-block ov-x32">
+        <!-- Row 2: Proclaim current slide | OBS Program -->
+        <div class="slide-thumb active" id="ov-thumb-current"></div>
+        <div class="ov-obs-preview-wrap">
+          <img id="ov-obs-preview" class="ov-obs-preview" src="" alt="Program">
+        </div>
+
+        <!-- Row 3: Prev Slide button | Next Slide button -->
+        <button class="btn btn-large" onclick="sendAction('PreviousSlide')">&#8592; Slide</button>
+        <button class="btn btn-large" onclick="sendAction('NextSlide')">Slide &#8594;</button>
+
+        <!-- Row 4: Prev slide thumb | Next slide thumb -->
+        <div class="slide-thumb" id="ov-thumb-prev"></div>
+        <div class="slide-thumb" id="ov-thumb-next"></div>
+
+        <!-- Row 5: Mix levels | OBS levels -->
+        <div class="ov-block">
           <div class="ov-title">Mix</div>
           <div id="ov-channels" class="ov-channel-list"></div>
+        </div>
+        <div class="ov-block">
+          <div class="ov-title">OBS</div>
+          <div id="ov-obs-audio" class="ov-channel-list"></div>
         </div>
       </div>
     </section>

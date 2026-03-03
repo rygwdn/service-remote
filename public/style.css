@@ -430,10 +430,41 @@ main {
 
 /* ---- Overview panel ---- */
 .overview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px;
+}
+
+/* Info cells (Row 1) */
+.ov-cell {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px;
+  justify-content: center;
+  min-height: 44px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.ov-scene-info {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.ov-scene-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Slide thumbs fill their grid cell */
+.overview-grid .slide-thumb {
+  max-width: 100%;
+  flex: none;
 }
 
 .ov-block {
@@ -461,9 +492,9 @@ main {
   margin-bottom: 10px;
 }
 
-/* Limit preview height on the overview panel */
-.ov-obs .ov-obs-preview-wrap {
-  max-height: 200px;
+/* Remove bottom margin when preview is a direct grid cell */
+.overview-grid .ov-obs-preview-wrap {
+  margin-bottom: 0;
 }
 
 .ov-obs-preview {
@@ -471,10 +502,6 @@ main {
   height: 100%;
   object-fit: contain;
   display: block;
-}
-
-.ov-scenes {
-  margin-bottom: 0;
 }
 
 /* X32 compact channel list */
