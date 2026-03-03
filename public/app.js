@@ -256,12 +256,34 @@ function renderProclaim(p) {
   setThumb(document.getElementById('proclaim-thumb-next'), nextItemId, nextSlideIndex);
 
   // Service item list — use the original full-list 1-based index for GoToServiceItem
-  itemsEl.innerHTML = items
-    .map((item) => {
-      const isActive = item.id === p.currentItemId;
-      return `<button class="item-btn${isActive ? ' active' : ''}" onclick="sendAction('GoToServiceItem', ${item.index})">${esc(item.title || item.kind)}</button>`;
-    })
-    .join('');
+  let currentSection = null;
+  let currentGroup = null;
+  const parts = [];
+  for (const item of items) {
+    if (item.section !== currentSection) {
+      currentSection = item.section;
+      currentGroup = null;
+      parts.push(`<div class="item-section-header">${esc(item.section)}</div>`);
+    }
+    if (item.group !== currentGroup) {
+      currentGroup = item.group;
+      if (currentGroup) {
+        parts.push(`<div class="item-group-header">${esc(currentGroup)}</div>`);
+      }
+    }
+    const isActive = item.id === p.currentItemId;
+    let slideCountLabel = '';
+    if (item.slideCount > 1) {
+      if (isActive && p.slideIndex !== null) {
+        slideCountLabel = ` <span class="item-slide-count">(${p.slideIndex + 1} of ${item.slideCount})</span>`;
+      } else {
+        slideCountLabel = ` <span class="item-slide-count">(${item.slideCount} slides)</span>`;
+      }
+    }
+    const indentClass = item.group ? ' item-grouped' : '';
+    parts.push(`<button class="item-btn${isActive ? ' active' : ''}${indentClass}" onclick="sendAction('GoToServiceItem', ${item.index})">${esc(item.title || item.kind)}${slideCountLabel}</button>`);
+  }
+  itemsEl.innerHTML = parts.join('');
 }
 
 // --- Overview rendering ---
