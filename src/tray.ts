@@ -7,19 +7,54 @@ import type { ChangeEvent } from './types';
 
 const { spawn, exec } = childProcess;
 
-function startTray(port: number, state: { on: (event: 'change', listener: (ev: ChangeEvent) => void) => void }): void {
-  if (process.platform !== 'win32') return;
+function startTray(
+  port: number,
+  state: { on: (event: 'change', listener: (ev: ChangeEvent) => void) => void },
+  shutdown: () => void
+): void {
+  logger.log(`[Tray] startTray called (platform: ${process.platform})`);
+
+  if (process.platform !== 'win32') {
+    logger.log('[Tray] Not Windows — skipping system tray');
+    return;
+  }
 
   const ps1 = path.join(__dirname, 'tray.ps1');
+  logger.log(`[Tray] Spawning PowerShell tray script: ${ps1}`);
+
   const child = spawn('powershell.exe', [
     '-NoProfile', '-NonInteractive', '-STA',
     '-ExecutionPolicy', 'Bypass',
     '-File', ps1,
   ], {
-    stdio: ['pipe', 'pipe', 'inherit'],
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
 
-  child.on('error', (err: Error) => logger.warn('[Tray] failed to start PowerShell:', err.message));
+  logger.log(`[Tray] PowerShell process spawned (pid: ${child.pid ?? 'unknown'})`);
+
+  child.on('error', (err: Error) => logger.warn('[Tray] Failed to start PowerShell:', err.message));
+
+  child.on('exit', (code: number | null, signal: string | null) => {
+    logger.log(`[Tray] PowerShell process exited (code: ${code}, signal: ${signal})`);
+  });
+
+  // Capture and log PowerShell stderr so errors appear in the log file
+  let errBuf = '';
+  child.stderr!.on('data', (chunk: Buffer) => {
+    errBuf += chunk.toString();
+    const lines = errBuf.split('\n');
+    errBuf = lines.pop()!;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      // Diagnostic lines from tray.ps1 start with '[Tray]'; everything else is an unexpected PS error
+      if (trimmed.startsWith('[Tray]')) {
+        logger.log('[Tray] PS:', trimmed);
+      } else {
+        logger.warn('[Tray] PS error:', trimmed);
+      }
+    }
+  });
 
   // Parse newline-delimited JSON events from the tray process
   let buf = '';
@@ -30,19 +65,31 @@ function startTray(port: number, state: { on: (event: 'change', listener: (ev: C
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
+      logger.log(`[Tray] Received: ${trimmed}`);
       let msg: { event?: string };
-      try { msg = JSON.parse(trimmed); } catch { continue; }
+      try { msg = JSON.parse(trimmed); } catch {
+        logger.warn('[Tray] Failed to parse tray message:', trimmed);
+        continue;
+      }
       if (msg.event === 'open') {
+        logger.log('[Tray] Opening browser');
         exec(`start http://localhost:${port}`);
       } else if (msg.event === 'exit') {
-        process.exit(0);
+        logger.log('[Tray] Exit requested from tray — shutting down');
+        shutdown();
+      } else {
+        logger.warn('[Tray] Unknown event from tray:', trimmed);
       }
     }
   });
 
   function send(obj: unknown): void {
-    if (!child.killed) {
-      child.stdin!.write(JSON.stringify(obj) + '\n');
+    if (!child.killed && child.exitCode === null) {
+      try {
+        child.stdin!.write(JSON.stringify(obj) + '\n');
+      } catch (err: unknown) {
+        logger.warn('[Tray] Failed to write to tray process:', err instanceof Error ? err.message : String(err));
+      }
     }
   }
 
