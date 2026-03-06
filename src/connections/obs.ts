@@ -68,38 +68,55 @@ obs.on('InputMuteStateChanged', ({ inputName, inputMuted }) => {
   state.update('obs', { audioSources: sources });
 });
 
-obs.on('SceneItemEnableStateChanged', async ({ sceneName }) => {
-  if (sceneName === state.get().obs.currentScene) {
-    await refreshLiveStatus(sceneName);
+obs.on('SceneItemEnableStateChanged', async () => {
+  const currentScene = state.get().obs.currentScene;
+  if (currentScene) {
+    await refreshLiveStatus(currentScene);
   }
 });
 
-// Returns source names that are enabled scene items in the given scene
-async function getSceneSourceNames(sceneName: string): Promise<Set<string>> {
-  try {
-    const { sceneItems } = await obs.call('GetSceneItemList', { sceneName });
-    const names = new Set<string>();
-    for (const item of sceneItems) {
-      if (item.sceneItemEnabled) {
-        names.add(item.sourceName as string);
-      }
+// Recursively collects enabled source names from a scene or group into the given set
+async function collectSourceNames(name: string, isGroup: boolean, names: Set<string>): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const method = isGroup ? 'GetGroupSceneItemList' : 'GetSceneItemList';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { sceneItems } = await (obs as any).call(method, { sceneName: name });
+  for (const item of sceneItems) {
+    if (!item.sceneItemEnabled) continue;
+    if (item.isGroup) {
+      await collectSourceNames(item.sourceName as string, true, names);
+    } else {
+      names.add(item.sourceName as string);
     }
-    return names;
-  } catch {
-    return new Set<string>();
   }
+}
+
+// Returns source names that are enabled scene items in the given scene (including inside groups)
+async function getSceneSourceNames(sceneName: string): Promise<Set<string>> {
+  const names = new Set<string>();
+  try {
+    await collectSourceNames(sceneName, false, names);
+  } catch {
+    // Return empty set on error
+  }
+  return names;
 }
 
 // Returns true if the source is hidden from the OBS audio mixer panel
 async function isSourceHiddenFromMixer(sourceName: string): Promise<boolean> {
   try {
-    // GetSourcePrivateSettings may not exist in all obs-websocket-js type definitions,
-    // so we use a runtime call with type assertion. Any failure defaults to not hidden.
+    // GetSourcePrivateSettings is not in obs-websocket-js type definitions,
+    // so we use a runtime call with type assertion.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await (obs as any).call('GetSourcePrivateSettings', { sourceName });
     const settings = (result?.sourcePrivateSettings ?? {}) as Record<string, unknown>;
-    return !!(settings?.audioMixerHidden);
-  } catch {
+    if (settings?.audioMixerHidden) {
+      logger.log(`[OBS] Source "${sourceName}" is hidden from audio mixer`);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    logger.log(`[OBS] GetSourcePrivateSettings failed for "${sourceName}":`, (err as Error).message);
     return false;
   }
 }
