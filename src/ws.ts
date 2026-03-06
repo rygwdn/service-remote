@@ -7,6 +7,7 @@ const { WebSocketServer } = ws;
 function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, connections?: Connections, { disconnectDelay = 5000 }: { disconnectDelay?: number } = {}): void {
   const wss = new WebSocketServer({ server });
   let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let connectionsStarted = false;
 
   function openClientCount(): number {
     let count = 0;
@@ -23,12 +24,13 @@ function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, 
     // Send full state on connect
     socket.send(JSON.stringify({ type: 'state', data: state.get() }));
 
-    // Start each service only if it isn't already connected
-    if (connections) {
-      const s = state.get();
-      if (!s.obs?.connected)      connections.obs.connect();
-      if (!s.x32?.connected)      { connections.x32.connect(); connections.x32.startMeterUpdates(); }
-      if (!s.proclaim?.connected) connections.proclaim.connect();
+    // Start connections when the first client connects
+    if (connections && !connectionsStarted) {
+      connectionsStarted = true;
+      connections.obs.connect();
+      connections.x32.connect();
+      connections.x32.startMeterUpdates();
+      connections.proclaim.connect();
     }
 
     socket.on('close', () => {
@@ -39,6 +41,7 @@ function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, 
       if (openClientCount() > 0) return;
       disconnectTimer = setTimeout(() => {
         disconnectTimer = null;
+        connectionsStarted = false;
         connections.x32.stopMeterUpdates();
         connections.obs.disconnect();
         connections.x32.disconnect();
