@@ -15,6 +15,7 @@ let subscribeInterval: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let meterInterval: ReturnType<typeof setInterval> | null = null;
 let metersActive = false;
+let loggedNoResponse = false;
 
 interface OscArg {
   value: unknown;
@@ -74,7 +75,10 @@ function connect(): void {
   // If we get responses, we're connected
   setTimeout(() => {
     if (wantConnected && !connected) {
-      logger.log('[X32] No response, will retry...');
+      if (!loggedNoResponse) {
+        logger.log('[X32] No response, will retry...');
+        loggedNoResponse = true;
+      }
       state.update('x32', { connected: false, channels });
       scheduleReconnect();
     }
@@ -197,6 +201,7 @@ function handleMessage(msg: unknown[]): void {
 
   if (!connected) {
     connected = true;
+    loggedNoResponse = false;
     logger.log('[X32] Connected');
   }
 
