@@ -239,7 +239,12 @@ async function fetchDetailedStatus(): Promise<void> {
       presentationId?: string;
       presentationLocalRevision?: number | string;
       status?: { itemId?: string; slideIndex?: number };
-    };
+    } | null;
+
+    if (!data) {
+      logger.log('[Proclaim] statusChanged returned null');
+      return;
+    }
 
     if (data.presentationLocalRevision !== undefined) {
       presentationLocalRevision = String(data.presentationLocalRevision);
@@ -257,8 +262,8 @@ async function fetchDetailedStatus(): Promise<void> {
         if (presRes.ok) {
           presentationCache = parseProclaimJson(await presRes.text());
         }
-      } catch (_) {
-        // best-effort
+      } catch (err) {
+        logger.log('[Proclaim] onair error:', (err as Error).toString());
       }
     }
 
@@ -305,7 +310,7 @@ async function fetchDetailedStatus(): Promise<void> {
       serviceItems,
     });
   } catch (err) {
-    logger.log('[Proclaim] statusChanged error:', (err as Error).message);
+    logger.log('[Proclaim] statusChanged error:', (err as Error).toString());
   }
 }
 
