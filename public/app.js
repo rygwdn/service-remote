@@ -426,6 +426,9 @@ document.querySelectorAll('.tab').forEach((tab) => {
 // Overview is the default tab, so start polling immediately
 startScreenshotPolling();
 
+// Pre-populate settings form so values are ready if user opens settings directly
+loadConfig();
+
 // --- Settings ---
 let currentConfig = null;
 
