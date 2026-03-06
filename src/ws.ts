@@ -4,7 +4,7 @@ import type { Connections } from './types';
 
 const { WebSocketServer } = ws;
 
-function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, connections?: Connections): void {
+function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, connections?: Connections, { disconnectDelay = 5000 }: { disconnectDelay?: number } = {}): void {
   const wss = new WebSocketServer({ server });
   let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -43,7 +43,7 @@ function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, 
         connections.obs.disconnect();
         connections.x32.disconnect();
         connections.proclaim.disconnect();
-      }, 5000);
+      }, disconnectDelay);
     });
   });
 

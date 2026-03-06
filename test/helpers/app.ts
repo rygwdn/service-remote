@@ -76,7 +76,7 @@ function createTestApp(): TestApp {
   setupRoutes(app, stubs, state, testConfigPath);
 
   const server = http.createServer(app);
-  setupWebSocket(server, state, stubs);
+  setupWebSocket(server, state, stubs, { disconnectDelay: 0 });
 
   return { app, server, state, stubs, calls };
 }

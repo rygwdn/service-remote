@@ -37,8 +37,8 @@ const exeName = 'service-remote' + (targetIsWindows ? '.exe' : '');
 const outfile = path.join(dist, exeName);
 
 // --windows-hide-console suppresses the terminal window so the tray app runs
-// silently in the background.
-const windowsFlags = targetIsWindows ? ['--windows-hide-console'] : [];
+// silently in the background. Only supported when building natively on Windows.
+const windowsFlags = (targetIsWindows && process.platform === 'win32') ? ['--windows-hide-console'] : [];
 
 run(
   [
