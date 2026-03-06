@@ -35,31 +35,38 @@ const CH_COUNT = 32;
 const BUS_COUNT = 16;
 
 function connect(): void {
-  logger.log('[X32] Attempting to connect to', config.x32.host, config.x32.port);
+  logger.log('[X32] Attempting to connect to', config.x32.address, 'port', config.x32.port);
   wantConnected = true;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (keepAliveInterval) clearInterval(keepAliveInterval);
   if (subscribeInterval) clearInterval(subscribeInterval);
   if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
 
-  if (server) server.close();
-  if (client) client.close();
+  if (server) { logger.log('[X32] Closing existing OSC server'); server.close(); }
+  if (client) { logger.log('[X32] Closing existing OSC client'); client.close(); }
 
   // Start with empty channels — populated via auto-discovery
   channels = [];
 
   server = new Server(0, '0.0.0.0');
   server.on('message', (msg: unknown[]) => handleMessage(msg));
+  logger.log('[X32] OSC server listening on ephemeral port');
 
   client = new Client(config.x32.address, config.x32.port);
+  logger.log('[X32] OSC client created, target:', config.x32.address + ':' + config.x32.port);
 
   // X32 requires /xremote every <10s to stay connected
+  logger.log('[X32] Sending /xremote and starting keepalive (8s interval)');
   sendOsc('/xremote');
-  keepAliveInterval = setInterval(() => sendOsc('/xremote'), 8000);
+  keepAliveInterval = setInterval(() => {
+    logger.log('[X32] keepalive /xremote');
+    sendOsc('/xremote');
+  }, 8000);
   // Subscriptions expire after ~10s; renew periodically
   subscribeInterval = setInterval(subscribeToChanges, 8000);
 
   // Request names for all input channels and buses — non-empty names indicate active channels
+  logger.log(`[X32] Requesting names for ${CH_COUNT} input channels and ${BUS_COUNT} buses`);
   for (let i = 1; i <= CH_COUNT; i++) {
     sendOsc(`${channelPrefix(i, 'ch')}/config/name`);
   }
@@ -69,6 +76,7 @@ function connect(): void {
 
   // Restart meter updates immediately if they were active before reconnect
   if (metersActive) {
+    logger.log('[X32] Restarting meter updates after reconnect');
     requestMeterUpdates();
     meterInterval = setInterval(requestMeterUpdates, 1500);
   }
@@ -77,7 +85,7 @@ function connect(): void {
   setTimeout(() => {
     if (wantConnected && !connected) {
       if (!loggedNoResponse) {
-        logger.log('[X32] No response, will retry...');
+        logger.log('[X32] No response after 3s, will retry...');
         loggedNoResponse = true;
       }
       state.update('x32', { connected: false, channels });
@@ -89,6 +97,7 @@ function connect(): void {
 function scheduleReconnect(): void {
   if (!wantConnected) return;
   if (reconnectTimer) clearTimeout(reconnectTimer);
+  logger.log('[X32] Scheduling reconnect in 5s');
   reconnectTimer = setTimeout(connect, 5000);
 }
 
@@ -98,7 +107,12 @@ function channelPrefix(index: number, type: 'ch' | 'bus'): string {
 }
 
 function sendOsc(address: string, args?: OscArg[]): void {
-  if (!client) return;
+  if (!client) {
+    logger.warn('[X32] sendOsc called but no client:', address);
+    return;
+  }
+  const argVals = args?.map((a) => a.value);
+  logger.log('[X32] send', address, argVals ? JSON.stringify(argVals) : '');
   if (args && args.length > 0) {
     client.send(address, ...args.map((a) => a.value as number | string), () => {});
   } else {
@@ -203,7 +217,7 @@ function handleMessage(msg: unknown[]): void {
   if (!connected) {
     connected = true;
     loggedNoResponse = false;
-    logger.log('[X32] Connected');
+    logger.log('[X32] Connected — first message received');
   }
 
   if (address === '/meters/0' || address === '/meters/2') {
@@ -211,9 +225,14 @@ function handleMessage(msg: unknown[]): void {
     return;
   }
 
+  logger.log('[X32] recv', address, rawArgs.length ? JSON.stringify(rawArgs) : '');
+
   const result = parseOscMessage(address, args);
   if (result) {
+    logger.log(`[X32] parsed: ${result.type} ${result.index} patch=${JSON.stringify(result.patch)}`);
     updateChannel(result.index, result.type, result.patch);
+  } else {
+    logger.log('[X32] unrecognised message, ignoring:', address);
   }
 }
 
@@ -221,7 +240,11 @@ function updateChannel(index: number, type: 'ch' | 'bus', patch: Partial<Channel
   let ch = channels.find((c) => c.index === index && c.type === type);
   if (!ch) {
     // Only create a new channel entry when a name is received (auto-discovery)
-    if (!patch.label) return;
+    if (!patch.label) {
+      logger.log(`[X32] Ignoring patch for unknown ${type} ${index} (no label yet)`);
+      return;
+    }
+    logger.log(`[X32] Discovered ${type} ${index}: "${patch.label}" — requesting fader/mute state`);
     ch = { index, type, label: patch.label, fader: 0, muted: false, level: 0 };
     channels.push(ch);
     channels.sort((a, b) => {
@@ -239,6 +262,7 @@ function updateChannel(index: number, type: 'ch' | 'bus', patch: Partial<Channel
 }
 
 function subscribeToChanges(): void {
+  logger.log(`[X32] Renewing subscriptions for ${channels.length} channel(s)`);
   for (const ch of channels) {
     const prefix = channelPrefix(ch.index, ch.type);
     sendOsc('/subscribe', [
@@ -253,6 +277,7 @@ function subscribeToChanges(): void {
 }
 
 function disconnect(): void {
+  logger.log('[X32] Disconnecting');
   wantConnected = false;
   if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
   if (subscribeInterval) { clearInterval(subscribeInterval); subscribeInterval = null; }
@@ -262,6 +287,7 @@ function disconnect(): void {
   if (client) { client.close(); client = null; }
   connected = false;
   metersActive = false;
+  logger.log('[X32] Disconnected');
 }
 
 export = {
@@ -271,6 +297,7 @@ export = {
   disconnect,
 
   startMeterUpdates(): void {
+    logger.log('[X32] startMeterUpdates (connected=' + connected + ')');
     metersActive = true;
     if (!connected) return;
     requestMeterUpdates();
@@ -279,12 +306,14 @@ export = {
   },
 
   stopMeterUpdates(): void {
+    logger.log('[X32] stopMeterUpdates');
     metersActive = false;
     if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
   },
 
   setFader(channelIndex: number, value: number, type: 'ch' | 'bus' = 'ch'): void {
     const clamped = Math.max(0, Math.min(1, value));
+    logger.log(`[X32] setFader ${type} ${channelIndex} = ${clamped}`);
     sendOsc(`${channelPrefix(channelIndex, type)}/mix/fader`, [
       { value: clamped },
     ]);
@@ -293,8 +322,12 @@ export = {
 
   toggleMute(channelIndex: number, type: 'ch' | 'bus' = 'ch'): void {
     const ch = channels.find((c) => c.index === channelIndex && c.type === type);
-    if (!ch) return;
+    if (!ch) {
+      logger.warn(`[X32] toggleMute: ${type} ${channelIndex} not found`);
+      return;
+    }
     const newState = ch.muted ? 1 : 0; // 1 = on (unmuted), 0 = off (muted)
+    logger.log(`[X32] toggleMute ${type} ${channelIndex}: muted=${ch.muted} → ${!ch.muted}`);
     sendOsc(`${channelPrefix(channelIndex, type)}/mix/on`, [
       { value: newState },
     ]);
