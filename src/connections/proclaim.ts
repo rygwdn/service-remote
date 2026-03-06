@@ -125,7 +125,7 @@ async function sendAction(commandName: string, index?: number): Promise<boolean>
   });
 
   if (res.status === 401) {
-    logger.log('[Proclaim] sendAction got 401, re-authenticating');
+    logger.log(`[Proclaim] sendAction got 401 for ${commandName}, re-authenticating`);
     appCommandToken = null;
     scheduleReconnect();
     return false;

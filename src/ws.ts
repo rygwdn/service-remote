@@ -6,6 +6,7 @@ const { WebSocketServer } = ws;
 
 function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, connections?: Connections): void {
   const wss = new WebSocketServer({ server });
+  let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   function openClientCount(): number {
     let count = 0;
@@ -16,15 +17,18 @@ function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, 
   }
 
   wss.on('connection', (socket) => {
+    // Cancel any pending disconnect
+    if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
+
     // Send full state on connect
     socket.send(JSON.stringify({ type: 'state', data: state.get() }));
 
-    // Start connections when the first client connects
-    if (connections && wss.clients.size === 1) {
-      connections.obs.connect();
-      connections.x32.connect();
-      connections.proclaim.connect();
-      connections.x32.startMeterUpdates();
+    // Start each service only if it isn't already connected
+    if (connections) {
+      const s = state.get();
+      if (!s.obs?.connected)      connections.obs.connect();
+      if (!s.x32?.connected)      { connections.x32.connect(); connections.x32.startMeterUpdates(); }
+      if (!s.proclaim?.connected) connections.proclaim.connect();
     }
 
     socket.on('close', () => {
@@ -32,12 +36,14 @@ function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, 
       // Stop connections when the last client disconnects.
       // The closing socket's readyState is CLOSED (3) at this point, so count
       // OPEN sockets to find how many clients remain.
-      if (openClientCount() === 0) {
+      if (openClientCount() > 0) return;
+      disconnectTimer = setTimeout(() => {
+        disconnectTimer = null;
         connections.x32.stopMeterUpdates();
         connections.obs.disconnect();
         connections.x32.disconnect();
         connections.proclaim.disconnect();
-      }
+      }, 5000);
     });
   });
 

@@ -95,7 +95,7 @@ $scriptBlock = {
         if ($null -eq $line) { break }
         $line = $line.Trim()
         if ($line -eq '') { continue }
-        [Console]::Error.WriteLine("[Tray] stdin command: $line")
+        # [Console]::Error.WriteLine("[Tray] stdin command: $line")
         try {
             $msg = $line | ConvertFrom-Json
         } catch { continue }
@@ -180,6 +180,8 @@ function startTray(
       // Diagnostic lines from tray.ps1 start with '[Tray]'; everything else is an unexpected PS error
       if (trimmed.startsWith('[Tray]')) {
         logger.log('[Tray] PS:', trimmed);
+      } else if (trimmed === '#< CLIXML') {
+        // PowerShell prepends this XML preamble to its structured error stream — harmless, ignore it
       } else {
         logger.warn('[Tray] PS error:', trimmed);
       }
