@@ -24,7 +24,7 @@ A mobile-friendly web control panel for running church services. Control Proclai
 Download `service-remote.exe` from the [latest release](https://github.com/rygwdn/service-remote/releases/download/dev/service-remote.exe), or run this in PowerShell:
 
 ```powershell
-Invoke-WebRequest https://github.com/rygwdn/service-remote/releases/download/dev/service-remote.exe -OutFile ~/remote/service-remote.exe
+(New-Object System.Net.WebClient).DownloadFile('https://github.com/rygwdn/service-remote/releases/download/dev/service-remote.exe', "$HOME\remote\service-remote.exe")
 ```
 
 Then edit `~/remote/config.json` (see [Configuration](#configuration) below) and run `service-remote.exe`.
