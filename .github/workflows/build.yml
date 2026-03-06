@@ -42,11 +42,17 @@ jobs:
       - name: Create zip
         run: zip -j service-remote-windows.zip dist/*
 
-      - name: Upload artifact
+      - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: service-remote-windows
+          name: service-remote-windows-zip
           path: service-remote-windows.zip
+
+      - name: Upload exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-remote-windows-exe
+          path: dist/service-remote.exe
 
   release:
     name: Create Dev Release
@@ -58,7 +64,11 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: service-remote-windows
+          name: service-remote-windows-zip
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: service-remote-windows-exe
 
       - name: Delete existing dev release
         env:
@@ -80,4 +90,5 @@ jobs:
             --title "Dev Build" \
             --notes "Latest build from main. Automatically updated on every push." \
             --prerelease \
-            service-remote-windows.zip
+            service-remote-windows.zip \
+            service-remote.exe

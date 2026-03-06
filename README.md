@@ -21,13 +21,10 @@ A mobile-friendly web control panel for running church services. Control Proclai
 
 ### Windows (pre-built executable)
 
-Run this in PowerShell to download and extract the latest build to `~/remote/`:
+Download `service-remote.exe` from the [latest release](https://github.com/rygwdn/service-remote/releases/download/dev/service-remote.exe), or run this in PowerShell:
 
 ```powershell
-$zip = "$env:TEMP\sr.zip"
-Invoke-WebRequest https://github.com/rygwdn/service-remote/releases/download/dev/service-remote-windows.zip -OutFile $zip
-Expand-Archive $zip -DestinationPath ~/remote/ -Force
-Remove-Item $zip
+Invoke-WebRequest https://github.com/rygwdn/service-remote/releases/download/dev/service-remote.exe -OutFile ~/remote/service-remote.exe
 ```
 
 Then edit `~/remote/config.json` (see [Configuration](#configuration) below) and run `service-remote.exe`.
