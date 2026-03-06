@@ -1,6 +1,7 @@
 'use strict';
 
 import childProcess = require('child_process');
+import fs = require('fs');
 import path = require('path');
 import logger = require('./logger');
 import type { ChangeEvent } from './types';
@@ -19,7 +20,10 @@ function startTray(
     return;
   }
 
-  const ps1 = path.join(__dirname, 'tray.ps1');
+  // When running as a compiled binary, tray.ps1 is placed next to the executable.
+  // Fall back to __dirname (baked-in source path) for development (`bun start`).
+  const nextToExe = path.join(path.dirname(process.execPath), 'tray.ps1');
+  const ps1 = fs.existsSync(nextToExe) ? nextToExe : path.join(__dirname, 'tray.ps1');
   logger.log(`[Tray] Spawning PowerShell tray script: ${ps1}`);
 
   const child = spawn('powershell.exe', [

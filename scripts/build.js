@@ -47,4 +47,10 @@ run(
   ].join(' ')
 );
 
+// Copy tray.ps1 next to the binary so it can be found at runtime
+const trayPs1Src = path.join(root, 'src', 'tray.ps1');
+const trayPs1Dst = path.join(dist, 'tray.ps1');
+fs.copyFileSync(trayPs1Src, trayPs1Dst);
+console.log(`Copied tray.ps1 → ${trayPs1Dst}`);
+
 console.log(`\nBuild complete → ${outfile}`);
