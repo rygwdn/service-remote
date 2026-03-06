@@ -27,20 +27,25 @@ run('bun scripts/embed-public.js');
 console.log('\nStep 2: Compiling single executable …');
 fs.mkdirSync(dist, { recursive: true });
 
-const exeName = 'service-remote' + (process.platform === 'win32' ? '.exe' : '');
+// Accept an explicit --target=<bun-target> argument, e.g. bun-windows-x64.
+// Falls back to the native platform target.
+const targetArg = process.argv.find((a) => a.startsWith('--target='));
+const target = targetArg ? targetArg.slice('--target='.length) : 'bun';
+const targetIsWindows = target.includes('windows') || (target === 'bun' && process.platform === 'win32');
+
+const exeName = 'service-remote' + (targetIsWindows ? '.exe' : '');
 const outfile = path.join(dist, exeName);
 
 // --windows-hide-console suppresses the terminal window so the tray app runs
-// silently in the background. The flag requires building natively on Windows
-// (it cannot be used when cross-compiling).
-const windowsFlags = process.platform === 'win32' ? ['--windows-hide-console'] : [];
+// silently in the background.
+const windowsFlags = targetIsWindows ? ['--windows-hide-console'] : [];
 
 run(
   [
     'bun build',
     '--compile',
     '--minify',
-    '--target=bun',
+    `--target=${target}`,
     ...windowsFlags,
     'server.ts',
     `--outfile=${outfile}`,

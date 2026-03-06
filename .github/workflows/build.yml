@@ -25,8 +25,7 @@ jobs:
 
   build-windows:
     name: Build Windows Executable
-    needs: test
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -38,11 +37,10 @@ jobs:
         run: bun install
 
       - name: Build Windows executable
-        run: bun run build
+        run: bun run build -- --target=bun-windows-x64
 
       - name: Create zip
-        run: Compress-Archive -Path dist\* -DestinationPath service-remote-windows.zip
-        shell: pwsh
+        run: zip -j service-remote-windows.zip dist/*
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -52,7 +50,7 @@ jobs:
 
   release:
     name: Create Dev Release
-    needs: build-windows
+    needs: [test, build-windows]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
