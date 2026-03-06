@@ -82,7 +82,6 @@ async function authenticateRemote(): Promise<{ onAirSessionId: string; connectio
     remoteDeviceName: '',
     password: config.proclaim.password,
   });
-  console.log('[Proclaim] auth/control OnAirSessionId:', sessionId);
   const controlRes = await fetch(`${baseUrl()}/auth/control`, {
     method: 'POST',
     headers: {
@@ -92,7 +91,6 @@ async function authenticateRemote(): Promise<{ onAirSessionId: string; connectio
     body: controlBody,
   });
   const controlText = await controlRes.text();
-  console.log('[Proclaim] auth/control response:', controlRes.status, controlText.slice(0, 300));
 
   if (!controlRes.ok) {
     // Likely running on the same machine as Proclaim — proceed with sessionId only
@@ -158,7 +156,6 @@ async function pollStatus(): Promise<void> {
     }
 
     const text = await res.text();
-    logger.log('[Proclaim] onair/session response:', JSON.stringify(text.trim().slice(0, 200)));
     const sessionId = text.trim();
     if (!sessionId || sessionId === 'null') {
       state.update('proclaim', {
