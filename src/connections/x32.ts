@@ -35,6 +35,7 @@ const CH_COUNT = 32;
 const BUS_COUNT = 16;
 
 function connect(): void {
+  logger.log('[X32] Attempting to connect to', config.x32.host, config.x32.port);
   wantConnected = true;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (keepAliveInterval) clearInterval(keepAliveInterval);

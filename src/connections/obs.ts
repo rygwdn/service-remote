@@ -12,6 +12,7 @@ let wantConnected = false;
 async function connect(): Promise<void> {
   wantConnected = true;
   if (reconnectTimer) clearTimeout(reconnectTimer);
+  logger.log('[OBS] Attempting to connect to', config.obs.address);
   try {
     await obs.connect(config.obs.address, config.obs.password || undefined);
     logger.log('[OBS] Connected');

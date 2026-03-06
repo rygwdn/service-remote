@@ -320,6 +320,7 @@ function scheduleReconnect(): void {
 
 async function connect(): Promise<void> {
   wantConnected = true;
+  logger.log('[Proclaim] Attempting to connect to', baseUrl());
   try {
     appCommandToken = await authenticateAppCommand();
     logger.log('[Proclaim] Authenticated');
