@@ -324,6 +324,48 @@ describe('proclaim service item indexing', () => {
   });
 });
 
+describe('proclaim statusChanged initial poll', () => {
+  afterEach(() => {
+    delete globalThis.fetch;
+    for (const key of Object.keys(require.cache)) {
+      if (key.includes('connections/proclaim') || key.includes('src/state')) {
+        delete require.cache[key];
+      }
+    }
+  });
+
+  test('first statusChanged poll uses Int64/Int32 min sentinel values', async () => {
+    let statusChangedUrl = null;
+    globalThis.fetch = async (url) => {
+      if (url.includes('authenticate')) {
+        return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok' }), text: async () => '' };
+      }
+      if (url.includes('onair/session')) {
+        return { ok: true, status: 200, json: async () => 'sess1', text: async () => 'sess1' };
+      }
+      if (url.includes('auth/control')) {
+        return { ok: true, status: 200, json: async () => ({ connectionId: 'conn1' }), text: async () => JSON.stringify({ connectionId: 'conn1' }) };
+      }
+      if (url.includes('presentations/onair')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify({ id: 'p1', serviceItems: [] }) };
+      }
+      if (url.includes('statusChanged')) {
+        statusChangedUrl = url;
+        return { ok: true, status: 200, text: async () => JSON.stringify({ status: {} }) };
+      }
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
+    };
+
+    const proclaim = freshProclaim();
+    await proclaim.connect();
+    await new Promise((r) => setTimeout(r, 100));
+
+    assert.ok(statusChangedUrl, 'Expected statusChanged to be called');
+    assert.ok(statusChangedUrl.includes('localrevision=-9223372036854775808'), `Expected Int64 min localrevision, got: ${statusChangedUrl}`);
+    assert.ok(statusChangedUrl.includes('step=-2147483648'), `Expected Int32 min step, got: ${statusChangedUrl}`);
+  });
+});
+
 describe('proclaim._pollStatus', () => {
   afterEach(() => {
     delete globalThis.fetch;

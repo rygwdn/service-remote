@@ -40,8 +40,10 @@ interface PresentationCache {
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let presentationCache: PresentationCache | null = null;
-let presentationLocalRevision = '0'; // kept as string — value exceeds JS safe integer range
-let statusRevision = '0'; // the revision field from status, sent as `step` to statusChanged
+// Sentinel values for the first poll: Proclaim returns current state immediately
+// instead of long-polling when these minimum integer values are sent.
+let presentationLocalRevision = '-9223372036854775808'; // Int64 min — kept as string (exceeds JS safe integer range)
+let statusRevision = '-2147483648'; // Int32 min, sent as `step`
 let statusLoopGeneration = 0; // incremented on disconnect to stop any in-flight loop
 
 function baseUrl(): string {
@@ -196,8 +198,8 @@ async function pollStatus(): Promise<void> {
         return;
       }
       // New session: reset revision state and restart long-poll loop
-      presentationLocalRevision = '0';
-      statusRevision = '0';
+      presentationLocalRevision = '-9223372036854775808';
+      statusRevision = '-2147483648';
       presentationCache = null;
       startStatusLoop();
     }
