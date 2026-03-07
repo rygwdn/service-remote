@@ -65,4 +65,22 @@ describe('State', () => {
     s.update('obs', { scenes: ['C'] });
     assert.deepEqual(s.get().obs.scenes, ['C']);
   });
+
+  test('update() does not emit change when nothing changed', () => {
+    const s = new State();
+    s.update('obs', { connected: true });
+    let eventCount = 0;
+    s.on('change', () => { eventCount++; });
+    s.update('obs', { connected: true }); // same value — no change
+    assert.equal(eventCount, 0);
+  });
+
+  test('update() does emit change when value actually changes', () => {
+    const s = new State();
+    let eventCount = 0;
+    s.on('change', () => { eventCount++; });
+    s.update('obs', { connected: true });
+    s.update('obs', { connected: false });
+    assert.equal(eventCount, 2);
+  });
 });

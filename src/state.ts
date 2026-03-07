@@ -34,7 +34,11 @@ class State extends EventEmitter {
   }
 
   update<K extends keyof AppState>(section: K, patch: Partial<AppState[K]>): void {
-    this.data[section] = { ...this.data[section], ...patch } as AppState[K];
+    const current = this.data[section];
+    const next = { ...current, ...patch } as AppState[K];
+    // Skip if nothing actually changed
+    if (JSON.stringify(current) === JSON.stringify(next)) return;
+    this.data[section] = next;
     this.emit('change', { section, state: this.data });
   }
 
