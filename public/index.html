@@ -112,15 +112,17 @@
       </div>
       <div class="proclaim-items">
         <template x-for="entry in flatServiceItems($store.state.proclaim)" :key="entry.key">
-          <div x-show="entry.type==='section'" class="item-section-header" x-text="entry.label"></div>
-          <div x-show="entry.type==='group'"   class="item-group-header"   x-text="entry.label"></div>
-          <button x-show="entry.type==='item'"
-                  class="item-btn"
-                  :class="{ active: entry.isActive, 'item-grouped': entry.item.group }"
-                  @click="sendAction('GoToServiceItem', entry.item.index)">
-            <span x-text="entry.item.title || entry.item.kind"></span>
-            <span class="item-slide-count" x-show="entry.slideCountLabel" x-text="' '+entry.slideCountLabel"></span>
-          </button>
+          <div style="display:contents">
+            <div x-show="entry.type==='section'" class="item-section-header" x-text="entry.label"></div>
+            <div x-show="entry.type==='group'"   class="item-group-header"   x-text="entry.label"></div>
+            <button x-show="entry.type==='item'"
+                    class="item-btn"
+                    :class="{ active: entry.isActive, 'item-grouped': entry.item.group }"
+                    @click="sendAction('GoToServiceItem', entry.item.index)">
+              <span x-text="entry.item.title || entry.item.kind"></span>
+              <span class="item-slide-count" x-show="entry.slideCountLabel" x-text="' '+entry.slideCountLabel"></span>
+            </button>
+          </div>
         </template>
       </div>
     </section>

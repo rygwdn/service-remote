@@ -1,10 +1,5 @@
 import { test, expect } from './fixtures';
 
-// NOTE: The Proclaim service item list uses a multi-root x-for template (3 sibling
-// elements inside <template x-for>). Alpine 3.x only stamps the FIRST child per
-// iteration, so the section/group headers render but item <button> elements do not.
-// Tests below work around this by testing what Alpine actually renders.
-
 const serviceItems = [
   { id: 'item1', title: 'Welcome', kind: 'Slide', slideCount: 1, index: 0, section: 'Opening', group: null },
   { id: 'item2', title: 'Amazing Grace', kind: 'Song', slideCount: 4, index: 1, section: 'Worship', group: null },
@@ -42,16 +37,68 @@ test.describe('Proclaim panel', () => {
     await expect(nowPlaying).toContainText('Song');
   });
 
-  test('visible section headers match service item sections', async ({ page, setState }) => {
+  test('shows service items list when on air', async ({ page, setState }) => {
     await goToProclaim(page, setState, {
       proclaim: { connected: true, onAir: true, currentItemId: 'item1', slideIndex: 0, serviceItems },
     });
-    // x-for renders all entries but only section-type ones have x-show=true on the header
-    const visibleSections = panel(page).locator('.item-section-header:visible');
-    await expect(visibleSections).toHaveCount(3);
-    await expect(visibleSections.nth(0)).toHaveText('Opening');
-    await expect(visibleSections.nth(1)).toHaveText('Worship');
-    await expect(visibleSections.nth(2)).toHaveText('Message');
+
+    const items = panel(page).locator('.item-btn:visible');
+    await expect(items).toHaveCount(3);
+    await expect(items.nth(0)).toContainText('Welcome');
+    await expect(items.nth(1)).toContainText('Amazing Grace');
+    await expect(items.nth(2)).toContainText('Sermon');
+  });
+
+  test('active item is highlighted', async ({ page, setState }) => {
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item2', slideIndex: 1, serviceItems },
+    });
+
+    const items = panel(page).locator('.item-btn:visible');
+    await expect(items.nth(1)).toHaveClass(/active/);
+    await expect(items.nth(0)).not.toHaveClass(/active/);
+    await expect(items.nth(2)).not.toHaveClass(/active/);
+  });
+
+  test('shows section headers', async ({ page, setState }) => {
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item1', slideIndex: 0, serviceItems },
+    });
+
+    const sections = panel(page).locator('.item-section-header:visible');
+    await expect(sections).toHaveCount(3);
+    await expect(sections.nth(0)).toHaveText('Opening');
+    await expect(sections.nth(1)).toHaveText('Worship');
+    await expect(sections.nth(2)).toHaveText('Message');
+  });
+
+  test('shows slide count for multi-slide items', async ({ page, setState }) => {
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item1', slideIndex: 0, serviceItems },
+    });
+
+    const items = panel(page).locator('.item-btn:visible');
+    await expect(items.nth(1)).toContainText('4 slides');
+    await expect(items.nth(0)).not.toContainText('slides');
+  });
+
+  test('clicking an item sends GoToServiceItem action', async ({ page, setState }) => {
+    let lastCall: { action: string; index?: number } | null = null;
+    await page.route('**/api/proclaim/action', async (route) => {
+      lastCall = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    });
+
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item1', slideIndex: 0, serviceItems },
+    });
+
+    await panel(page).locator('.item-btn:visible').nth(2).click();
+    await page.waitForTimeout(100);
+
+    expect(lastCall).not.toBeNull();
+    expect(lastCall!.action).toBe('GoToServiceItem');
+    expect(lastCall!.index).toBe(2);
   });
 
   test('slide nav buttons send correct actions', async ({ page, setState }) => {
@@ -73,5 +120,10 @@ test.describe('Proclaim panel', () => {
 
     await page.waitForTimeout(200);
     expect(calls).toEqual(['PreviousServiceItem', 'NextServiceItem', 'PreviousSlide', 'NextSlide']);
+  });
+
+  test('shows no items when not on air', async ({ page, setState }) => {
+    await goToProclaim(page, setState, { proclaim: { connected: true, onAir: false } });
+    await expect(panel(page).locator('.item-btn:visible')).toHaveCount(0);
   });
 });
