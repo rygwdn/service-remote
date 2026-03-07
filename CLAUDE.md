@@ -121,7 +121,7 @@ Tests use Bun's built-in test runner (`bun:test`) for unit/e2e and Playwright fo
 
 ### TDD workflow
 
-Write the failing test first, confirm it's red, then implement until green.
+**Tests are written before implementation.** Write the failing test first, confirm it's red, then implement until green. Never implement a feature without a test already in place for it.
 
 ```bash
 # Red → Green cycle
@@ -131,14 +131,17 @@ bunx playwright test test/ui/foo.test.ts --headed  # UI — browser tests
 ```
 
 When adding new features:
-1. Unit-test pure/stateless logic in `test/unit/`.
-2. Add an API test in `test/e2e/api.test.ts` for new routes.
-3. Add a UI test in `test/ui/` for any visible behaviour (use `setState()` to drive state).
-4. Keep connection modules mockable — `routes.ts` accepts `{ obs, x32, proclaim }` as an argument so tests can inject stubs.
+1. **Write tests first** — before touching any implementation files.
+2. Run the new tests and confirm they fail (red).
+3. Implement the feature until all tests pass (green).
+4. Unit-test pure/stateless logic in `test/unit/`.
+5. Add an API test in `test/e2e/api.test.ts` for new routes.
+6. Add a UI test in `test/ui/` for any visible behaviour (use `setState()` to drive state).
+7. Keep connection modules mockable — `routes.ts` accepts `{ obs, x32, proclaim }` as an argument so tests can inject stubs.
 
 ## Workflow
 
-After completing a task, always run the relevant tests and, once they pass, commit the changes.
+After completing a task, always run the relevant tests and, once they pass, commit the changes. Tests must be committed alongside the implementation — never commit a feature without its tests.
 
 ### Commit message format
 
