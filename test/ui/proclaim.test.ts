@@ -164,6 +164,39 @@ test.describe('Proclaim panel', () => {
     expect(calls).toContain('GoOffAir');
   });
 
+  test('renders without Alpine error when items have section and group entries', async ({ page, setState }) => {
+    const itemsWithGroups = [
+      { id: 'g1', title: 'Opening Song', kind: 'Song', slideCount: 3, index: 1, sectionIndex: 1, sectionCommand: 'StartService', section: 'Service', group: 'Worship Set' },
+      { id: 'g2', title: 'Second Song', kind: 'Song', slideCount: 2, index: 2, sectionIndex: 2, sectionCommand: 'StartService', section: 'Service', group: 'Worship Set' },
+      { id: 'g3', title: 'Sermon', kind: 'Slide', slideCount: 5, index: 3, sectionIndex: 3, sectionCommand: 'StartService', section: 'Service', group: null },
+    ];
+
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'g1', slideIndex: 0, serviceItems: itemsWithGroups },
+    });
+
+    const items = panel(page).locator('.item-btn:visible');
+    await expect(items).toHaveCount(3);
+
+    // The group header should render
+    const groupHeader = panel(page).locator('.item-group-header:visible');
+    await expect(groupHeader).toHaveCount(1);
+    await expect(groupHeader).toHaveText('Worship Set');
+
+    // Grouped items should have the item-grouped class
+    await expect(items.nth(0)).toHaveClass(/item-grouped/);
+    await expect(items.nth(1)).toHaveClass(/item-grouped/);
+    await expect(items.nth(2)).not.toHaveClass(/item-grouped/);
+
+    // No Alpine expression errors
+    const alpineErrors = errors.filter((e) => e.includes('Alpine Expression Error'));
+    expect(alpineErrors).toHaveLength(0);
+  });
+
   test('AV transport buttons send correct actions', async ({ page, setState }) => {
     const calls: string[] = [];
     await page.route('**/api/proclaim/action', async (route) => {
