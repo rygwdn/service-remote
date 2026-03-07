@@ -29,6 +29,8 @@ let presentationCache: {
   }>;
 } | null = null;
 let presentationLocalRevision = '0'; // kept as string — value exceeds JS safe integer range
+let statusRevision = '0'; // the revision field from status, sent as `step` to statusChanged
+let statusLoopGeneration = 0; // incremented on disconnect to stop any in-flight loop
 
 function baseUrl(): string {
   return `http://${config.proclaim.host}:${config.proclaim.port}`;
@@ -181,16 +183,55 @@ async function pollStatus(): Promise<void> {
         logger.log('[Proclaim] Remote auth failed:', (err as Error).message);
         return;
       }
+      // New session: reset revision state and restart long-poll loop
+      presentationLocalRevision = '0';
+      statusRevision = '0';
+      presentationCache = null;
+      startStatusLoop();
     }
 
     state.update('proclaim', { connected: true, onAir: true });
-    fetchDetailedStatus();
   } catch (err) {
     logger.log('[Proclaim] pollStatus network error:', (err as Error).message);
     state.update('proclaim', { connected: false });
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = null;
     scheduleReconnect();
+  }
+}
+
+// Minimum delay before re-firing statusChanged if it returned faster than expected.
+// Grows exponentially on repeated fast responses, resets after a slow (long-poll) response.
+const LONG_POLL_THRESHOLD_MS = 5000;
+const MIN_RETRY_MS = 500;
+const MAX_RETRY_MS = 10000;
+
+function startStatusLoop(): void {
+  const generation = ++statusLoopGeneration;
+  runStatusLoop(generation, MIN_RETRY_MS);
+}
+
+async function runStatusLoop(generation: number, retryDelay: number): Promise<void> {
+  if (!wantConnected || generation !== statusLoopGeneration) return;
+
+  const start = Date.now();
+  try {
+    await fetchDetailedStatus();
+  } catch (err) {
+    logger.log('[Proclaim] statusChanged loop error:', (err as Error).message);
+  }
+
+  if (!wantConnected || generation !== statusLoopGeneration) return;
+
+  const elapsed = Date.now() - start;
+  if (elapsed >= LONG_POLL_THRESHOLD_MS) {
+    // Genuine long-poll response — fire again immediately, reset backoff
+    runStatusLoop(generation, MIN_RETRY_MS);
+  } else {
+    // Quick response — back off to avoid hammering the server
+    const nextDelay = Math.min(retryDelay * 2, MAX_RETRY_MS);
+    logger.debug(`[Proclaim] statusChanged returned in ${elapsed}ms, retrying in ${retryDelay}ms`);
+    setTimeout(() => runStatusLoop(generation, nextDelay), retryDelay);
   }
 }
 
@@ -224,11 +265,11 @@ async function fetchDetailedStatus(): Promise<void> {
     }
   }
 
-  // Fetch current status (not a long-poll — Proclaim returns immediately)
+  // Long-poll: Proclaim blocks up to ~60s, returning immediately only on state change.
   try {
     const headers: Record<string, string> = { 'OnAirSessionId': onAirSessionId! };
     if (connectionId) headers['ConnectionId'] = connectionId;
-    const res = await fetch(`${baseUrl()}/onair/statusChanged?localrevision=${presentationLocalRevision}&step=250`, { headers });
+    const res = await fetch(`${baseUrl()}/onair/statusChanged?localrevision=${presentationLocalRevision}&step=${statusRevision}`, { headers });
 
     if (!res.ok) {
       logger.log('[Proclaim] statusChanged error:', res.status);
@@ -238,7 +279,7 @@ async function fetchDetailedStatus(): Promise<void> {
     const data = parseProclaimJson(await res.text()) as {
       presentationId?: string;
       presentationLocalRevision?: number | string;
-      status?: { itemId?: string; slideIndex?: number };
+      status?: { revision?: number | string; itemId?: string; slideIndex?: number };
     } | null;
 
     if (!data) {
@@ -251,6 +292,9 @@ async function fetchDetailedStatus(): Promise<void> {
     }
 
     const status = data.status;
+    if (status?.revision !== undefined) {
+      statusRevision = String(status.revision);
+    }
     if (!status) return;
 
     // If presentation changed, refresh the cache
@@ -346,6 +390,7 @@ async function connect(): Promise<void> {
     logger.log('[Proclaim] Authenticated');
     state.update('proclaim', { connected: true });
     startPolling();
+    startStatusLoop();
   } catch (err) {
     logger.log('[Proclaim] Connection failed:', (err as Error).message);
     state.update('proclaim', { connected: false });
@@ -355,11 +400,15 @@ async function connect(): Promise<void> {
 
 function disconnect(): void {
   wantConnected = false;
+  statusLoopGeneration++; // invalidates any in-flight runStatusLoop iteration
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   appCommandToken = null;
   onAirSessionId = null;
   connectionId = null;
+  presentationLocalRevision = '0';
+  statusRevision = '0';
+  presentationCache = null;
 }
 
 async function goToItem(itemId: string): Promise<boolean> {
@@ -385,4 +434,5 @@ export = {
   _authenticateAppCommand: authenticateAppCommand,
   _authenticateRemote: authenticateRemote,
   _pollStatus: pollStatus,
+  _fetchDetailedStatus: fetchDetailedStatus,
 };
