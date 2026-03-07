@@ -34,16 +34,20 @@ interface OscArg {
 
 interface OscResult {
   index: number;
-  type: 'ch' | 'bus';
+  type: 'ch' | 'bus' | 'main' | 'mtx';
   patch: Partial<Channel>;
 }
 
 // Dynamically discovered channels
 let channels: Channel[] = [];
 
-// Number of input channels and buses on the X32
+// Number of input channels, buses, and matrices on the X32
 const CH_COUNT = 32;
 const BUS_COUNT = 16;
+const MTX_COUNT = 6;
+
+// main type: index 1 = stereo L/R, index 2 = mono/center
+const MAIN_LABELS: Record<number, string> = { 1: 'Main L/R', 2: 'Main M/C' };
 
 function connect(): void {
   logger.log('[X32] Attempting to connect to', config.x32.address, 'port', config.x32.port);
@@ -121,7 +125,10 @@ function scheduleReconnect(): void {
   reconnectTimer = setTimeout(connect, 5000);
 }
 
-function channelPrefix(index: number, type: 'ch' | 'bus'): string {
+function channelPrefix(index: number, type: 'ch' | 'bus' | 'main' | 'mtx'): string {
+  if (type === 'main') {
+    return index === 2 ? '/main/m' : '/main/st';
+  }
   const padded = String(index).padStart(2, '0');
   return `/${type}/${padded}`;
 }
@@ -178,14 +185,16 @@ function parseMeterBlob(blob: Buffer): number[] {
   return values;
 }
 
-// Send /meters subscription requests to the X32 for input channels and mix buses.
-// The X32 responds with /meters/0 and /meters/2 blobs every 100 ms for the given duration.
+// Send /meters subscription requests to the X32 for input channels, mix buses, and main/matrix.
+// The X32 responds with /meters/0, /meters/2, /meters/3 blobs every 100 ms for the given duration.
 // We renew every 1.5 s to keep the stream active (duration = 20 × 100 ms = 2 s).
 function requestMeterUpdates(): void {
   // Bank 0: input channel pre-fader levels (positions 0–31 = ch 1–32)
   sendOsc('/meters', [{ value: 0 }, { value: 20 }]);
   // Bank 2: mix bus output levels (positions 0–15 = bus 1–16)
   sendOsc('/meters', [{ value: 2 }, { value: 20 }]);
+  // Bank 3: main/matrix output levels (pos 0=main L, 1=main R, 2=main M/C, 3–8 = mtx 1–6)
+  sendOsc('/meters', [{ value: 3 }, { value: 20 }]);
 }
 
 function handleMeterMessage(address: string, args: OscArg[]): void {
@@ -199,6 +208,15 @@ function handleMeterMessage(address: string, args: OscArg[]): void {
       level = values[ch.index - 1]; // ch.index is 1-based; bank 0 pos 0 = ch 1
     } else if (address === '/meters/2' && ch.type === 'bus') {
       level = values[ch.index - 1]; // bank 2 pos 0 = bus 1
+    } else if (address === '/meters/3') {
+      // bank 3: pos 0–1 = main L/R (index 1), pos 2 = main M/C (index 2), pos 3–8 = mtx 1–6
+      if (ch.type === 'main') {
+        // Use the higher of L and R for the stereo main (index 1)
+        if (ch.index === 1) level = Math.max(values[0] ?? 0, values[1] ?? 0);
+        else if (ch.index === 2) level = values[2];
+      } else if (ch.type === 'mtx') {
+        level = values[2 + ch.index]; // pos 3 = mtx 1, pos 4 = mtx 2, ...
+      }
     }
     if (level !== undefined && isFinite(level)) {
       ch.level = level;
@@ -249,6 +267,45 @@ function parseOscMessage(address: string, args: OscArg[]): OscResult | null {
     return { index: parseInt(busNameMatch[1], 10), type: 'bus', patch: { label: name } };
   }
 
+  // Matrix: /mtx/XX/...
+  const mtxFaderMatch = address.match(/^\/mtx\/(\d+)\/mix\/fader$/);
+  if (mtxFaderMatch) {
+    return { index: parseInt(mtxFaderMatch[1], 10), type: 'mtx', patch: { fader: (args?.[0]?.value as number) ?? 0 } };
+  }
+
+  const mtxMuteMatch = address.match(/^\/mtx\/(\d+)\/mix\/on$/);
+  if (mtxMuteMatch) {
+    return { index: parseInt(mtxMuteMatch[1], 10), type: 'mtx', patch: { muted: ((args?.[0]?.value as number) ?? 1) === 0 } };
+  }
+
+  const mtxNameMatch = address.match(/^\/mtx\/(\d+)\/config\/name$/);
+  if (mtxNameMatch) {
+    const name = args?.[0]?.value as string | undefined;
+    if (!name) return null;
+    return { index: parseInt(mtxNameMatch[1], 10), type: 'mtx', patch: { label: name } };
+  }
+
+  // Main L/R: /main/st/... (index 1) and Main M/C: /main/m/... (index 2)
+  const mainStFaderMatch = address.match(/^\/main\/st\/mix\/fader$/);
+  if (mainStFaderMatch) {
+    return { index: 1, type: 'main', patch: { fader: (args?.[0]?.value as number) ?? 0 } };
+  }
+
+  const mainStMuteMatch = address.match(/^\/main\/st\/mix\/on$/);
+  if (mainStMuteMatch) {
+    return { index: 1, type: 'main', patch: { muted: ((args?.[0]?.value as number) ?? 1) === 0 } };
+  }
+
+  const mainMFaderMatch = address.match(/^\/main\/m\/mix\/fader$/);
+  if (mainMFaderMatch) {
+    return { index: 2, type: 'main', patch: { fader: (args?.[0]?.value as number) ?? 0 } };
+  }
+
+  const mainMMuteMatch = address.match(/^\/main\/m\/mix\/on$/);
+  if (mainMMuteMatch) {
+    return { index: 2, type: 'main', patch: { muted: ((args?.[0]?.value as number) ?? 1) === 0 } };
+  }
+
   return null;
 }
 
@@ -270,12 +327,28 @@ function handleMessage(address: string, args: OscArg[]): void {
 
     // Request names for all channels — non-empty names indicate active channels.
     // Throttled via the send queue to avoid flooding the mixer.
-    logger.log(`[X32] Requesting names for ${CH_COUNT} input channels and ${BUS_COUNT} buses`);
+    logger.log(`[X32] Requesting names for ${CH_COUNT} input channels, ${BUS_COUNT} buses, ${MTX_COUNT} matrices, and main`);
     for (let i = 1; i <= CH_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'ch')}/config/name`);
     }
     for (let i = 1; i <= BUS_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'bus')}/config/name`);
+    }
+    for (let i = 1; i <= MTX_COUNT; i++) {
+      sendOsc(`${channelPrefix(i, 'mtx')}/config/name`);
+    }
+    // Main L/R and Mono/Center are always present — seed them directly
+    for (const [idx, lbl] of Object.entries(MAIN_LABELS)) {
+      const index = Number(idx);
+      const label = lbl;
+      let ch = channels.find((c) => c.index === index && c.type === 'main');
+      if (!ch) {
+        ch = { index, type: 'main', label, fader: 0, muted: false, level: 0 };
+        channels.push(ch);
+      }
+      const prefix = channelPrefix(index, 'main');
+      sendOsc(`${prefix}/mix/fader`);
+      sendOsc(`${prefix}/mix/on`);
     }
 
     if (metersActive) {
@@ -286,7 +359,7 @@ function handleMessage(address: string, args: OscArg[]): void {
     return;
   }
 
-  if (address === '/meters/0' || address === '/meters/2') {
+  if (address === '/meters/0' || address === '/meters/2' || address === '/meters/3') {
     handleMeterMessage(address, args);
     return;
   }
@@ -297,7 +370,9 @@ function handleMessage(address: string, args: OscArg[]): void {
   }
 }
 
-function updateChannel(index: number, type: 'ch' | 'bus', patch: Partial<Channel>): void {
+const TYPE_ORDER: Record<string, number> = { ch: 0, bus: 1, mtx: 2, main: 3 };
+
+function updateChannel(index: number, type: 'ch' | 'bus' | 'main' | 'mtx', patch: Partial<Channel>): void {
   let ch = channels.find((c) => c.index === index && c.type === type);
   if (!ch) {
     // Only create a new channel entry when a name is received (auto-discovery)
@@ -309,8 +384,8 @@ function updateChannel(index: number, type: 'ch' | 'bus', patch: Partial<Channel
     ch = { index, type, label: patch.label, fader: 0, muted: false, level: 0 };
     channels.push(ch);
     channels.sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'ch' ? -1 : 1;
-      return a.index - b.index;
+      const to = (TYPE_ORDER[a.type] ?? 99) - (TYPE_ORDER[b.type] ?? 99);
+      return to !== 0 ? to : a.index - b.index;
     });
     // Request initial fader/mute state for newly discovered channel
     const prefix = channelPrefix(index, type);
@@ -373,7 +448,7 @@ export = {
     if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
   },
 
-  setFader(channelIndex: number, value: number, type: 'ch' | 'bus' = 'ch'): void {
+  setFader(channelIndex: number, value: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {
     const clamped = Math.max(0, Math.min(1, value));
     logger.log(`[X32] setFader ${type} ${channelIndex} = ${clamped}`);
     sendOsc(`${channelPrefix(channelIndex, type)}/mix/fader`, [
@@ -382,7 +457,7 @@ export = {
     updateChannel(channelIndex, type, { fader: clamped });
   },
 
-  toggleMute(channelIndex: number, type: 'ch' | 'bus' = 'ch'): void {
+  toggleMute(channelIndex: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {
     const ch = channels.find((c) => c.index === channelIndex && c.type === type);
     if (!ch) {
       logger.warn(`[X32] toggleMute: ${type} ${channelIndex} not found`);

@@ -106,6 +106,54 @@ describe('x32 parseOscMessage()', () => {
     });
   });
 
+  describe('matrix faders', () => {
+    test('parses mtx fader', () => {
+      const result = parseOscMessage('/mtx/01/mix/fader', [{ value: 0.8 }]);
+      assert.deepEqual(result, { index: 1, type: 'mtx', patch: { fader: 0.8 } });
+    });
+
+    test('parses mtx mute (on=0 → muted)', () => {
+      const result = parseOscMessage('/mtx/03/mix/on', [{ value: 0 }]);
+      assert.deepEqual(result, { index: 3, type: 'mtx', patch: { muted: true } });
+    });
+
+    test('parses mtx mute (on=1 → not muted)', () => {
+      const result = parseOscMessage('/mtx/03/mix/on', [{ value: 1 }]);
+      assert.deepEqual(result, { index: 3, type: 'mtx', patch: { muted: false } });
+    });
+
+    test('parses mtx name', () => {
+      const result = parseOscMessage('/mtx/02/config/name', [{ value: 'Lobby' }]);
+      assert.deepEqual(result, { index: 2, type: 'mtx', patch: { label: 'Lobby' } });
+    });
+
+    test('returns null for empty mtx name', () => {
+      assert.equal(parseOscMessage('/mtx/01/config/name', [{ value: '' }]), null);
+    });
+  });
+
+  describe('main faders', () => {
+    test('parses main L/R fader', () => {
+      const result = parseOscMessage('/main/st/mix/fader', [{ value: 0.9 }]);
+      assert.deepEqual(result, { index: 1, type: 'main', patch: { fader: 0.9 } });
+    });
+
+    test('parses main L/R mute', () => {
+      const result = parseOscMessage('/main/st/mix/on', [{ value: 0 }]);
+      assert.deepEqual(result, { index: 1, type: 'main', patch: { muted: true } });
+    });
+
+    test('parses main M/C fader', () => {
+      const result = parseOscMessage('/main/m/mix/fader', [{ value: 0.7 }]);
+      assert.deepEqual(result, { index: 2, type: 'main', patch: { fader: 0.7 } });
+    });
+
+    test('parses main M/C mute', () => {
+      const result = parseOscMessage('/main/m/mix/on', [{ value: 1 }]);
+      assert.deepEqual(result, { index: 2, type: 'main', patch: { muted: false } });
+    });
+  });
+
   describe('unrecognised addresses', () => {
     test('returns null for unknown OSC address', () => {
       assert.equal(parseOscMessage('/xremote', []), null);
