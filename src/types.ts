@@ -8,7 +8,7 @@ export interface AudioSource {
 
 export interface Channel {
   index: number;
-  type: 'ch' | 'bus';
+  type: 'ch' | 'bus' | 'main' | 'mtx';
   label: string;
   fader: number;
   muted: boolean;
@@ -74,6 +74,10 @@ export interface Config {
     password: string;
     pollInterval: number;
   };
+  ui: {
+    hiddenObs: string[];
+    hiddenX32: string[];
+  };
 }
 
 export interface ObsConnection {
@@ -90,9 +94,9 @@ export interface ObsConnection {
 export interface X32Connection {
   connect(): void;
   disconnect(): void;
-  setFader(channelIndex: number, value: number, type?: 'ch' | 'bus'): void;
-  toggleMute(channelIndex: number, type?: 'ch' | 'bus'): void;
-  parseOscMessage(address: string, args: Array<{ value: unknown }>): { index: number; type: 'ch' | 'bus'; patch: Partial<Channel> } | null;
+  setFader(channelIndex: number, value: number, type?: 'ch' | 'bus' | 'main' | 'mtx'): void;
+  toggleMute(channelIndex: number, type?: 'ch' | 'bus' | 'main' | 'mtx'): void;
+  parseOscMessage(address: string, args: Array<{ value: unknown }>): { index: number; type: 'ch' | 'bus' | 'main' | 'mtx'; patch: Partial<Channel> } | null;
   startMeterUpdates(): void;
   stopMeterUpdates(): void;
 }

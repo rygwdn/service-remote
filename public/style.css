@@ -272,6 +272,55 @@ main {
   font-weight: normal;
 }
 
+/* Section header with edit button */
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.section-header-row h2 {
+  margin-bottom: 0;
+}
+
+.x32-header-row {
+  padding: 0 4px 4px;
+}
+
+.btn-edit-toggle {
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.btn-edit-toggle.active {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.fader-visibility-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  flex: 1 1 100%;
+}
+
+.channel-strip .fader-visibility-label {
+  flex: none;
+  justify-content: center;
+  width: 100%;
+}
+
 /* OBS */
 .obs-section {
   margin-bottom: 24px;
@@ -619,7 +668,7 @@ main {
 }
 
 .ov-fader-bar {
-  flex: 1;
+  width: 100%;
   height: 8px;
   background: var(--accent);
   border-radius: 4px;
@@ -639,7 +688,7 @@ main {
 }
 
 .ov-level-bar {
-  flex: 1;
+  width: 100%;
   height: 4px;
   background: var(--accent);
   border-radius: 2px;

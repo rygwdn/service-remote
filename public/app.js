@@ -83,6 +83,85 @@ function toggleX32Mute(channel, type) {
   post('/api/x32/mute', { channel, type });
 }
 
+// --- Fader visibility (show/hide toggles) ---
+const editModeActive = { obs: false, x32: false };
+const hidden = { obs: new Set(), x32: new Set() };
+
+async function loadHiddenFromServer() {
+  try {
+    const res = await fetch('/api/ui/hidden');
+    if (!res.ok) return;
+    const data = await res.json();
+    hidden.obs = new Set(data.hiddenObs || []);
+    hidden.x32 = new Set(data.hiddenX32 || []);
+    applyObsVisibility();
+    applyX32Visibility();
+    applyOverviewVisibility();
+  } catch (_) {}
+}
+
+let saveHiddenTimer = null;
+function saveHiddenToServer() {
+  clearTimeout(saveHiddenTimer);
+  saveHiddenTimer = setTimeout(async () => {
+    try {
+      await fetch('/api/ui/hidden', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hiddenObs: [...hidden.obs], hiddenX32: [...hidden.x32] }),
+      });
+    } catch (_) {}
+  }, 300);
+}
+
+function toggleEditMode(panel) {
+  editModeActive[panel] = !editModeActive[panel];
+  const btnId = panel === 'obs' ? 'obs-audio-edit-btn' : 'x32-edit-btn';
+  const btn = document.getElementById(btnId);
+  btn.classList.toggle('active', editModeActive[panel]);
+  btn.textContent = editModeActive[panel] ? 'Done' : 'Edit';
+  if (panel === 'obs') {
+    document.getElementById('obs-audio').querySelectorAll('.fader-visibility-label').forEach((label) => {
+      label.style.display = editModeActive.obs ? '' : 'none';
+    });
+    applyObsVisibility();
+  } else {
+    document.getElementById('x32-channels').querySelectorAll('.fader-visibility-label').forEach((label) => {
+      label.style.display = editModeActive.x32 ? '' : 'none';
+    });
+    applyX32Visibility();
+  }
+}
+
+function applyObsVisibility() {
+  document.getElementById('obs-audio').querySelectorAll('.audio-source[data-name]').forEach((el) => {
+    const isHidden = hidden.obs.has(el.dataset.name);
+    el.style.display = (!editModeActive.obs && isHidden) ? 'none' : '';
+  });
+}
+
+function applyX32Visibility() {
+  document.getElementById('x32-channels').querySelectorAll('.channel-strip[data-key]').forEach((el) => {
+    const isHidden = hidden.x32.has(el.dataset.key);
+    el.style.display = (!editModeActive.x32 && isHidden) ? 'none' : '';
+  });
+}
+
+function applyOverviewVisibility() {
+  const obsAudioEl = document.getElementById('ov-obs-audio');
+  if (obsAudioEl) {
+    obsAudioEl.querySelectorAll('.ov-channel-row[data-name]').forEach((el) => {
+      el.style.display = hidden.obs.has(el.dataset.name) ? 'none' : '';
+    });
+  }
+  const chList = document.getElementById('ov-channels');
+  if (chList) {
+    chList.querySelectorAll('.ov-channel-row[data-key]').forEach((el) => {
+      el.style.display = hidden.x32.has(el.dataset.key) ? 'none' : '';
+    });
+  }
+}
+
 // --- Render state ---
 function renderState(s) {
   // Connection dots
@@ -133,11 +212,19 @@ function renderObs(obs) {
         <span class="name"></span>
         <input type="range" min="-60" max="0" step="0.5">
         <button class="mute-btn"></button>
-        <div class="obs-meter"><div class="obs-meter-fill"></div></div>`;
-      const input = row.querySelector('input');
+        <div class="obs-meter"><div class="obs-meter-fill"></div></div>
+        <label class="fader-visibility-label" style="display:none"><input type="checkbox" class="fader-visibility-cb" checked> Show</label>`;
+      const input = row.querySelector('input[type="range"]');
       input.addEventListener('input', () => setObsVolume(src.name, parseFloat(input.value)));
       const btn = row.querySelector('.mute-btn');
       btn.addEventListener('click', () => toggleObsMute(src.name));
+      const cb = row.querySelector('.fader-visibility-cb');
+      cb.addEventListener('change', () => {
+        if (cb.checked) hidden.obs.delete(src.name); else hidden.obs.add(src.name);
+        saveHiddenToServer();
+        applyObsVisibility();
+        applyOverviewVisibility();
+      });
       audioEl.appendChild(row);
     }
     row.className = 'audio-source' + (src.live ? ' live' : '');
@@ -148,12 +235,18 @@ function renderObs(obs) {
     btn.className = 'mute-btn' + (src.muted ? ' muted' : '');
     btn.textContent = src.muted ? 'M' : '🔊';
     row.querySelector('.obs-meter-fill').style.width = (src.level * 100).toFixed(1) + '%';
+    // Sync visibility checkbox
+    const cb = row.querySelector('.fader-visibility-cb');
+    cb.checked = !hidden.obs.has(src.name);
+    const label = row.querySelector('.fader-visibility-label');
+    label.style.display = editModeActive.obs ? '' : 'none';
   });
   // Remove rows for sources no longer present
   const srcNames = new Set(obs.audioSources.map((s) => s.name));
   audioEl.querySelectorAll('.audio-source[data-name]').forEach((el) => {
     if (!srcNames.has(el.dataset.name)) el.remove();
   });
+  applyObsVisibility();
 
   // Stream/Record
   document.getElementById('obs-stream-btn').classList.toggle('active', obs.streaming);
@@ -186,9 +279,10 @@ function renderX32(x32) {
           <input type="range" min="0" max="1" step="0.005">
           <div class="ch-meter"><div class="ch-meter-fill"></div></div>
         </div>
-        <button class="ch-mute"></button>`;
+        <button class="ch-mute"></button>
+        <label class="fader-visibility-label" style="display:none"><input type="checkbox" class="fader-visibility-cb" checked> Show</label>`;
 
-      const input = strip.querySelector('input');
+      const input = strip.querySelector('input[type="range"]');
       input.addEventListener('input', () => handleFader(input, ch.index, ch.type));
       input.addEventListener('mousedown', () => { faderTouched[key] = true; });
       input.addEventListener('touchstart', () => { faderTouched[key] = true; }, { passive: true });
@@ -197,6 +291,14 @@ function renderX32(x32) {
 
       const btn = strip.querySelector('.ch-mute');
       btn.addEventListener('click', () => toggleX32Mute(ch.index, ch.type));
+
+      const cb = strip.querySelector('.fader-visibility-cb');
+      cb.addEventListener('change', () => {
+        if (cb.checked) hidden.x32.delete(key); else hidden.x32.add(key);
+        saveHiddenToServer();
+        applyX32Visibility();
+        applyOverviewVisibility();
+      });
 
       grid.appendChild(strip);
     }
@@ -212,6 +314,12 @@ function renderX32(x32) {
     const btn = strip.querySelector('.ch-mute');
     btn.className = 'ch-mute' + (ch.muted ? ' muted' : '');
     btn.textContent = ch.muted ? 'MUTED' : 'ON';
+
+    // Sync visibility checkbox
+    const cb = strip.querySelector('.fader-visibility-cb');
+    cb.checked = !hidden.x32.has(key);
+    const label = strip.querySelector('.fader-visibility-label');
+    label.style.display = editModeActive.x32 ? '' : 'none';
   });
 
   // Remove strips for channels no longer present
@@ -219,6 +327,7 @@ function renderX32(x32) {
   grid.querySelectorAll('.channel-strip[data-key]').forEach((el) => {
     if (!keys.has(el.dataset.key)) el.remove();
   });
+  applyX32Visibility();
 }
 
 let faderDebounce = {};
@@ -451,6 +560,7 @@ function renderOverview(s) {
   chList.querySelectorAll('.ov-channel-row[data-key]').forEach((el) => {
     if (!chKeys.has(el.dataset.key)) el.remove();
   });
+  applyOverviewVisibility();
 
   // OBS audio — fader bar + live level bar
   const obsAudioEl = document.getElementById('ov-obs-audio');
@@ -481,6 +591,7 @@ function renderOverview(s) {
     obsAudioEl.querySelectorAll('.ov-channel-row[data-name]').forEach((el) => {
       if (!srcNames.has(el.dataset.name)) el.remove();
     });
+    applyOverviewVisibility();
   }
 }
 
@@ -548,13 +659,22 @@ startScreenshotPolling();
 // Pre-populate settings form so values are ready if user opens settings directly
 loadConfig();
 
+// Load hidden fader preferences from server
+loadHiddenFromServer();
+
 // --- Settings ---
 let currentConfig = null;
 
 async function loadConfig() {
-  const res = await fetch('/api/config');
-  currentConfig = await res.json();
-  populateConfigForm(currentConfig);
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    currentConfig = await res.json();
+    populateConfigForm(currentConfig);
+  } catch (err) {
+    const status = document.getElementById('settings-save-status');
+    if (status) status.textContent = 'Failed to load config: ' + err.message;
+  }
 }
 
 function populateConfigForm(cfg) {

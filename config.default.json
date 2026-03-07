@@ -16,5 +16,9 @@
     "port": 52195,
     "password": "proclaim",
     "pollInterval": 1000
+  },
+  "ui": {
+    "hiddenObs": [],
+    "hiddenX32": []
   }
 }

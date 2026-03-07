@@ -163,6 +163,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
         obs: body.obs,
         x32: body.x32,
         proclaim: body.proclaim,
+        ui: config.ui,
       };
       fs.writeFileSync(cfgPath, JSON.stringify(newConfig, null, 2), 'utf-8');
       config.reload();
@@ -171,6 +172,31 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
       if (x32Changed) { x32.disconnect(); x32.connect(); }
       if (proclaimChanged) { proclaim.disconnect(); await proclaim.connect(); }
 
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // --- UI preferences (hidden faders) ---
+  app.get('/api/ui/hidden', (req: Request, res: Response) => {
+    res.json({ hiddenObs: config.ui.hiddenObs, hiddenX32: config.ui.hiddenX32 });
+  });
+
+  app.post('/api/ui/hidden', (req: Request, res: Response) => {
+    const { hiddenObs, hiddenX32 } = req.body as { hiddenObs?: unknown; hiddenX32?: unknown };
+    if (!Array.isArray(hiddenObs) || !Array.isArray(hiddenX32)) {
+      res.status(400).json({ error: 'hiddenObs and hiddenX32 must be arrays' });
+      return;
+    }
+    try {
+      let existing: Record<string, unknown> = {};
+      if (fs.existsSync(cfgPath)) {
+        existing = JSON.parse(fs.readFileSync(cfgPath, 'utf-8')) as Record<string, unknown>;
+      }
+      existing.ui = { hiddenObs, hiddenX32 };
+      fs.writeFileSync(cfgPath, JSON.stringify(existing, null, 2), 'utf-8');
+      config.reload();
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });

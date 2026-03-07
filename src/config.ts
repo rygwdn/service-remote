@@ -48,6 +48,7 @@ function reload(): void {
   Object.assign(config.obs, merged.obs);
   Object.assign(config.x32, merged.x32);
   Object.assign(config.proclaim, merged.proclaim);
+  Object.assign(config.ui, merged.ui);
 }
 
 const config: Config & { merge: typeof merge; reload: typeof reload; userConfigPath: string } = Object.assign(
