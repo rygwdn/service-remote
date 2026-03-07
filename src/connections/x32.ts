@@ -158,8 +158,6 @@ function sendOsc(address: string, args?: OscArg[]): void {
     logger.warn('[X32] sendOsc called but no socket:', address);
     return;
   }
-  const argVals = args?.map((a) => a.value);
-  logger.log('[X32] queue', address, argVals ? JSON.stringify(argVals) : '');
   sendQueue.push(buildOscBuffer(address, args));
 }
 
