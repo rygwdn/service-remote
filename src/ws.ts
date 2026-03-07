@@ -50,9 +50,13 @@ function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, 
     });
   });
 
-  // Broadcast state changes to all connected browsers
-  state.on('change', ({ section, state: fullState }: { section: string; state: unknown }) => {
-    const msg = JSON.stringify({ type: 'state', data: fullState });
+  // Broadcast state changes to all connected browsers, throttled to 10x/sec
+  let pendingFlush: ReturnType<typeof setTimeout> | null = null;
+  let latestState: unknown = null;
+
+  function flushState(): void {
+    pendingFlush = null;
+    const msg = JSON.stringify({ type: 'state', data: latestState });
     for (const client of wss.clients) {
       if (client.readyState === 1) {
         try {
@@ -61,6 +65,13 @@ function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, 
           // Client disconnected between readyState check and send
         }
       }
+    }
+  }
+
+  state.on('change', ({ state: fullState }: { section: string; state: unknown }) => {
+    latestState = fullState;
+    if (!pendingFlush) {
+      pendingFlush = setTimeout(flushState, 100);
     }
   });
 }
