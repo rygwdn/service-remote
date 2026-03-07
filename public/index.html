@@ -108,7 +108,7 @@
         <div class="control-row">
           <button class="btn btn-large btn-on-air"
                   :class="{ active: $store.state.proclaim.onAir }"
-                  @click="sendAction($store.state.proclaim.onAir ? 'GoOffAir' : 'GoOnAir')"
+                  @click="window.confirm($store.state.proclaim.onAir ? 'Go Off Air?' : 'Go On Air?') && sendAction($store.state.proclaim.onAir ? 'GoOffAir' : 'GoOnAir')"
                   x-text="$store.state.proclaim.onAir ? 'On Air' : 'Go On Air'"></button>
         </div>
         <div class="control-row proclaim-av-controls" x-show="$store.state.proclaim.currentItemType === 'Video'">

@@ -134,7 +134,7 @@ test.describe('Proclaim panel', () => {
     await expect(panel(page).locator('.item-btn:visible')).toHaveCount(0);
   });
 
-  test('OnAir button shows "Go On Air" when off air and sends GoOnAir', async ({ page, setState }) => {
+  test('OnAir button shows "Go On Air" when off air and sends GoOnAir when confirmed', async ({ page, setState }) => {
     const calls: string[] = [];
     await page.route('**/api/proclaim/action', async (route) => {
       calls.push(route.request().postDataJSON().action);
@@ -147,12 +147,29 @@ test.describe('Proclaim panel', () => {
     await expect(btn).toHaveText('Go On Air');
     await expect(btn).not.toHaveClass(/active/);
 
+    page.on('dialog', (dialog) => dialog.accept());
     await btn.click();
     await page.waitForTimeout(100);
     expect(calls).toContain('GoOnAir');
   });
 
-  test('OnAir button shows "On Air" when on air and sends GoOffAir', async ({ page, setState }) => {
+  test('OnAir button does not send GoOnAir when confirmation is cancelled', async ({ page, setState }) => {
+    const calls: string[] = [];
+    await page.route('**/api/proclaim/action', async (route) => {
+      calls.push(route.request().postDataJSON().action);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    });
+
+    await goToProclaim(page, setState, { proclaim: { connected: true, onAir: false } });
+
+    const btn = panel(page).locator('.btn-on-air');
+    page.on('dialog', (dialog) => dialog.dismiss());
+    await btn.click();
+    await page.waitForTimeout(100);
+    expect(calls).not.toContain('GoOnAir');
+  });
+
+  test('OnAir button shows "On Air" when on air and sends GoOffAir when confirmed', async ({ page, setState }) => {
     const calls: string[] = [];
     await page.route('**/api/proclaim/action', async (route) => {
       calls.push(route.request().postDataJSON().action);
@@ -167,9 +184,28 @@ test.describe('Proclaim panel', () => {
     await expect(btn).toHaveText('On Air');
     await expect(btn).toHaveClass(/active/);
 
+    page.on('dialog', (dialog) => dialog.accept());
     await btn.click();
     await page.waitForTimeout(100);
     expect(calls).toContain('GoOffAir');
+  });
+
+  test('OnAir button does not send GoOffAir when confirmation is cancelled', async ({ page, setState }) => {
+    const calls: string[] = [];
+    await page.route('**/api/proclaim/action', async (route) => {
+      calls.push(route.request().postDataJSON().action);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    });
+
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item1', slideIndex: 0, serviceItems },
+    });
+
+    const btn = panel(page).locator('.btn-on-air');
+    page.on('dialog', (dialog) => dialog.dismiss());
+    await btn.click();
+    await page.waitForTimeout(100);
+    expect(calls).not.toContain('GoOffAir');
   });
 
   test('renders without Alpine error when items have section and group entries', async ({ page, setState }) => {
