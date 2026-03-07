@@ -36,6 +36,7 @@ export interface ObsState {
   streaming: boolean;
   recording: boolean;
   audioSources: AudioSource[];
+  screenshot?: string; // base64 data URL, pushed every 250ms when connected
 }
 
 export interface X32State {

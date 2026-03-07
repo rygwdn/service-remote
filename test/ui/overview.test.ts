@@ -93,6 +93,16 @@ test.describe('Overview panel', () => {
     await expect(rows.nth(1).locator('.ov-ch-label')).toHaveClass(/muted/);
   });
 
+  test('overview OBS preview uses obs.screenshot data URL from state', async ({ page, setState }) => {
+    const fakeDataUrl = 'data:image/jpeg;base64,/9j/fakeOverviewScreenshot';
+    await setState({
+      obs: { connected: true, screenshot: fakeDataUrl } as any,
+    });
+
+    const ovPreview = page.locator('#ov-obs-preview');
+    await expect(ovPreview).toHaveAttribute('src', fakeDataUrl);
+  });
+
   test('disconnected overlay is hidden when WebSocket is connected', async ({ page }) => {
     await page.evaluate(() => {
       (window as any).Alpine.store('ui').serverConnected = true;

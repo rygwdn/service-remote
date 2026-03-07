@@ -179,6 +179,25 @@ test.describe('OBS panel', () => {
     expect(recordCalled).toBe(false);
   });
 
+  test('preview images use obs.screenshot data URL from state', async ({ page, setState }) => {
+    const fakeDataUrl = 'data:image/jpeg;base64,/9j/fakeScreenshot';
+    await setState({
+      obs: { connected: true, screenshot: fakeDataUrl } as any,
+    });
+
+    const obsPreview = page.locator('#obs-preview');
+    await expect(obsPreview).toHaveAttribute('src', fakeDataUrl);
+  });
+
+  test('preview image src is empty when screenshot state is absent', async ({ page, setState }) => {
+    await setState({ obs: { connected: true } });
+
+    const obsPreview = page.locator('#obs-preview');
+    // src should be '' or not set to a data URL
+    const src = await obsPreview.getAttribute('src');
+    expect(src === '' || src === null || !src.startsWith('data:')).toBeTruthy();
+  });
+
   test('edit mode reveals visibility checkboxes', async ({ page, setState }) => {
     await setState({
       obs: {

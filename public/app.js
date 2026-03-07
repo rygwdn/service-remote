@@ -3,7 +3,7 @@ document.addEventListener('alpine:init', () => {
 
   // Main server state mirror
   Alpine.store('state', {
-    obs: { connected: false, scenes: [], currentScene: '', streaming: false, recording: false, audioSources: [] },
+    obs: { connected: false, scenes: [], currentScene: '', streaming: false, recording: false, audioSources: [], screenshot: '' },
     x32: { connected: false, channels: [] },
     proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [] },
   });
@@ -20,11 +20,6 @@ document.addEventListener('alpine:init', () => {
 
     setTab(tab) {
       this.tab = tab;
-      if (tab === 'overview' || tab === 'obs') {
-        startScreenshotPolling();
-      } else {
-        stopScreenshotPolling();
-      }
     },
     toggleEditMode(panel) {
       this.editMode[panel] = !this.editMode[panel];
@@ -107,7 +102,7 @@ document.addEventListener('alpine:init', () => {
         });
         const data = await res.json();
         this.saveStatus = data.ok ? 'Saved!' : 'Error: ' + (data.error || 'unknown');
-        if (data.ok) { currentConfig = this.cfg; startScreenshotPolling(); }
+        if (data.ok) { currentConfig = this.cfg; }
       } catch (err) {
         this.saveStatus = 'Error: ' + err.message;
       }
@@ -177,12 +172,6 @@ function connectWs() {
       store.obs = msg.data.obs;
       store.x32 = msg.data.x32;
       store.proclaim = msg.data.proclaim;
-
-      // Refresh screenshot on scene change
-      if (msg.data.obs.currentScene !== lastObsScene) {
-        lastObsScene = msg.data.obs.currentScene;
-        refreshScreenshot();
-      }
     }
   };
 
@@ -283,30 +272,7 @@ async function loadHiddenFromServer() {
   } catch (_) {}
 }
 
-// --- Screenshot polling ---
-let screenshotInterval = null;
-let lastObsScene = null;
 let currentConfig = null;
-
-function startScreenshotPolling() {
-  stopScreenshotPolling();
-  const interval = (currentConfig?.obs?.screenshotInterval) || 1000;
-  screenshotInterval = setInterval(refreshScreenshot, interval);
-  refreshScreenshot();
-}
-
-function stopScreenshotPolling() {
-  clearInterval(screenshotInterval);
-  screenshotInterval = null;
-}
-
-function refreshScreenshot() {
-  const url = '/api/obs/screenshot?' + Date.now();
-  const ov = document.getElementById('ov-obs-preview');
-  if (ov) ov.src = url;
-  const obs = document.getElementById('obs-preview');
-  if (obs) obs.src = url;
-}
 
 // --- Template helpers (called from x-html / x-for expressions) ---
 
@@ -434,7 +400,6 @@ async function fetchConfig() {
 async function init() {
   await loadHiddenFromServer();
   await fetchConfig();
-  startScreenshotPolling();
 }
 
 init();

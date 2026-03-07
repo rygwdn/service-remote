@@ -7,7 +7,39 @@ const OBSWebSocket = obsWebSocketJs.default;
 
 const obs = new OBSWebSocket();
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let screenshotTimer: ReturnType<typeof setInterval> | null = null;
 let wantConnected = false;
+
+const SCREENSHOT_INTERVAL_MS = 250;
+
+async function captureScreenshot(): Promise<void> {
+  const currentScene = state.get().obs.currentScene;
+  if (!currentScene) return;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (obs as any).call('GetSourceScreenshot', {
+      sourceName: currentScene,
+      imageFormat: 'jpeg',
+      imageWidth: 480,
+      imageCompressionQuality: 70,
+    });
+    state.update('obs', { screenshot: result.imageData as string });
+  } catch {
+    // Ignore screenshot errors (e.g. scene not yet loaded)
+  }
+}
+
+function startScreenshotCapture(): void {
+  stopScreenshotCapture();
+  screenshotTimer = setInterval(captureScreenshot, SCREENSHOT_INTERVAL_MS);
+}
+
+function stopScreenshotCapture(): void {
+  if (screenshotTimer) {
+    clearInterval(screenshotTimer);
+    screenshotTimer = null;
+  }
+}
 
 async function connect(): Promise<void> {
   wantConnected = true;
@@ -19,6 +51,7 @@ async function connect(): Promise<void> {
     logger.log('[OBS] Connected');
     state.update('obs', { connected: true });
     await refreshState();
+    startScreenshotCapture();
   } catch (err) {
     logger.log('[OBS] Connection failed:', (err as Error).message);
     state.update('obs', { connected: false });
@@ -34,7 +67,8 @@ function scheduleReconnect(): void {
 
 obs.on('ConnectionClosed', () => {
   logger.log('[OBS] Disconnected');
-  state.update('obs', { connected: false });
+  stopScreenshotCapture();
+  state.update('obs', { connected: false, screenshot: undefined });
   if (wantConnected) scheduleReconnect();
 });
 
@@ -226,6 +260,7 @@ function disconnect(): void {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
+  stopScreenshotCapture();
   obs.disconnect();
 }
 

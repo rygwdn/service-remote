@@ -49,7 +49,7 @@
         <!-- Row 2: Proclaim current slide thumb | OBS preview -->
         <div class="slide-thumb active" x-html="thumbHtml(ovThumbs($store.state.proclaim).current)"></div>
         <div class="ov-obs-preview-wrap">
-          <img id="ov-obs-preview" class="ov-obs-preview" src="" alt="Program">
+          <img id="ov-obs-preview" class="ov-obs-preview" :src="$store.state.obs.screenshot || ''" alt="Program">
         </div>
 
         <!-- Row 3: Slide nav buttons -->
@@ -165,7 +165,7 @@
       </div>
       <div class="obs-section">
         <div class="ov-obs-preview-wrap">
-          <img id="obs-preview" class="ov-obs-preview" src="" alt="Program">
+          <img id="obs-preview" class="ov-obs-preview" :src="$store.state.obs.screenshot || ''" alt="Program">
         </div>
       </div>
       <div class="obs-section">
