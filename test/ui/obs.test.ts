@@ -84,12 +84,99 @@ test.describe('OBS panel', () => {
     await expect(panel(page).locator('.btn').filter({ hasText: 'Streaming' })).toBeVisible();
   });
 
+  test('stream button has active class when streaming', async ({ page, setState }) => {
+    await setState({ obs: { streaming: false } });
+    await expect(panel(page).locator('.btn').filter({ hasText: 'Stream' })).not.toHaveClass(/active/);
+
+    await setState({ obs: { streaming: true } });
+    await expect(panel(page).locator('.btn').filter({ hasText: 'Streaming' })).toHaveClass(/active/);
+  });
+
   test('record button text toggles based on state', async ({ page, setState }) => {
     await setState({ obs: { recording: false } });
     await expect(panel(page).locator('.btn').filter({ hasText: /^Record$/ })).toBeVisible();
 
     await setState({ obs: { recording: true } });
     await expect(panel(page).locator('.btn').filter({ hasText: 'Recording' })).toBeVisible();
+  });
+
+  test('record button has active class when recording', async ({ page, setState }) => {
+    await setState({ obs: { recording: false } });
+    await expect(panel(page).locator('.btn').filter({ hasText: /^Record$/ })).not.toHaveClass(/active/);
+
+    await setState({ obs: { recording: true } });
+    await expect(panel(page).locator('.btn').filter({ hasText: 'Recording' })).toHaveClass(/active/);
+  });
+
+  test('stream and record buttons are at the top of the OBS panel, before screenshot and scenes', async ({ page, setState }) => {
+    await setState({ obs: { connected: true, scenes: ['Main'], streaming: false, recording: false } });
+
+    const p = panel(page);
+    // Get all obs-section elements and check Output section comes first
+    const sections = p.locator('.obs-section');
+    const firstSection = sections.first();
+    await expect(firstSection.locator('.btn').filter({ hasText: /Stream|Streaming/ })).toBeVisible();
+    await expect(firstSection.locator('.btn').filter({ hasText: /^Record$|Recording/ })).toBeVisible();
+  });
+
+  test('clicking stream button shows confirm dialog and sends API call on accept', async ({ page, setState }) => {
+    let streamCalled = false;
+    await page.route('**/api/obs/stream', async (route) => {
+      streamCalled = true;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    });
+
+    await setState({ obs: { streaming: false } });
+
+    page.on('dialog', dialog => dialog.accept());
+    await panel(page).locator('.btn').filter({ hasText: 'Stream' }).click();
+    await page.waitForTimeout(100);
+    expect(streamCalled).toBe(true);
+  });
+
+  test('clicking stream button shows confirm dialog and does NOT send API call on cancel', async ({ page, setState }) => {
+    let streamCalled = false;
+    await page.route('**/api/obs/stream', async (route) => {
+      streamCalled = true;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    });
+
+    await setState({ obs: { streaming: false } });
+
+    page.on('dialog', dialog => dialog.dismiss());
+    await panel(page).locator('.btn').filter({ hasText: 'Stream' }).click();
+    await page.waitForTimeout(100);
+    expect(streamCalled).toBe(false);
+  });
+
+  test('clicking record button shows confirm dialog and sends API call on accept', async ({ page, setState }) => {
+    let recordCalled = false;
+    await page.route('**/api/obs/record', async (route) => {
+      recordCalled = true;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    });
+
+    await setState({ obs: { recording: false } });
+
+    page.on('dialog', dialog => dialog.accept());
+    await panel(page).locator('.btn').filter({ hasText: /^Record$/ }).click();
+    await page.waitForTimeout(100);
+    expect(recordCalled).toBe(true);
+  });
+
+  test('clicking record button shows confirm dialog and does NOT send API call on cancel', async ({ page, setState }) => {
+    let recordCalled = false;
+    await page.route('**/api/obs/record', async (route) => {
+      recordCalled = true;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    });
+
+    await setState({ obs: { recording: false } });
+
+    page.on('dialog', dialog => dialog.dismiss());
+    await panel(page).locator('.btn').filter({ hasText: /^Record$/ }).click();
+    await page.waitForTimeout(100);
+    expect(recordCalled).toBe(false);
   });
 
   test('edit mode reveals visibility checkboxes', async ({ page, setState }) => {
