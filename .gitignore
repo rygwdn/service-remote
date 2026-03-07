@@ -6,3 +6,6 @@ config.json
 dist/
 src/embedded-public.js
 src/embedded-natives.js
+TODO.md
+test-results
+settings.local.json

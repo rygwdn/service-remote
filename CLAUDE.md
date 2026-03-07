@@ -112,16 +112,29 @@ Defined in `src/routes.ts`. All POST endpoints call the appropriate connection m
 
 ## Testing
 
-Tests use Bun's built-in test runner (`bun:test`). No external test framework is needed.
+Tests use Bun's built-in test runner (`bun:test`) for unit/e2e and Playwright for UI tests.
 
 - `test/unit/` — pure unit tests for `config.ts`, `state.ts`, `x32.ts` (OSC parsing), `discovery.ts`
 - `test/e2e/` — integration tests that spin up the Express app via `supertest` and a real WebSocket server
+- `test/ui/` — Playwright browser tests; inject state via `setState()` fixture, interact with the UI, assert DOM
 - `test/helpers/` — shared utilities (e.g. mock connection factories)
 
+### TDD workflow
+
+Write the failing test first, confirm it's red, then implement until green.
+
+```bash
+# Red → Green cycle
+bun test test/unit/foo.test.ts          # unit — fast, run after every change
+bun test test/e2e/api.test.ts           # e2e  — API routes / WebSocket
+bunx playwright test test/ui/foo.test.ts --headed  # UI — browser tests
+```
+
 When adding new features:
-1. Unit-test any pure/stateless logic in `test/unit/`.
+1. Unit-test pure/stateless logic in `test/unit/`.
 2. Add an API test in `test/e2e/api.test.ts` for new routes.
-3. Keep connection modules mockable — `routes.ts` accepts `{ obs, x32, proclaim }` as an argument so tests can inject stubs.
+3. Add a UI test in `test/ui/` for any visible behaviour (use `setState()` to drive state).
+4. Keep connection modules mockable — `routes.ts` accepts `{ obs, x32, proclaim }` as an argument so tests can inject stubs.
 
 ## Key conventions
 
