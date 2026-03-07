@@ -195,7 +195,7 @@ function parseMeterBlob(blob: Buffer): number[] {
   for (let i = 0; i < count; i++) {
     const offset = 4 + i * 4;
     if (offset + 4 > blob.length) break;
-    values.push(blob.readFloatLE(offset));
+    values.push(Math.round(blob.readFloatLE(offset) * 1000) / 1000);
   }
   return values;
 }

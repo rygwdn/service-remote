@@ -222,6 +222,61 @@ describe('x32 parseMeterBlob()', () => {
   });
 });
 
+describe('x32 parseMeterBlob() level rounding', () => {
+  function makeBlob(floats: number[]): Buffer {
+    const buf = Buffer.allocUnsafe(4 + floats.length * 4);
+    buf.writeUInt32BE(floats.length, 0);
+    for (let i = 0; i < floats.length; i++) {
+      buf.writeFloatLE(floats[i], 4 + i * 4);
+    }
+    return buf;
+  }
+
+  test('level values are rounded to 3 decimal places', () => {
+    // A value that would produce many decimal places when read as float32
+    // e.g. 0.123456789 stored as float32 rounds to a specific representation
+    const blob = makeBlob([0.123456789]);
+    const result = parseMeterBlob(blob);
+    assert.equal(result.length, 1);
+    // The result must be rounded to exactly 3 decimal places
+    assert.equal(result[0], Math.round(result[0] * 1000) / 1000,
+      'level should be rounded to 3 decimal places');
+    // And the number of decimal places must not exceed 3
+    const str = result[0].toString();
+    const decimals = str.includes('.') ? str.split('.')[1].length : 0;
+    assert.ok(decimals <= 3, `expected at most 3 decimal places, got ${decimals} in ${str}`);
+  });
+
+  test('level 0.5 rounds to 0.5 (no change)', () => {
+    const blob = makeBlob([0.5]);
+    const result = parseMeterBlob(blob);
+    assert.equal(result[0], 0.5);
+  });
+
+  test('level 0.0 rounds to 0.0 (no change)', () => {
+    const blob = makeBlob([0.0]);
+    const result = parseMeterBlob(blob);
+    assert.equal(result[0], 0.0);
+  });
+
+  test('level 1.0 rounds to 1.0 (no change)', () => {
+    const blob = makeBlob([1.0]);
+    const result = parseMeterBlob(blob);
+    assert.equal(result[0], 1.0);
+  });
+
+  test('all values in a multi-float blob are rounded to 3 decimal places', () => {
+    // Use values that produce float32 precision noise
+    const floats = [0.1, 0.2, 0.3, 0.7, 0.9];
+    const result = parseMeterBlob(makeBlob(floats));
+    for (let i = 0; i < result.length; i++) {
+      const rounded = Math.round(result[i] * 1000) / 1000;
+      assert.equal(result[i], rounded,
+        `value at index ${i} (${result[i]}) should equal its 3dp-rounded form (${rounded})`);
+    }
+  });
+});
+
 describe('x32 buildMeterRequests()', () => {
   test('returns three OSC messages for banks 0, 2, and 3', () => {
     const requests = buildMeterRequests();

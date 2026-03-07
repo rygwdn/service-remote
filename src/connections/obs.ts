@@ -91,8 +91,10 @@ obs.on('RecordStateChanged', ({ outputActive }) => {
 });
 
 obs.on('InputVolumeChanged', ({ inputName, inputVolumeMul }) => {
+  const db = mulToDb(inputVolumeMul);
+  const rounded = isFinite(db) ? Math.round(db * 1000) / 1000 : db;
   const sources = state.get().obs.audioSources.map((s) =>
-    s.name === inputName ? { ...s, volume: mulToDb(inputVolumeMul) } : s
+    s.name === inputName ? { ...s, volume: rounded } : s
   );
   state.update('obs', { audioSources: sources });
 });
@@ -109,7 +111,7 @@ obs.on('InputVolumeMeters', ({ inputs }) => {
       if (ch[2] != null && ch[2] > peak) peak = ch[2];
       if (ch[3] != null && ch[3] > peak) peak = ch[3];
     }
-    updates[input.inputName as string] = peak;
+    updates[input.inputName as string] = Math.round(peak * 1000) / 1000;
   }
   const sources = state.get().obs.audioSources.map((s) =>
     updates[s.name] != null ? { ...s, level: updates[s.name] } : s
