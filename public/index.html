@@ -283,6 +283,11 @@
       </div>
     </section>
 
+    <!-- Disconnected overlay -->
+    <div class="disconnected-overlay" x-show="!$store.ui.serverConnected">
+      <div class="disconnected-message">Disconnected — reconnecting&hellip;</div>
+    </div>
+
   </main>
 
   <script src="/app.js"></script>

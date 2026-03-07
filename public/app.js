@@ -13,6 +13,7 @@ document.addEventListener('alpine:init', () => {
     tab: 'overview',
     editMode: { obs: false, x32: false },
     hidden: { obs: [], x32: [] },
+    serverConnected: false,
 
     setTab(tab) {
       this.tab = tab;
@@ -157,7 +158,7 @@ function connectWs() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}`);
 
-  ws.onopen = () => { reconnectDelay = 1000; };
+  ws.onopen = () => { reconnectDelay = 1000; Alpine.store('ui').serverConnected = true; };
 
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
@@ -176,6 +177,7 @@ function connectWs() {
   };
 
   ws.onclose = () => {
+    Alpine.store('ui').serverConnected = false;
     setTimeout(connectWs, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 10000);
   };

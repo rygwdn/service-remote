@@ -92,9 +92,29 @@ header h1 {
 
 /* Main content */
 main {
+  position: relative;
   height: calc(100% - 90px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.disconnected-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.disconnected-message {
+  color: #fff;
+  font-size: 1.2rem;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 16px 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.2);
 }
 
 .panel {
