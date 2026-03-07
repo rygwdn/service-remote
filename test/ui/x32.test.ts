@@ -89,6 +89,25 @@ test.describe('Sound (X32) panel', () => {
     await expect(rows.nth(1)).toBeVisible();
   });
 
+  test('default-named channels are hidden by default', async ({ page, setState }) => {
+    const mixedChannels = [
+      { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0.5 },
+      { index: 2, type: 'ch' as const, label: 'CH 02', fader: 0.5, muted: false, level: 0.0 },
+      { index: 1, type: 'bus' as const, label: 'Bus 01', fader: 0.7, muted: false, level: 0.0 },
+      { index: 1, type: 'main' as const, label: 'Main L/R', fader: 0.9, muted: false, level: 0.6 },
+    ];
+
+    await setState({ x32: { connected: true, channels: mixedChannels } });
+
+    const p = panel(page);
+    // Custom-named and Main L/R channels should be visible
+    await expect(p.locator('.channel-row-h').filter({ hasText: 'Vocals' })).toBeVisible();
+    await expect(p.locator('.channel-row-h').filter({ hasText: 'Main L/R' })).toBeVisible();
+    // Default-named channels should be hidden
+    await expect(p.locator('.channel-row-h').filter({ hasText: 'CH 02' })).not.toBeVisible();
+    await expect(p.locator('.channel-row-h').filter({ hasText: 'Bus 01' })).not.toBeVisible();
+  });
+
   test('fader is disabled by default (locked)', async ({ page, setState }) => {
     await setState({ x32: { connected: true, channels: [channels[0]] } });
 

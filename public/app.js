@@ -14,6 +14,8 @@ document.addEventListener('alpine:init', () => {
     editMode: { obs: false, x32: false },
     faderEnabled: { obs: false, x32: false },
     hidden: { obs: [], x32: [] },
+    // Keys of default-named X32 channels that the user has explicitly chosen to show.
+    shownDefaultX32: [],
     serverConnected: false,
 
     setTab(tab) {
@@ -31,7 +33,18 @@ document.addEventListener('alpine:init', () => {
       this.faderEnabled[panel] = !this.faderEnabled[panel];
     },
     isHiddenObs(name) { return this.hidden.obs.includes(name); },
-    isHiddenX32(key)  { return this.hidden.x32.includes(key); },
+    isHiddenX32(key) {
+      if (this.hidden.x32.includes(key)) return true;
+      // Channels with default mixer names are hidden by default unless the user
+      // has explicitly shown them.
+      const ch = Alpine.store('state').x32.channels.find(
+        (c) => c.type + '/' + c.index === key
+      );
+      if (ch && isDefaultX32Label(ch.label, ch.type, ch.index) && !this.shownDefaultX32.includes(key)) {
+        return true;
+      }
+      return false;
+    },
   });
 
   // X32 vertical fader — tracks touch so server updates don't jump the slider
@@ -212,6 +225,19 @@ function toggleRecord()                 { post('/api/obs/record', {}); }
 function setX32Fader(channel, type, value) { post('/api/x32/fader', { channel, type, value }); }
 function toggleX32Mute(channel, type)   { post('/api/x32/mute', { channel, type }); }
 
+// Returns true if the label matches the default X32 naming pattern (e.g. "CH 02", "Bus 03", "Mtx 01").
+// Main L/R is NOT considered a default label and is always shown.
+function isDefaultX32Label(label, type, index) {
+  if (type === 'main') return false;
+  const padded = String(index).padStart(2, '0');
+  const defaults = {
+    ch: `CH ${padded}`,
+    bus: `Bus ${padded}`,
+    mtx: `Mtx ${padded}`,
+  };
+  return label === defaults[type];
+}
+
 // --- Fader visibility ---
 function toggleHiddenObs(name, show) {
   const ui = Alpine.store('ui');
@@ -222,8 +248,16 @@ function toggleHiddenObs(name, show) {
 
 function toggleHiddenX32(key, show) {
   const ui = Alpine.store('ui');
-  if (show) ui.hidden.x32 = ui.hidden.x32.filter((k) => k !== key);
-  else if (!ui.hidden.x32.includes(key)) ui.hidden.x32.push(key);
+  const ch = Alpine.store('state').x32.channels.find((c) => c.type + '/' + c.index === key);
+  const isDefault = ch && isDefaultX32Label(ch.label, ch.type, ch.index);
+  if (isDefault) {
+    // For default-named channels, track explicit show intent separately
+    if (show && !ui.shownDefaultX32.includes(key)) ui.shownDefaultX32.push(key);
+    else if (!show) ui.shownDefaultX32 = ui.shownDefaultX32.filter((k) => k !== key);
+  } else {
+    if (show) ui.hidden.x32 = ui.hidden.x32.filter((k) => k !== key);
+    else if (!ui.hidden.x32.includes(key)) ui.hidden.x32.push(key);
+  }
   saveHiddenToServer();
 }
 
@@ -231,12 +265,12 @@ let saveHiddenTimer = null;
 function saveHiddenToServer() {
   clearTimeout(saveHiddenTimer);
   saveHiddenTimer = setTimeout(async () => {
-    const { hidden } = Alpine.store('ui');
+    const ui = Alpine.store('ui');
     try {
       await fetch('/api/ui/hidden', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hiddenObs: hidden.obs, hiddenX32: hidden.x32 }),
+        body: JSON.stringify({ hiddenObs: ui.hidden.obs, hiddenX32: ui.hidden.x32, shownDefaultX32: ui.shownDefaultX32 }),
       });
     } catch (_) {}
   }, 300);
@@ -250,6 +284,7 @@ async function loadHiddenFromServer() {
     const ui = Alpine.store('ui');
     ui.hidden.obs = data.hiddenObs || [];
     ui.hidden.x32 = data.hiddenX32 || [];
+    ui.shownDefaultX32 = data.shownDefaultX32 || [];
   } catch (_) {}
 }
 
