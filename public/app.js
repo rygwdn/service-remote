@@ -654,6 +654,9 @@ document.querySelectorAll('.tab').forEach((tab) => {
 });
 
 // Overview is the default tab, so start polling immediately
+// --- Settings ---
+let currentConfig = null;
+
 startScreenshotPolling();
 
 // Pre-populate settings form so values are ready if user opens settings directly
@@ -661,9 +664,6 @@ loadConfig();
 
 // Load hidden fader preferences from server
 loadHiddenFromServer();
-
-// --- Settings ---
-let currentConfig = null;
 
 async function loadConfig() {
   try {
