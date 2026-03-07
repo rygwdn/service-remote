@@ -208,6 +208,29 @@ test.describe('Proclaim panel', () => {
     expect(calls).not.toContain('GoOffAir');
   });
 
+  test('no Alpine Expression Error for entry.item.title when rendering section/group entries', async ({ page, setState }) => {
+    const itemsWithSections = [
+      { id: 's1', title: 'Opening Song', kind: 'Song', slideCount: 2, index: 1, sectionIndex: 1, sectionCommand: 'StartService', section: 'Opening', group: null },
+      { id: 's2', title: 'Sermon', kind: 'Slide', slideCount: 5, index: 2, sectionIndex: 2, sectionCommand: 'StartService', section: 'Message', group: null },
+    ];
+
+    const warnings: string[] = [];
+    page.on('pageerror', (err) => warnings.push(err.message));
+    page.on('console', (msg) => {
+      if (msg.type() === 'warning' || msg.type() === 'error') warnings.push(msg.text());
+    });
+
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 's1', slideIndex: 0, serviceItems: itemsWithSections },
+    });
+
+    // Wait for Alpine to process all reactive updates
+    await page.waitForTimeout(200);
+
+    const alpineErrors = warnings.filter((w) => w.includes('Alpine Expression Error') && w.includes('entry.item'));
+    expect(alpineErrors).toHaveLength(0);
+  });
+
   test('renders without Alpine error when items have section and group entries', async ({ page, setState }) => {
     const itemsWithGroups = [
       { id: 'g1', title: 'Opening Song', kind: 'Song', slideCount: 3, index: 1, sectionIndex: 1, sectionCommand: 'StartService', section: 'Service', group: 'Worship Set' },

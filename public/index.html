@@ -142,7 +142,7 @@
                     class="item-btn"
                     :class="{ active: entry.isActive, 'item-grouped': entry.item && entry.item.group }"
                     @click="entry.item && gotoItem(entry.item.id)">
-              <span x-text="entry.item.title || entry.item.kind"></span>
+              <span x-text="entry.item ? (entry.item.title || entry.item.kind) : ''"></span>
               <span class="item-slide-count" x-show="entry.slideCountLabel" x-text="' '+entry.slideCountLabel"></span>
             </button>
           </div>
