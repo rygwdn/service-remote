@@ -103,6 +103,9 @@ function connect(): void {
       return;
     }
     handleMessage(address, args);
+    // Immediately send the next queued request on any incoming reply to
+    // pipeline discovery messages rather than waiting for the timer tick.
+    flushSendQueue();
   });
 
   sock.bind(0, '0.0.0.0', () => {
