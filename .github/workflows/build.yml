@@ -23,6 +23,12 @@ jobs:
       - name: Run tests
         run: bun run test
 
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run UI tests
+        run: bun run test:ui
+
   build-windows:
     name: Build Windows Executable
     runs-on: ubuntu-latest
