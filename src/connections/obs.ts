@@ -144,8 +144,7 @@ async function isSourceHiddenFromMixer(sourceName: string): Promise<boolean> {
 }
 
 // Updates the live status of all audio sources based on the current scene's source list.
-// When a source transitions from live to not-live, its volume is faded out to -Infinity
-// and its monitor level is set to 0 (mute the monitor output).
+// When a source transitions from live to not-live, its level is reset to 0 in the UI.
 async function refreshLiveStatus(sceneName: string): Promise<void> {
   try {
     const liveSourceNames = await getSceneSourceNames(sceneName);
@@ -153,33 +152,10 @@ async function refreshLiveStatus(sceneName: string): Promise<void> {
     const sources = prevSources.map((s) => ({
       ...s,
       live: liveSourceNames.has(s.name),
+      // Reset the displayed level when a source goes offline so meters don't stay lit
+      level: liveSourceNames.has(s.name) ? s.level : 0,
     }));
-
-    // Fade out sources that just went offline
-    const fadingOut: Array<Promise<void>> = [];
-    for (let i = 0; i < prevSources.length; i++) {
-      const prev = prevSources[i];
-      const next = sources[i];
-      if (prev.live && !next.live) {
-        logger.log(`[OBS] Source "${prev.name}" went offline — fading out`);
-        fadingOut.push(
-          (async () => {
-            try {
-              await obs.call('SetInputVolume', { inputName: prev.name, inputVolumeMul: 0 });
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              await (obs as any).call('SetInputAudioMonitorType', { inputName: prev.name, monitorType: 'OBS_MONITORING_TYPE_NONE' });
-            } catch (err) {
-              logger.log(`[OBS] Failed to fade out "${prev.name}":`, (err as Error).message);
-            }
-          })()
-        );
-        // Reflect the muted-out volume in state immediately
-        sources[i] = { ...next, volume: -Infinity };
-      }
-    }
-
     state.update('obs', { audioSources: sources });
-    await Promise.all(fadingOut);
   } catch (err) {
     logger.log('[OBS] Failed to refresh live status:', (err as Error).message);
   }
