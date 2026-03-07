@@ -1,0 +1,17 @@
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './test/ui',
+  fullyParallel: false,
+  retries: 0,
+  use: {
+    // baseURL is set per-test via the fixture
+    headless: true,
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+});

@@ -1,0 +1,108 @@
+import { test, expect } from './fixtures';
+
+test.describe('OBS panel', () => {
+  const panel = (page: Parameters<typeof test>[1]['page']) =>
+    page.locator('section.panel.active');
+
+  test.beforeEach(async ({ page }) => {
+    await page.locator('.tab').filter({ hasText: 'OBS' }).click();
+    await expect(page.locator('section.panel.active')).toBeVisible();
+  });
+
+  test('scene buttons render and highlight current scene', async ({ page, setState }) => {
+    await setState({
+      obs: { connected: true, scenes: ['Main', 'Interview', 'Blank'], currentScene: 'Interview' },
+    });
+
+    const sceneBtns = panel(page).locator('.scene-btn');
+    await expect(sceneBtns).toHaveCount(3);
+    await expect(sceneBtns.filter({ hasText: 'Interview' })).toHaveClass(/active/);
+    await expect(sceneBtns.filter({ hasText: 'Main' })).not.toHaveClass(/active/);
+    await expect(sceneBtns.filter({ hasText: 'Blank' })).not.toHaveClass(/active/);
+  });
+
+  test('clicking a scene sends obs/scene API call', async ({ page, setState }) => {
+    let lastScene: string | null = null;
+    await page.route('**/api/obs/scene', async (route) => {
+      lastScene = route.request().postDataJSON().scene;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    });
+
+    await setState({
+      obs: { connected: true, scenes: ['Main', 'Blank'], currentScene: 'Main' },
+    });
+
+    await panel(page).locator('.scene-btn').filter({ hasText: 'Blank' }).click();
+    await page.waitForTimeout(100);
+    expect(lastScene).toBe('Blank');
+  });
+
+  test('audio sources render with mute button', async ({ page, setState }) => {
+    await setState({
+      obs: {
+        connected: true,
+        audioSources: [
+          { name: 'Mic 1', volume: -10, muted: false, level: 0.6, live: true },
+          { name: 'Desktop Audio', volume: -20, muted: true, level: 0.0, live: false },
+        ],
+      },
+    });
+
+    const sources = panel(page).locator('.audio-source');
+    await expect(sources).toHaveCount(2);
+    await expect(sources.nth(0).locator('.name')).toHaveText('Mic 1');
+    await expect(sources.nth(1).locator('.name')).toHaveText('Desktop Audio');
+
+    await expect(sources.nth(0).locator('.mute-btn')).not.toHaveClass(/muted/);
+    await expect(sources.nth(1).locator('.mute-btn')).toHaveClass(/muted/);
+  });
+
+  test('clicking mute sends obs/mute API call', async ({ page, setState }) => {
+    let muteTarget: string | null = null;
+    await page.route('**/api/obs/mute', async (route) => {
+      muteTarget = route.request().postDataJSON().input;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    });
+
+    await setState({
+      obs: {
+        connected: true,
+        audioSources: [{ name: 'Mic 1', volume: -10, muted: false, level: 0.5, live: true }],
+      },
+    });
+
+    await panel(page).locator('.mute-btn').first().click();
+    await page.waitForTimeout(100);
+    expect(muteTarget).toBe('Mic 1');
+  });
+
+  test('stream button text toggles based on state', async ({ page, setState }) => {
+    await setState({ obs: { streaming: false } });
+    await expect(panel(page).locator('.btn').filter({ hasText: 'Stream' })).toBeVisible();
+
+    await setState({ obs: { streaming: true } });
+    await expect(panel(page).locator('.btn').filter({ hasText: 'Streaming' })).toBeVisible();
+  });
+
+  test('record button text toggles based on state', async ({ page, setState }) => {
+    await setState({ obs: { recording: false } });
+    await expect(panel(page).locator('.btn').filter({ hasText: /^Record$/ })).toBeVisible();
+
+    await setState({ obs: { recording: true } });
+    await expect(panel(page).locator('.btn').filter({ hasText: 'Recording' })).toBeVisible();
+  });
+
+  test('edit mode reveals visibility checkboxes', async ({ page, setState }) => {
+    await setState({
+      obs: {
+        connected: true,
+        audioSources: [{ name: 'Mic 1', volume: -10, muted: false, level: 0.5 }],
+      },
+    });
+
+    const p = panel(page);
+    await expect(p.locator('.fader-visibility-label').first()).not.toBeVisible();
+    await p.locator('.btn-edit-toggle').click();
+    await expect(p.locator('.fader-visibility-label').first()).toBeVisible();
+  });
+});
