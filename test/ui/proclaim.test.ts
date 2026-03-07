@@ -197,6 +197,20 @@ test.describe('Proclaim panel', () => {
     expect(alpineErrors).toHaveLength(0);
   });
 
+  test('video controls are hidden when current item is not a Video', async ({ page, setState }) => {
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item2', currentItemType: 'Song', slideIndex: 0, serviceItems },
+    });
+    await expect(panel(page).locator('.proclaim-av-controls').filter({ hasText: '⏸' })).toBeHidden();
+  });
+
+  test('video controls are visible when current item is a Video', async ({ page, setState }) => {
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item1', currentItemType: 'Video', slideIndex: 0, serviceItems },
+    });
+    await expect(panel(page).locator('.proclaim-av-controls').filter({ hasText: '⏸' })).toBeVisible();
+  });
+
   test('AV transport buttons send correct actions', async ({ page, setState }) => {
     const calls: string[] = [];
     await page.route('**/api/proclaim/action', async (route) => {
@@ -204,7 +218,9 @@ test.describe('Proclaim panel', () => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
     });
 
-    await goToProclaim(page, setState, { proclaim: { connected: true, onAir: false } });
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item1', currentItemType: 'Video', slideIndex: 0, serviceItems },
+    });
 
     const p = panel(page);
     await p.locator('.proclaim-av-controls button').filter({ hasText: '⏸' }).first().click();

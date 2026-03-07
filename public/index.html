@@ -115,7 +115,7 @@
                   @click="sendAction($store.state.proclaim.onAir ? 'GoOffAir' : 'GoOnAir')"
                   x-text="$store.state.proclaim.onAir ? 'On Air' : 'Go On Air'"></button>
         </div>
-        <div class="control-row proclaim-av-controls">
+        <div class="control-row proclaim-av-controls" x-show="$store.state.proclaim.currentItemType === 'Video'">
           <button class="btn" @click="sendAction('VideoPause')">⏸</button>
           <button class="btn" @click="sendAction('VideoPlay')">▶</button>
           <button class="btn" @click="sendAction('VideoRewind')">⏪</button>
