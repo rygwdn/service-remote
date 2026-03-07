@@ -1,3 +1,4 @@
 [test]
 # Exclude Playwright UI tests (run separately with `bun run test:ui`)
 exclude = ["test/ui/**"]
+preload = ["./test/silence-logs.ts"]

@@ -2,6 +2,12 @@ import { test as base, expect, Page, WebSocketRoute } from '@playwright/test';
 import path = require('path');
 import fs = require('fs');
 
+// Silence logger output (console.log/warn/error) from the test server process
+const noop = () => {};
+console.log = noop;
+console.warn = noop;
+console.error = noop;
+
 type AppState = {
   obs?: {
     connected?: boolean;
