@@ -8,88 +8,125 @@
   <meta name="color-scheme" content="dark">
   <title>Service Remote</title>
   <link rel="stylesheet" href="/style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body>
+<body x-data>
   <header>
     <h1>Service Remote</h1>
     <div class="status-dots">
-      <span class="dot" id="dot-obs" title="OBS"></span>
+      <span class="dot" :class="{ connected: $store.state.obs.connected }" title="OBS"></span>
       <span class="dot-label">OBS</span>
-      <span class="dot" id="dot-x32" title="X32"></span>
+      <span class="dot" :class="{ connected: $store.state.x32.connected }" title="X32"></span>
       <span class="dot-label">X32</span>
-      <span class="dot" id="dot-proclaim" title="Proclaim"></span>
+      <span class="dot" :class="{ connected: $store.state.proclaim.connected }" title="Proclaim"></span>
       <span class="dot-label">Proclaim</span>
     </div>
   </header>
 
   <nav class="tabs">
-    <button class="tab active" data-tab="overview">Overview</button>
-    <button class="tab" data-tab="proclaim">Proclaim</button>
-    <button class="tab" data-tab="obs">OBS</button>
-    <button class="tab" data-tab="sound">Sound</button>
-    <button class="tab" data-tab="settings">Settings</button>
+    <button class="tab" :class="{ active: $store.ui.tab==='overview' }" @click="$store.ui.setTab('overview')">Overview</button>
+    <button class="tab" :class="{ active: $store.ui.tab==='proclaim' }" @click="$store.ui.setTab('proclaim')">Proclaim</button>
+    <button class="tab" :class="{ active: $store.ui.tab==='obs' }"      @click="$store.ui.setTab('obs')">OBS</button>
+    <button class="tab" :class="{ active: $store.ui.tab==='sound' }"    @click="$store.ui.setTab('sound')">Sound</button>
+    <button class="tab" :class="{ active: $store.ui.tab==='settings' }" @click="$store.ui.setTab('settings')">Settings</button>
   </nav>
 
   <main>
-    <!-- Overview Panel -->
-    <section id="panel-overview" class="panel active">
+
+    <!-- ===================== Overview Panel ===================== -->
+    <section class="panel" :class="{ active: $store.ui.tab==='overview' }">
       <div class="overview-grid">
-        <!-- Row 1: Slide description | OBS scene -->
-        <div class="ov-cell ov-slide-desc" id="ov-now-playing"></div>
+        <!-- Row 1: Proclaim now-playing | OBS scene -->
+        <div class="ov-cell ov-slide-desc" x-html="ovNowPlaying($store.state.proclaim)"></div>
         <div class="ov-cell ov-scene-info">
-          <span id="ov-current-scene" class="ov-scene-name"></span>
-          <div id="ov-stream-status" class="ov-status-row"></div>
+          <span class="ov-scene-name" x-text="$store.state.obs.currentScene"></span>
+          <div class="ov-status-row">
+            <span class="ov-status-pill active" x-show="$store.state.obs.streaming">LIVE</span>
+            <span class="ov-status-pill active" x-show="$store.state.obs.recording">REC</span>
+          </div>
         </div>
 
-        <!-- Row 2: Proclaim current slide | OBS Program -->
-        <div class="slide-thumb active" id="ov-thumb-current"></div>
+        <!-- Row 2: Proclaim current slide thumb | OBS preview -->
+        <div class="slide-thumb active" x-html="thumbHtml(ovThumbs($store.state.proclaim).current)"></div>
         <div class="ov-obs-preview-wrap">
           <img id="ov-obs-preview" class="ov-obs-preview" src="" alt="Program">
         </div>
 
-        <!-- Row 3: Prev Slide button | Next Slide button -->
-        <button class="btn btn-large" onclick="sendAction('PreviousSlide')">&#8592; Slide</button>
-        <button class="btn btn-large" onclick="sendAction('NextSlide')">Slide &#8594;</button>
+        <!-- Row 3: Slide nav buttons -->
+        <button class="btn btn-large" @click="sendAction('PreviousSlide')">&#8592; Slide</button>
+        <button class="btn btn-large" @click="sendAction('NextSlide')">Slide &#8594;</button>
 
-        <!-- Row 4: Prev slide thumb | Next slide thumb -->
-        <div class="slide-thumb" id="ov-thumb-prev"></div>
-        <div class="slide-thumb" id="ov-thumb-next"></div>
+        <!-- Row 4: Prev / next slide thumbs -->
+        <div class="slide-thumb" x-html="thumbHtml(ovThumbs($store.state.proclaim).prev)"></div>
+        <div class="slide-thumb" x-html="thumbHtml(ovThumbs($store.state.proclaim).next)"></div>
 
-        <!-- Row 5: Mix levels | OBS levels -->
+        <!-- Row 5: X32 compact levels | OBS compact levels -->
         <div class="ov-block">
           <div class="ov-title">Mix</div>
-          <div id="ov-channels" class="ov-channel-list"></div>
+          <div class="ov-channel-list">
+            <template x-for="ch in $store.state.x32.channels" :key="ch.type+'/'+ch.index">
+              <div class="ov-channel-row" x-show="!$store.ui.isHiddenX32(ch.type+'/'+ch.index)">
+                <span class="ov-ch-label" :class="{ muted: ch.muted }" x-text="ch.label"></span>
+                <div class="ov-bars">
+                  <div class="ov-fader-bar"><div class="ov-fader-fill" :class="{ muted: ch.muted }" :style="'width:'+((ch.fader*100).toFixed(1))+'%'"></div></div>
+                  <div class="ov-level-bar"><div class="ov-level-fill" :style="'width:'+((ch.level*100).toFixed(1))+'%'"></div></div>
+                </div>
+              </div>
+            </template>
+          </div>
         </div>
         <div class="ov-block">
           <div class="ov-title">OBS</div>
-          <div id="ov-obs-audio" class="ov-channel-list"></div>
+          <div class="ov-channel-list">
+            <template x-for="src in $store.state.obs.audioSources" :key="src.name">
+              <div class="ov-channel-row" x-show="!$store.ui.isHiddenObs(src.name)">
+                <span class="ov-ch-label" :class="{ muted: src.muted }" x-text="src.name"></span>
+                <div class="ov-bars">
+                  <div class="ov-fader-bar"><div class="ov-fader-fill" :class="{ muted: src.muted }" :style="'width:'+(((src.volume??-60)+60)/60*100).toFixed(1)+'%'"></div></div>
+                  <div class="ov-level-bar"><div class="ov-level-fill" :style="'width:'+((src.level*100).toFixed(1))+'%'"></div></div>
+                </div>
+              </div>
+            </template>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- Proclaim Panel -->
-    <section id="panel-proclaim" class="panel">
+    <!-- ===================== Proclaim Panel ===================== -->
+    <section class="panel" :class="{ active: $store.ui.tab==='proclaim' }">
       <div class="slide-strip">
-        <div class="slide-thumb" id="proclaim-thumb-prev"></div>
-        <div class="slide-thumb active" id="proclaim-thumb-current"></div>
-        <div class="slide-thumb" id="proclaim-thumb-next"></div>
+        <div class="slide-thumb"        x-html="thumbHtml(ovThumbs($store.state.proclaim).prev)"></div>
+        <div class="slide-thumb active" x-html="thumbHtml(ovThumbs($store.state.proclaim).current)"></div>
+        <div class="slide-thumb"        x-html="thumbHtml(ovThumbs($store.state.proclaim).next)"></div>
       </div>
-      <div id="proclaim-now-playing" class="proclaim-now-playing"></div>
+      <div class="proclaim-now-playing" x-html="ovNowPlaying($store.state.proclaim)"></div>
       <div class="proclaim-controls">
         <div class="control-row">
-          <button class="btn btn-large" onclick="sendAction('PreviousServiceItem')">Prev Item</button>
-          <button class="btn btn-large" onclick="sendAction('NextServiceItem')">Next Item</button>
+          <button class="btn btn-large" @click="sendAction('PreviousServiceItem')">Prev Item</button>
+          <button class="btn btn-large" @click="sendAction('NextServiceItem')">Next Item</button>
         </div>
         <div class="control-row">
-          <button class="btn btn-large btn-primary" onclick="sendAction('PreviousSlide')">Prev Slide</button>
-          <button class="btn btn-large btn-primary" onclick="sendAction('NextSlide')">Next Slide</button>
+          <button class="btn btn-large btn-primary" @click="sendAction('PreviousSlide')">Prev Slide</button>
+          <button class="btn btn-large btn-primary" @click="sendAction('NextSlide')">Next Slide</button>
         </div>
       </div>
-      <div id="proclaim-items" class="proclaim-items"></div>
+      <div class="proclaim-items">
+        <template x-for="entry in flatServiceItems($store.state.proclaim)" :key="entry.key">
+          <div x-show="entry.type==='section'" class="item-section-header" x-text="entry.label"></div>
+          <div x-show="entry.type==='group'"   class="item-group-header"   x-text="entry.label"></div>
+          <button x-show="entry.type==='item'"
+                  class="item-btn"
+                  :class="{ active: entry.isActive, 'item-grouped': entry.item.group }"
+                  @click="sendAction('GoToServiceItem', entry.item.index)">
+            <span x-text="entry.item.title || entry.item.kind"></span>
+            <span class="item-slide-count" x-show="entry.slideCountLabel" x-text="' '+entry.slideCountLabel"></span>
+          </button>
+        </template>
+      </div>
     </section>
 
-    <!-- OBS Panel -->
-    <section id="panel-obs" class="panel">
+    <!-- ===================== OBS Panel ===================== -->
+    <section class="panel" :class="{ active: $store.ui.tab==='obs' }">
       <div class="obs-section">
         <div class="ov-obs-preview-wrap">
           <img id="obs-preview" class="ov-obs-preview" src="" alt="Program">
@@ -97,83 +134,153 @@
       </div>
       <div class="obs-section">
         <h2>Scenes</h2>
-        <div id="obs-scenes" class="scene-grid"></div>
+        <div class="scene-grid">
+          <template x-for="scene in $store.state.obs.scenes" :key="scene">
+            <button class="scene-btn" :class="{ active: scene===$store.state.obs.currentScene }"
+                    @click="setScene(scene)" x-text="scene"></button>
+          </template>
+        </div>
       </div>
       <div class="obs-section">
         <div class="section-header-row">
           <h2>Audio</h2>
-          <button class="btn btn-edit-toggle" id="obs-audio-edit-btn" onclick="toggleEditMode('obs')">Edit</button>
+          <button class="btn btn-edit-toggle"
+                  :class="{ active: $store.ui.editMode.obs }"
+                  @click="$store.ui.toggleEditMode('obs')"
+                  x-text="$store.ui.editMode.obs ? 'Done' : 'Edit'"></button>
         </div>
-        <div id="obs-audio" class="audio-list"></div>
+        <div class="audio-list">
+          <template x-for="src in $store.state.obs.audioSources" :key="src.name">
+            <div class="audio-source"
+                 :class="{ live: src.live }"
+                 x-show="$store.ui.editMode.obs || !$store.ui.isHiddenObs(src.name)"
+                 x-data="obsFader(src)">
+              <span class="name" x-text="src.name"></span>
+              <input type="range" min="-60" max="0" step="0.5"
+                     :value="src.volume != null && isFinite(src.volume) ? src.volume.toFixed(1) : -60"
+                     @input="setObsVolume(src.name, parseFloat($event.target.value))">
+              <button class="mute-btn" :class="{ muted: src.muted }"
+                      @click="toggleObsMute(src.name)"
+                      x-text="src.muted ? 'M' : '🔊'"></button>
+              <div class="obs-meter"><div class="obs-meter-fill" :style="'width:'+(src.level*100).toFixed(1)+'%'"></div></div>
+              <label class="fader-visibility-label" x-show="$store.ui.editMode.obs">
+                <input type="checkbox"
+                       class="fader-visibility-cb"
+                       :checked="!$store.ui.isHiddenObs(src.name)"
+                       @change="toggleHiddenObs(src.name, $event.target.checked)">
+                Show
+              </label>
+            </div>
+          </template>
+        </div>
       </div>
       <div class="obs-section">
         <h2>Output</h2>
         <div class="control-row">
-          <button class="btn" id="obs-stream-btn" onclick="toggleStream()">Stream</button>
-          <button class="btn" id="obs-record-btn" onclick="toggleRecord()">Record</button>
+          <button class="btn" :class="{ active: $store.state.obs.streaming }"
+                  @click="toggleStream()"
+                  x-text="$store.state.obs.streaming ? 'Streaming' : 'Stream'"></button>
+          <button class="btn" :class="{ active: $store.state.obs.recording }"
+                  @click="toggleRecord()"
+                  x-text="$store.state.obs.recording ? 'Recording' : 'Record'"></button>
         </div>
       </div>
     </section>
 
-    <!-- Sound (X32) Panel -->
-    <section id="panel-sound" class="panel">
+    <!-- ===================== Sound (X32) Panel ===================== -->
+    <section class="panel" :class="{ active: $store.ui.tab==='sound' }">
       <div class="section-header-row x32-header-row">
         <span></span>
-        <button class="btn btn-edit-toggle" id="x32-edit-btn" onclick="toggleEditMode('x32')">Edit</button>
+        <button class="btn btn-edit-toggle"
+                :class="{ active: $store.ui.editMode.x32 }"
+                @click="$store.ui.toggleEditMode('x32')"
+                x-text="$store.ui.editMode.x32 ? 'Done' : 'Edit'"></button>
       </div>
-      <div id="x32-channels" class="channel-grid"></div>
+      <div class="channel-grid">
+        <template x-for="ch in $store.state.x32.channels" :key="ch.type+'/'+ch.index">
+          <div class="channel-strip"
+               x-show="$store.ui.editMode.x32 || !$store.ui.isHiddenX32(ch.type+'/'+ch.index)"
+               x-data="x32Fader(ch)">
+            <span class="ch-label" x-text="ch.label"></span>
+            <div class="fader-wrap">
+              <input type="range" min="0" max="1" step="0.005"
+                     :value="touched ? undefined : ch.fader"
+                     @input="onFaderInput(ch, $event.target)"
+                     @mousedown="touched=true" @touchstart.passive="touched=true"
+                     @mouseup="releaseSoon()" @touchend="releaseSoon()">
+              <div class="ch-meter"><div class="ch-meter-fill" :style="'height:'+(ch.level*100).toFixed(1)+'%'"></div></div>
+            </div>
+            <button class="ch-mute" :class="{ muted: ch.muted }"
+                    @click="toggleX32Mute(ch.index, ch.type)"
+                    x-text="ch.muted ? 'MUTED' : 'ON'"></button>
+            <label class="fader-visibility-label" x-show="$store.ui.editMode.x32">
+              <input type="checkbox"
+                     class="fader-visibility-cb"
+                     :checked="!$store.ui.isHiddenX32(ch.type+'/'+ch.index)"
+                     @change="toggleHiddenX32(ch.type+'/'+ch.index, $event.target.checked)">
+              Show
+            </label>
+          </div>
+        </template>
+      </div>
     </section>
 
-    <!-- Settings Panel -->
-    <section id="panel-settings" class="panel">
+    <!-- ===================== Settings Panel ===================== -->
+    <section class="panel" :class="{ active: $store.ui.tab==='settings' }"
+             x-data="settingsPanel()">
       <div class="settings-section">
         <h2>OBS</h2>
-        <label>Address <input type="text" id="cfg-obs-address" placeholder="ws://localhost:4455"></label>
-        <label>Password <input type="password" id="cfg-obs-password" placeholder="(leave blank if none)"></label>
-        <label>Screenshot interval (ms) <input type="number" id="cfg-obs-screenshot-interval" placeholder="1000" min="200"></label>
+        <label>Address <input type="text" x-model="cfg.obs.address" placeholder="ws://localhost:4455"></label>
+        <label>Password <input type="password" x-model="cfg.obs.password" placeholder="(leave blank if none)"></label>
+        <label>Screenshot interval (ms) <input type="number" x-model.number="cfg.obs.screenshotInterval" placeholder="1000" min="200"></label>
         <div class="discover-row">
-          <button class="btn" onclick="discoverObs()">Auto-detect</button>
-          <span class="discover-status" id="discover-obs-status"></span>
+          <button class="btn" @click="discoverObs()">Auto-detect</button>
+          <span class="discover-status" x-text="discoverStatus.obs"></span>
         </div>
       </div>
 
       <div class="settings-section">
         <h2>X32</h2>
-        <label>Address <input type="text" id="cfg-x32-address" placeholder="192.168.1.100"></label>
-        <label>Port <input type="number" id="cfg-x32-port" placeholder="10023"></label>
+        <label>Address <input type="text" x-model="cfg.x32.address" placeholder="192.168.1.100"></label>
+        <label>Port <input type="number" x-model.number="cfg.x32.port" placeholder="10023"></label>
         <div class="discover-row">
-          <button class="btn" onclick="discoverX32()">Auto-detect</button>
-          <span class="discover-status" id="discover-x32-status"></span>
+          <button class="btn" @click="discoverX32()">Auto-detect</button>
+          <span class="discover-status" x-text="discoverStatus.x32"></span>
         </div>
         <p style="color:var(--fg-dim,#888);font-size:0.85em;margin-top:8px">Channels are discovered automatically from the X32.</p>
       </div>
 
       <div class="settings-section">
         <h2>Proclaim</h2>
-        <label>Host <input type="text" id="cfg-proclaim-host" placeholder="127.0.0.1"></label>
-        <label>Port <input type="number" id="cfg-proclaim-port" placeholder="52195"></label>
-        <label>Password <input type="password" id="cfg-proclaim-password" placeholder="proclaim"></label>
-        <label>Poll interval (ms) <input type="number" id="cfg-proclaim-poll-interval" placeholder="1000" min="500"></label>
+        <label>Host <input type="text" x-model="cfg.proclaim.host" placeholder="127.0.0.1"></label>
+        <label>Port <input type="number" x-model.number="cfg.proclaim.port" placeholder="52195"></label>
+        <label>Password <input type="password" x-model="cfg.proclaim.password" placeholder="proclaim"></label>
+        <label>Poll interval (ms) <input type="number" x-model.number="cfg.proclaim.pollInterval" placeholder="1000" min="500"></label>
         <div class="discover-row">
-          <button class="btn" onclick="discoverProclaim()">Auto-detect</button>
-          <span class="discover-status" id="discover-proclaim-status"></span>
+          <button class="btn" @click="discoverProclaim()">Auto-detect</button>
+          <span class="discover-status" x-text="discoverStatus.proclaim"></span>
         </div>
       </div>
 
       <div class="settings-footer">
-        <button class="btn btn-primary" onclick="saveConfig()">Save &amp; Apply</button>
-        <span class="discover-status" id="settings-save-status"></span>
+        <button class="btn btn-primary" @click="saveConfig()">Save &amp; Apply</button>
+        <span class="discover-status" x-text="saveStatus"></span>
       </div>
 
       <div class="settings-section">
         <h2>Logs</h2>
         <div class="log-toolbar">
-          <button class="btn" onclick="loadLogs()">Refresh</button>
-          <button class="btn" onclick="clearLogDisplay()">Clear display</button>
+          <button class="btn" @click="loadLogs()">Refresh</button>
+          <button class="btn" @click="logs=[]">Clear display</button>
         </div>
-        <pre id="log-output" class="log-output"></pre>
+        <pre class="log-output" x-ref="logOutput">
+          <template x-for="entry in logs" :key="entry.ts+entry.msg">
+            <span :class="'log-'+entry.level" x-text="entry.ts.replace('T',' ').replace(/\.\d+Z$/,'Z')+' '+entry.msg+'\n'"></span>
+          </template>
+        </pre>
       </div>
     </section>
+
   </main>
 
   <script src="/app.js"></script>
