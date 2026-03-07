@@ -120,6 +120,53 @@ test.describe('Overview panel', () => {
     await expect(page.locator('.disconnected-message')).toContainText('reconnecting');
   });
 
+  test('overview info cells are compact: proclaim cell height <= 60px', async ({ page, setState }) => {
+    await setState({
+      proclaim: {
+        connected: true,
+        onAir: true,
+        currentItemId: 'item1',
+        currentItemTitle: 'Amazing Grace',
+        currentItemType: 'Song',
+        slideIndex: 2,
+        serviceItems: [{ id: 'item1', title: 'Amazing Grace', kind: 'Song', slideCount: 5, index: 0, section: 'Worship', group: null }],
+      },
+    });
+    const cell = page.locator('.ov-cell.ov-slide-desc');
+    const box = await cell.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.height).toBeLessThanOrEqual(60);
+  });
+
+  test('overview info cells are compact: OBS scene cell height <= 60px', async ({ page, setState }) => {
+    await setState({
+      obs: { connected: true, currentScene: 'Camera 1', streaming: true, recording: true },
+    });
+    const cell = page.locator('.ov-cell.ov-scene-info');
+    const box = await cell.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.height).toBeLessThanOrEqual(60);
+  });
+
+  test('overview proclaim cell shows type, title and slide on one row', async ({ page, setState }) => {
+    await setState({
+      proclaim: {
+        connected: true,
+        onAir: true,
+        currentItemId: 'item1',
+        currentItemTitle: 'Amazing Grace',
+        currentItemType: 'Song',
+        slideIndex: 2,
+        serviceItems: [{ id: 'item1', title: 'Amazing Grace', kind: 'Song', slideCount: 5, index: 0, section: 'Worship', group: null }],
+      },
+    });
+    const cell = page.locator('.ov-cell.ov-slide-desc');
+    // All content must be visible (not clipped/hidden)
+    await expect(cell).toContainText('Song');
+    await expect(cell).toContainText('Amazing Grace');
+    await expect(cell).toContainText('Slide 3');
+  });
+
   test('slide nav buttons send proclaim action API calls', async ({ page, setState }) => {
     const apiCalls: string[] = [];
     await page.route('**/api/proclaim/action', async (route) => {

@@ -660,24 +660,53 @@ main {
   background: var(--surface);
   border: 1px solid var(--accent);
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 5px 10px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   min-height: 44px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-dim);
+  overflow: hidden;
+}
+
+.ov-slide-desc {
+  /* Clamp to 2 visual lines max */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  /* Override flex-direction: column set by .ov-cell */
+  flex-direction: unset;
+  line-height: 1.4;
+}
+
+.ov-slide-desc .item-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+
+.ov-slide-desc strong {
+  color: var(--text);
+  font-size: 12px;
 }
 
 .ov-scene-info {
   align-items: flex-end;
   text-align: right;
+  gap: 2px;
 }
 
 .ov-scene-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* Slide thumbs fill their grid cell */
@@ -815,8 +844,8 @@ main {
 
 .ov-status-row {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 4px;
+  margin-top: 2px;
   font-size: 12px;
   color: var(--text-dim);
 }
