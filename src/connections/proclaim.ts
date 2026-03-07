@@ -16,18 +16,30 @@ let onAirSessionId: string | null = null;
 let connectionId: string | null = null;
 let wantConnected = false;
 
-let pollTimer: ReturnType<typeof setInterval> | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let presentationCache: {
+interface PresentationSlide {
+  localRevision: number;
+  index: number;
+}
+
+interface PresentationItem {
+  id: string;
+  title: string;
+  kind: string;
+  slides?: PresentationSlide[];
+}
+
+interface PresentationCache {
   id?: string;
   localRevision?: number;
-  serviceItems?: Array<{
-    id: string;
-    title: string;
-    kind: string;
-    slides?: Array<{ localRevision: number; index: number }>;
-  }>;
-} | null = null;
+  serviceItems?: PresentationItem[];
+  warmupStartIndex?: number | null;
+  serviceStartIndex?: number | null;
+  postServiceStartIndex?: number | null;
+}
+
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let presentationCache: PresentationCache | null = null;
 let presentationLocalRevision = '0'; // kept as string — value exceeds JS safe integer range
 let statusRevision = '0'; // the revision field from status, sent as `step` to statusChanged
 let statusLoopGeneration = 0; // incremented on disconnect to stop any in-flight loop
@@ -46,8 +58,8 @@ function getOnAirSessionId(): string | null {
 
 function getThumbUrl(itemId: string | undefined, slideIndex: string | undefined, _localRevision: string | undefined): string {
   // Look up the per-slide localRevision from the presentation cache
-  const item = (presentationCache as any)?.serviceItems?.find((i: any) => i.id === itemId);
-  const slide = item?.slides?.find((s: any) => String(s.index) === String(slideIndex));
+  const item = presentationCache?.serviceItems?.find((i) => i.id === itemId);
+  const slide = item?.slides?.find((s) => String(s.index) === String(slideIndex));
   const localRevision = slide?.localRevision !== undefined ? String(slide.localRevision) : '';
   const params = new URLSearchParams({ width: '480' });
   if (localRevision) params.set('localrevision', localRevision);
@@ -256,7 +268,7 @@ async function fetchDetailedStatus(): Promise<void> {
       });
       if (presRes.ok) {
         presentationCache = parseProclaimJson(await presRes.text());
-        logger.log('[Proclaim] presentations/onair loaded, items:', (presentationCache as any)?.serviceItems?.length ?? 0);
+        logger.log('[Proclaim] presentations/onair loaded, items:', presentationCache?.serviceItems?.length ?? 0);
       } else {
         logger.log('[Proclaim] presentations/onair failed:', presRes.status);
       }
@@ -298,7 +310,7 @@ async function fetchDetailedStatus(): Promise<void> {
     if (!status) return;
 
     // If presentation changed, refresh the cache
-    if (data.presentationId && (presentationCache as any)?.id !== data.presentationId) {
+    if (data.presentationId && presentationCache?.id !== data.presentationId) {
       try {
         const presRes = await fetch(`${baseUrl()}/presentations/onair`, {
           headers: { 'OnAirSessionId': onAirSessionId! },
@@ -311,11 +323,10 @@ async function fetchDetailedStatus(): Promise<void> {
       }
     }
 
-    const rawItems = (presentationCache as any)?.serviceItems ?? [];
-    const cache = presentationCache as any;
-    const warmupStartIndex: number | null = cache?.warmupStartIndex ?? null;
-    const serviceStartIndex: number | null = cache?.serviceStartIndex ?? null;
-    const postServiceStartIndex: number | null = cache?.postServiceStartIndex ?? null;
+    const rawItems = presentationCache?.serviceItems ?? [];
+    const warmupStartIndex: number | null = presentationCache?.warmupStartIndex ?? null;
+    const serviceStartIndex: number | null = presentationCache?.serviceStartIndex ?? null;
+    const postServiceStartIndex: number | null = presentationCache?.postServiceStartIndex ?? null;
 
     type SectionName = 'Pre-Service' | 'Warmup' | 'Service' | 'Post-Service';
     const SECTION_COMMANDS: Record<SectionName, string> = {
@@ -412,8 +423,7 @@ function disconnect(): void {
 }
 
 async function goToItem(itemId: string): Promise<boolean> {
-  const currentState = require('../state').get() as import('../types').AppState;
-  const item = currentState.proclaim.serviceItems.find((i) => i.id === itemId);
+  const item = state.get().proclaim.serviceItems.find((i) => i.id === itemId);
   if (!item) {
     logger.log(`[Proclaim] goToItem: item ${itemId} not found in state`);
     return false;

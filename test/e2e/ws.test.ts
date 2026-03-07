@@ -151,7 +151,7 @@ describe('WebSocket meter subscription lifecycle', () => {
     await waitForClose(ws1);
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    assert.equal(calls.x32.stopMeterUpdates, undefined, 'stopMeterUpdates should not be called while ws2 is still open');
+    assert.equal(calls.x32.stopMeterUpdates, 0, 'stopMeterUpdates should not be called while ws2 is still open');
 
     await waitForClose(ws2);
     await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -225,9 +225,9 @@ describe('WebSocket connection lifecycle', () => {
     await waitForClose(ws1);
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    assert.equal(calls.obs.disconnect, undefined, 'obs.disconnect should not be called while ws2 is still open');
-    assert.equal(calls.x32.disconnect, undefined, 'x32.disconnect should not be called while ws2 is still open');
-    assert.equal(calls.proclaim.disconnect, undefined, 'proclaim.disconnect should not be called while ws2 is still open');
+    assert.equal(calls.obs.disconnect, 0, 'obs.disconnect should not be called while ws2 is still open');
+    assert.equal(calls.x32.disconnect, 0, 'x32.disconnect should not be called while ws2 is still open');
+    assert.equal(calls.proclaim.disconnect, 0, 'proclaim.disconnect should not be called while ws2 is still open');
 
     await waitForClose(ws2);
     await new Promise<void>((resolve) => server.close(() => resolve()));

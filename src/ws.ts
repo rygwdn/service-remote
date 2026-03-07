@@ -1,10 +1,15 @@
 import ws = require('ws');
 import http = require('http');
-import type { Connections } from './types';
+import type { Connections, AppState, ChangeEvent } from './types';
 
 const { WebSocketServer } = ws;
 
-function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, connections?: Connections, { disconnectDelay = 5000 }: { disconnectDelay?: number } = {}): void {
+interface StateHandle {
+  get(): AppState;
+  on(event: 'change', listener: (ev: ChangeEvent) => void): void;
+}
+
+function setupWebSocket(server: http.Server, state: StateHandle, connections?: Connections, { disconnectDelay = 5000 }: { disconnectDelay?: number } = {}): void {
   const wss = new WebSocketServer({ server });
   let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let connectionsStarted = false;
@@ -12,7 +17,7 @@ function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, 
   function openClientCount(): number {
     let count = 0;
     for (const client of wss.clients) {
-      if (client.readyState === 1 /* OPEN */) count++;
+      if (client.readyState === ws.WebSocket.OPEN) count++;
     }
     return count;
   }
@@ -60,7 +65,7 @@ function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, 
     if (latestState === null) return;
     const msg = JSON.stringify({ type: 'state', data: latestState });
     for (const client of wss.clients) {
-      if (client.readyState === 1) {
+      if (client.readyState === ws.WebSocket.OPEN) {
         try {
           client.send(msg);
         } catch {
@@ -76,7 +81,7 @@ function setupWebSocket(server: http.Server, state: ReturnType<typeof require>, 
     flushState();
   }, 10000);
 
-  state.on('change', ({ state: fullState }: { section: string; state: unknown }) => {
+  state.on('change', ({ state: fullState }: ChangeEvent) => {
     latestState = fullState;
     if (!pendingFlush) {
       pendingFlush = setTimeout(flushState, 100);

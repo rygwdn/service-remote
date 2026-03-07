@@ -240,89 +240,65 @@ function handleMeterMessage(address: string, args: OscArg[]): void {
   }
 }
 
+type OscPatchFn = (args: OscArg[]) => Partial<Channel> | null;
+
+interface OscPattern {
+  re: RegExp;
+  type: OscResult['type'];
+  indexGroup: number | null; // regex capture group for channel index, or null for fixed index
+  fixedIndex?: number;
+  patch: OscPatchFn;
+}
+
+function faderPatch(args: OscArg[]): Partial<Channel> {
+  return { fader: (args?.[0]?.value as number) ?? 0 };
+}
+
+function mutePatch(args: OscArg[]): Partial<Channel> {
+  return { muted: ((args?.[0]?.value as number) ?? 1) === 0 };
+}
+
+function namePatch(args: OscArg[]): Partial<Channel> | null {
+  const name = args?.[0]?.value as string | undefined;
+  return name ? { label: name } : null;
+}
+
+function sourcePatch(args: OscArg[]): Partial<Channel> {
+  return { source: (args?.[0]?.value as number) ?? 0 };
+}
+
+const OSC_PATTERNS: OscPattern[] = [
+  // Input channels
+  { re: /^\/ch\/(\d+)\/mix\/fader$/,    type: 'ch',   indexGroup: 1, patch: faderPatch },
+  { re: /^\/ch\/(\d+)\/mix\/on$/,       type: 'ch',   indexGroup: 1, patch: mutePatch },
+  { re: /^\/ch\/(\d+)\/config\/name$/,  type: 'ch',   indexGroup: 1, patch: namePatch },
+  { re: /^\/ch\/(\d+)\/config\/source$/,type: 'ch',   indexGroup: 1, patch: sourcePatch },
+  // Mix buses
+  { re: /^\/bus\/(\d+)\/mix\/fader$/,   type: 'bus',  indexGroup: 1, patch: faderPatch },
+  { re: /^\/bus\/(\d+)\/mix\/on$/,      type: 'bus',  indexGroup: 1, patch: mutePatch },
+  { re: /^\/bus\/(\d+)\/config\/name$/, type: 'bus',  indexGroup: 1, patch: namePatch },
+  // Matrix
+  { re: /^\/mtx\/(\d+)\/mix\/fader$/,   type: 'mtx',  indexGroup: 1, patch: faderPatch },
+  { re: /^\/mtx\/(\d+)\/mix\/on$/,      type: 'mtx',  indexGroup: 1, patch: mutePatch },
+  { re: /^\/mtx\/(\d+)\/config\/name$/, type: 'mtx',  indexGroup: 1, patch: namePatch },
+  // Main L/R (index 1) and Main M/C (index 2)
+  { re: /^\/main\/st\/mix\/fader$/,     type: 'main', indexGroup: null, fixedIndex: 1, patch: faderPatch },
+  { re: /^\/main\/st\/mix\/on$/,        type: 'main', indexGroup: null, fixedIndex: 1, patch: mutePatch },
+  { re: /^\/main\/m\/mix\/fader$/,      type: 'main', indexGroup: null, fixedIndex: 2, patch: faderPatch },
+  { re: /^\/main\/m\/mix\/on$/,         type: 'main', indexGroup: null, fixedIndex: 2, patch: mutePatch },
+];
+
 // Pure function: parse an OSC address + args into a channel state patch.
 // Returns { index, type, patch } or null if the message isn't a recognised channel message.
 function parseOscMessage(address: string, args: OscArg[]): OscResult | null {
-  // Input channels: /ch/XX/...
-  const chFaderMatch = address.match(/^\/ch\/(\d+)\/mix\/fader$/);
-  if (chFaderMatch) {
-    return { index: parseInt(chFaderMatch[1], 10), type: 'ch', patch: { fader: (args?.[0]?.value as number) ?? 0 } };
+  for (const pattern of OSC_PATTERNS) {
+    const m = address.match(pattern.re);
+    if (!m) continue;
+    const index = pattern.indexGroup !== null ? parseInt(m[pattern.indexGroup], 10) : pattern.fixedIndex!;
+    const patch = pattern.patch(args);
+    if (!patch) return null;
+    return { index, type: pattern.type, patch };
   }
-
-  const chMuteMatch = address.match(/^\/ch\/(\d+)\/mix\/on$/);
-  if (chMuteMatch) {
-    return { index: parseInt(chMuteMatch[1], 10), type: 'ch', patch: { muted: ((args?.[0]?.value as number) ?? 1) === 0 } };
-  }
-
-  const chNameMatch = address.match(/^\/ch\/(\d+)\/config\/name$/);
-  if (chNameMatch) {
-    const name = args?.[0]?.value as string | undefined;
-    if (!name) return null;
-    return { index: parseInt(chNameMatch[1], 10), type: 'ch', patch: { label: name } };
-  }
-
-  const chSourceMatch = address.match(/^\/ch\/(\d+)\/config\/source$/);
-  if (chSourceMatch) {
-    return { index: parseInt(chSourceMatch[1], 10), type: 'ch', patch: { source: (args?.[0]?.value as number) ?? 0 } };
-  }
-
-  // Mix buses: /bus/XX/...
-  const busFaderMatch = address.match(/^\/bus\/(\d+)\/mix\/fader$/);
-  if (busFaderMatch) {
-    return { index: parseInt(busFaderMatch[1], 10), type: 'bus', patch: { fader: (args?.[0]?.value as number) ?? 0 } };
-  }
-
-  const busMuteMatch = address.match(/^\/bus\/(\d+)\/mix\/on$/);
-  if (busMuteMatch) {
-    return { index: parseInt(busMuteMatch[1], 10), type: 'bus', patch: { muted: ((args?.[0]?.value as number) ?? 1) === 0 } };
-  }
-
-  const busNameMatch = address.match(/^\/bus\/(\d+)\/config\/name$/);
-  if (busNameMatch) {
-    const name = args?.[0]?.value as string | undefined;
-    if (!name) return null;
-    return { index: parseInt(busNameMatch[1], 10), type: 'bus', patch: { label: name } };
-  }
-
-  // Matrix: /mtx/XX/...
-  const mtxFaderMatch = address.match(/^\/mtx\/(\d+)\/mix\/fader$/);
-  if (mtxFaderMatch) {
-    return { index: parseInt(mtxFaderMatch[1], 10), type: 'mtx', patch: { fader: (args?.[0]?.value as number) ?? 0 } };
-  }
-
-  const mtxMuteMatch = address.match(/^\/mtx\/(\d+)\/mix\/on$/);
-  if (mtxMuteMatch) {
-    return { index: parseInt(mtxMuteMatch[1], 10), type: 'mtx', patch: { muted: ((args?.[0]?.value as number) ?? 1) === 0 } };
-  }
-
-  const mtxNameMatch = address.match(/^\/mtx\/(\d+)\/config\/name$/);
-  if (mtxNameMatch) {
-    const name = args?.[0]?.value as string | undefined;
-    if (!name) return null;
-    return { index: parseInt(mtxNameMatch[1], 10), type: 'mtx', patch: { label: name } };
-  }
-
-  // Main L/R: /main/st/... (index 1) and Main M/C: /main/m/... (index 2)
-  const mainStFaderMatch = address.match(/^\/main\/st\/mix\/fader$/);
-  if (mainStFaderMatch) {
-    return { index: 1, type: 'main', patch: { fader: (args?.[0]?.value as number) ?? 0 } };
-  }
-
-  const mainStMuteMatch = address.match(/^\/main\/st\/mix\/on$/);
-  if (mainStMuteMatch) {
-    return { index: 1, type: 'main', patch: { muted: ((args?.[0]?.value as number) ?? 1) === 0 } };
-  }
-
-  const mainMFaderMatch = address.match(/^\/main\/m\/mix\/fader$/);
-  if (mainMFaderMatch) {
-    return { index: 2, type: 'main', patch: { fader: (args?.[0]?.value as number) ?? 0 } };
-  }
-
-  const mainMMuteMatch = address.match(/^\/main\/m\/mix\/on$/);
-  if (mainMMuteMatch) {
-    return { index: 2, type: 'main', patch: { muted: ((args?.[0]?.value as number) ?? 1) === 0 } };
-  }
-
   return null;
 }
 

@@ -6,18 +6,29 @@ const { setupRoutes } = require('../../src/routes');
 const { setupWebSocket } = require('../../src/ws');
 import type { Connections } from '../../src/types';
 
-const { State } = stateModule;
+
+interface TestCalls {
+  obs: {
+    connect: number; disconnect: number; startMeterUpdates: number; stopMeterUpdates: number;
+    setScene?: string; toggleMute?: string; setInputVolume?: { input: string; volumeDb: number };
+    toggleStream?: true; toggleRecord?: true;
+  };
+  x32: {
+    connect: number; disconnect: number; startMeterUpdates: number; stopMeterUpdates: number;
+    setFader?: { channel: number; value: number }; toggleMute?: number;
+  };
+  proclaim: {
+    connect: number; disconnect: number; startMeterUpdates: number; stopMeterUpdates: number;
+    sendAction?: { action: string; index?: number }; goToItem?: string;
+  };
+}
 
 interface TestApp {
   app: ReturnType<typeof express>;
   server: http.Server;
   state: InstanceType<typeof stateModule.State>;
   stubs: Connections;
-  calls: {
-    obs: Record<string, unknown>;
-    x32: Record<string, unknown>;
-    proclaim: Record<string, unknown>;
-  };
+  calls: TestCalls;
 }
 
 /**
@@ -29,16 +40,16 @@ function createTestApp(): TestApp {
   const state = new stateModule.State();
 
   // Record every call made through the stubs so tests can assert on them.
-  const calls = {
-    obs: {} as Record<string, unknown>,
-    x32: {} as Record<string, unknown>,
-    proclaim: {} as Record<string, unknown>,
+  const calls: TestCalls = {
+    obs:     { connect: 0, disconnect: 0, startMeterUpdates: 0, stopMeterUpdates: 0 },
+    x32:     { connect: 0, disconnect: 0, startMeterUpdates: 0, stopMeterUpdates: 0 },
+    proclaim:{ connect: 0, disconnect: 0, startMeterUpdates: 0, stopMeterUpdates: 0 },
   };
 
   const stubs: Connections = {
     obs: {
-      connect: async () => { calls.obs.connect = (calls.obs.connect as number || 0) as number + 1; },
-      disconnect: () => { calls.obs.disconnect = (calls.obs.disconnect as number || 0) as number + 1; },
+      connect: async () => { calls.obs.connect++; },
+      disconnect: () => { calls.obs.disconnect++; },
       setScene: async (scene: string) => { calls.obs.setScene = scene; },
       toggleMute: async (input: string) => { calls.obs.toggleMute = input; },
       setInputVolume: async (input: string, volumeDb: number) => { calls.obs.setInputVolume = { input, volumeDb }; },
@@ -47,17 +58,17 @@ function createTestApp(): TestApp {
       getSceneScreenshot: async (_sceneName: string) => Buffer.alloc(0),
     },
     x32: {
-      connect: () => { calls.x32.connect = (calls.x32.connect as number || 0) as number + 1; },
-      disconnect: () => { calls.x32.disconnect = (calls.x32.disconnect as number || 0) as number + 1; },
+      connect: () => { calls.x32.connect++; },
+      disconnect: () => { calls.x32.disconnect++; },
       setFader: (channel: number, value: number, _type?: 'ch' | 'bus') => { calls.x32.setFader = { channel, value }; },
       toggleMute: (channel: number, _type?: 'ch' | 'bus') => { calls.x32.toggleMute = channel; },
       parseOscMessage: () => null,
-      startMeterUpdates: () => { calls.x32.startMeterUpdates = (calls.x32.startMeterUpdates as number || 0) + 1; },
-      stopMeterUpdates: () => { calls.x32.stopMeterUpdates = (calls.x32.stopMeterUpdates as number || 0) + 1; },
+      startMeterUpdates: () => { calls.x32.startMeterUpdates++; },
+      stopMeterUpdates: () => { calls.x32.stopMeterUpdates++; },
     },
     proclaim: {
-      connect: async () => { calls.proclaim.connect = (calls.proclaim.connect as number || 0) as number + 1; },
-      disconnect: () => { calls.proclaim.disconnect = (calls.proclaim.disconnect as number || 0) as number + 1; },
+      connect: async () => { calls.proclaim.connect++; },
+      disconnect: () => { calls.proclaim.disconnect++; },
       sendAction: async (action: string, index?: number) => {
         calls.proclaim.sendAction = { action, index };
         return true;
@@ -66,7 +77,7 @@ function createTestApp(): TestApp {
         calls.proclaim.goToItem = itemId;
         return true;
       },
-      getThumbUrl: (itemId?: string, slideIndex?: string, localRevision?: string) => `/fake-thumb/${itemId}/${slideIndex}`,
+      getThumbUrl: (itemId?: string, slideIndex?: string, _localRevision?: string) => `/fake-thumb/${itemId}/${slideIndex}`,
       getToken: () => 'test-token',
       getOnAirSessionId: () => null,
     },

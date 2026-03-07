@@ -96,7 +96,8 @@ export async function discoverObs(timeoutMs = 2000): Promise<DiscoveryResult> {
 
     const timer = setTimeout(() => done({ found: false }), timeoutMs);
 
-    // Use a plain TCP connection to avoid requiring 'ws' at module level
+    // OBS is expected to run on the same machine as this server, so only check
+    // localhost. Use a plain TCP connection to avoid requiring 'ws' at module level.
     const ws = new net.Socket();
     ws.connect(4455, '127.0.0.1', () => {
       done({ found: true, address: 'ws://localhost:4455', port: 4455 });
@@ -111,10 +112,9 @@ export async function discoverProclaim(timeoutMs = 2000): Promise<DiscoveryResul
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch('http://127.0.0.1:52195/', { signal: controller.signal });
+    await fetch('http://127.0.0.1:52195/', { signal: controller.signal });
     clearTimeout(timer);
     // Any HTTP response (even 4xx) means the server is present
-    void res;
     return { found: true, address: '127.0.0.1', port: 52195 };
   } catch (err) {
     clearTimeout(timer);

@@ -84,24 +84,17 @@ document.addEventListener('alpine:init', () => {
     },
 
     async loadConfig() {
-      try {
-        const res = await fetch('/api/config');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        this.cfg.obs.address             = data.obs?.address ?? '';
-        this.cfg.obs.password            = data.obs?.password ?? '';
-        this.cfg.obs.screenshotInterval  = data.obs?.screenshotInterval ?? 1000;
-        this.cfg.x32.address             = data.x32?.address ?? '';
-        this.cfg.x32.port                = data.x32?.port ?? 10023;
-        this.cfg.proclaim.host           = data.proclaim?.host ?? '';
-        this.cfg.proclaim.port           = data.proclaim?.port ?? 52195;
-        this.cfg.proclaim.password       = data.proclaim?.password ?? '';
-        this.cfg.proclaim.pollInterval   = data.proclaim?.pollInterval ?? 1000;
-        // Keep currentConfig in sync for screenshot polling interval
-        currentConfig = data;
-      } catch (err) {
-        this.saveStatus = 'Failed to load config: ' + err.message;
-      }
+      const data = await fetchConfig();
+      if (!data) { this.saveStatus = 'Failed to load config'; return; }
+      this.cfg.obs.address             = data.obs?.address ?? '';
+      this.cfg.obs.password            = data.obs?.password ?? '';
+      this.cfg.obs.screenshotInterval  = data.obs?.screenshotInterval ?? 1000;
+      this.cfg.x32.address             = data.x32?.address ?? '';
+      this.cfg.x32.port                = data.x32?.port ?? 10023;
+      this.cfg.proclaim.host           = data.proclaim?.host ?? '';
+      this.cfg.proclaim.port           = data.proclaim?.port ?? 52195;
+      this.cfg.proclaim.password       = data.proclaim?.password ?? '';
+      this.cfg.proclaim.pollInterval   = data.proclaim?.pollInterval ?? 1000;
     },
 
     async saveConfig() {
@@ -114,7 +107,7 @@ document.addEventListener('alpine:init', () => {
         });
         const data = await res.json();
         this.saveStatus = data.ok ? 'Saved!' : 'Error: ' + (data.error || 'unknown');
-        if (data.ok) currentConfig = this.cfg;
+        if (data.ok) { currentConfig = this.cfg; startScreenshotPolling(); }
       } catch (err) {
         this.saveStatus = 'Error: ' + err.message;
       }
@@ -204,7 +197,9 @@ connectWs();
 
 // --- API helpers ---
 function post(url, body) {
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then((res) => { if (!res.ok) res.text().then((t) => console.error(`POST ${url} failed (${res.status}):`, t)); })
+    .catch((err) => console.error(`POST ${url} error:`, err));
 }
 
 function sendAction(action, index) {
@@ -324,8 +319,10 @@ function thumbUrl(itemId, slideIndex) {
 function thumbHtml(thumb) {
   if (!thumb || thumb.itemId == null || thumb.slideIndex == null) return '';
   const url = thumbUrl(thumb.itemId, thumb.slideIndex);
-  // Simple img; onerror retry is handled by setting src again
-  return `<img src="${url}" onerror="this._r=(this._r||0);if(this._r++<5)setTimeout(()=>{this.src='${url}&r='+this._r},500)">`;
+  // url is built entirely from encodeURIComponent values so it's safe to embed
+  // in an attribute. Use escaped single-quotes so the attribute value stays valid.
+  const escapedUrl = url.replace(/'/g, '%27');
+  return `<img src="${escapedUrl}" onerror="this._r=(this._r||0);if(this._r++<5)setTimeout(()=>{this.src='${escapedUrl}&r='+this._r},500)">`;
 }
 
 function ovNowPlaying(p) {
@@ -407,14 +404,22 @@ function esc(str) {
   return div.innerHTML;
 }
 
+// Fetch config from server and store in currentConfig. Returns the data or null on failure.
+async function fetchConfig() {
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) return null;
+    currentConfig = await res.json();
+    return currentConfig;
+  } catch (_) {
+    return null;
+  }
+}
+
 // --- Init ---
 async function init() {
   await loadHiddenFromServer();
-  // Load config for screenshot interval
-  try {
-    const res = await fetch('/api/config');
-    if (res.ok) currentConfig = await res.json();
-  } catch (_) {}
+  await fetchConfig();
   startScreenshotPolling();
 }
 

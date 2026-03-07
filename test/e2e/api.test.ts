@@ -5,7 +5,7 @@ const { createTestApp, startServer } = require('../helpers/app');
 describe('API routes', () => {
   let server: import('http').Server;
   let state: InstanceType<typeof import('../../src/state').State>;
-  let calls: { obs: Record<string, unknown>; x32: Record<string, unknown>; proclaim: Record<string, unknown> };
+  let calls: ReturnType<typeof import('../helpers/app').createTestApp>['calls'];
   let stubs: import('../../src/types').Connections;
   let request: ReturnType<typeof supertest>;
 
@@ -17,11 +17,12 @@ describe('API routes', () => {
 
   afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
-  // Reset recorded calls before each test by wiping the call objects
+  // Reset recorded calls before each test
   const resetCalls = () => {
-    calls.obs = {};
-    calls.x32 = {};
-    calls.proclaim = {};
+    delete calls.obs.setScene; delete calls.obs.toggleMute; delete calls.obs.setInputVolume;
+    delete calls.obs.toggleStream; delete calls.obs.toggleRecord;
+    delete calls.x32.setFader; delete calls.x32.toggleMute;
+    delete calls.proclaim.sendAction; delete calls.proclaim.goToItem;
   };
 
   describe('GET /api/state', () => {
@@ -197,11 +198,11 @@ describe('API routes', () => {
       assert.deepEqual(res.body, { ok: true });
 
       // OBS should have been disconnected and reconnected
-      assert.ok((calls.obs.disconnect as number) >= 1, 'obs.disconnect should have been called');
-      assert.ok((calls.obs.connect as number) >= 1, 'obs.connect should have been called');
+      assert.ok(calls.obs.disconnect >= 1, 'obs.disconnect should have been called');
+      assert.ok(calls.obs.connect >= 1, 'obs.connect should have been called');
       // X32 and proclaim were not changed, so they should not reconnect
-      assert.equal(calls.x32.disconnect, undefined);
-      assert.equal(calls.proclaim.disconnect, undefined);
+      assert.equal(calls.x32.disconnect, 0);
+      assert.equal(calls.proclaim.disconnect, 0);
     });
   });
 

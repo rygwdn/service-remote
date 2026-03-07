@@ -227,10 +227,10 @@ function startTray(
 
   // Update the status item whenever any connection state changes
   state.on('change', ({ state: s }: ChangeEvent) => {
-    const obs  = s.obs.connected      ? 'OBS:on'  : 'OBS:off';
-    const x32  = s.x32.connected      ? 'X32:on'  : 'X32:off';
-    const midi = s.proclaim.connected ? 'MIDI:on' : 'MIDI:off';
-    send({ cmd: 'status', text: `${obs}  ${x32}  ${midi}` });
+    const obs      = s.obs.connected      ? 'OBS:on'      : 'OBS:off';
+    const x32      = s.x32.connected      ? 'X32:on'      : 'X32:off';
+    const proclaim = s.proclaim.connected ? 'Proclaim:on' : 'Proclaim:off';
+    send({ cmd: 'status', text: `${obs}  ${x32}  ${proclaim}` });
   });
 
   // Kill the tray process when the server exits
