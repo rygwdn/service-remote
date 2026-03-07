@@ -3,6 +3,7 @@ export interface AudioSource {
   volume: number;
   muted: boolean;
   live: boolean; // true if source appears as an enabled item in the current program scene
+  level: number; // Linear peak level 0.0–1.0 from InputVolumeMeters
 }
 
 export interface Channel {

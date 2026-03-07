@@ -14,7 +14,8 @@ async function connect(): Promise<void> {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   logger.log('[OBS] Attempting to connect to', config.obs.address);
   try {
-    await obs.connect(config.obs.address, config.obs.password || undefined);
+    // 2047 = All standard events; 65536 = InputVolumeMeters (high-frequency, opt-in)
+    await obs.connect(config.obs.address, config.obs.password || undefined, { eventSubscriptions: 2047 | 65536 });
     logger.log('[OBS] Connected');
     state.update('obs', { connected: true });
     await refreshState();
@@ -58,6 +59,26 @@ obs.on('RecordStateChanged', ({ outputActive }) => {
 obs.on('InputVolumeChanged', ({ inputName, inputVolumeMul }) => {
   const sources = state.get().obs.audioSources.map((s) =>
     s.name === inputName ? { ...s, volume: mulToDb(inputVolumeMul) } : s
+  );
+  state.update('obs', { audioSources: sources });
+});
+
+obs.on('InputVolumeMeters', ({ inputs }) => {
+  const updates: Record<string, number> = {};
+  for (const input of inputs) {
+    // inputLevelsMul is [[left_pre, right_pre, left_post, right_post], ...]
+    const levels = input.inputLevelsMul as number[][];
+    if (!levels || levels.length === 0) continue;
+    // Use post-fader (index 2/3) peak across channels
+    let peak = 0;
+    for (const ch of levels) {
+      if (ch[2] != null && ch[2] > peak) peak = ch[2];
+      if (ch[3] != null && ch[3] > peak) peak = ch[3];
+    }
+    updates[input.inputName as string] = peak;
+  }
+  const sources = state.get().obs.audioSources.map((s) =>
+    updates[s.name] != null ? { ...s, level: updates[s.name] } : s
   );
   state.update('obs', { audioSources: sources });
 });
@@ -152,7 +173,7 @@ async function refreshState(): Promise<void> {
 
     // Get audio sources, filtering out those hidden from the OBS audio mixer
     const { inputs } = await obs.call('GetInputList');
-    const audioSources: Array<{ name: string; volume: number; muted: boolean; live: boolean }> = [];
+    const audioSources: Array<{ name: string; volume: number; muted: boolean; live: boolean; level: number }> = [];
     for (const input of inputs) {
       try {
         const inputName = input.inputName as string;
@@ -167,6 +188,7 @@ async function refreshState(): Promise<void> {
           volume: mulToDb(vol.inputVolumeMul as number),
           muted: mute.inputMuted as boolean,
           live: liveSourceNames.has(inputName),
+          level: 0,
         });
       } catch {
         // Not all inputs have audio

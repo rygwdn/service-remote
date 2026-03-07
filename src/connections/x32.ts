@@ -293,14 +293,9 @@ function handleMessage(address: string, args: OscArg[]): void {
     return;
   }
 
-  logger.log('[X32] recv', address, args.length ? JSON.stringify(args.map((a) => a.value)) : '');
-
   const result = parseOscMessage(address, args);
   if (result) {
-    logger.log(`[X32] parsed: ${result.type} ${result.index} patch=${JSON.stringify(result.patch)}`);
     updateChannel(result.index, result.type, result.patch);
-  } else {
-    logger.log('[X32] unrecognised message, ignoring:', address);
   }
 }
 

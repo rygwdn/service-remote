@@ -114,20 +114,37 @@ function renderObs(obs) {
 
   // Audio
   const audioEl = document.getElementById('obs-audio');
-  audioEl.innerHTML = obs.audioSources
-    .map(
-      (src) => `
-    <div class="audio-source${src.live ? ' live' : ''}">
-      <span class="name">${esc(src.name)}</span>
-      <input type="range" min="-60" max="0" step="0.5"
-        value="${src.volume != null && isFinite(src.volume) ? src.volume.toFixed(1) : -60}"
-        oninput="setObsVolume('${esc(src.name)}', parseFloat(this.value))">
-      <button class="mute-btn${src.muted ? ' muted' : ''}" onclick="toggleObsMute('${esc(src.name)}')">
-        ${src.muted ? 'M' : '\u{1f50a}'}
-      </button>
-    </div>`
-    )
-    .join('');
+  obs.audioSources.forEach((src) => {
+    let row = audioEl.querySelector(`.audio-source[data-name="${CSS.escape(src.name)}"]`);
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'audio-source';
+      row.dataset.name = src.name;
+      row.innerHTML = `
+        <span class="name"></span>
+        <input type="range" min="-60" max="0" step="0.5">
+        <button class="mute-btn"></button>
+        <div class="obs-meter"><div class="obs-meter-fill"></div></div>`;
+      const input = row.querySelector('input');
+      input.addEventListener('input', () => setObsVolume(src.name, parseFloat(input.value)));
+      const btn = row.querySelector('.mute-btn');
+      btn.addEventListener('click', () => toggleObsMute(src.name));
+      audioEl.appendChild(row);
+    }
+    row.className = 'audio-source' + (src.live ? ' live' : '');
+    row.querySelector('.name').textContent = src.name;
+    const input = row.querySelector('input');
+    input.value = src.volume != null && isFinite(src.volume) ? src.volume.toFixed(1) : -60;
+    const btn = row.querySelector('.mute-btn');
+    btn.className = 'mute-btn' + (src.muted ? ' muted' : '');
+    btn.textContent = src.muted ? 'M' : '🔊';
+    row.querySelector('.obs-meter-fill').style.width = (src.level * 100).toFixed(1) + '%';
+  });
+  // Remove rows for sources no longer present
+  const srcNames = new Set(obs.audioSources.map((s) => s.name));
+  audioEl.querySelectorAll('.audio-source[data-name]').forEach((el) => {
+    if (!srcNames.has(el.dataset.name)) el.remove();
+  });
 
   // Stream/Record
   document.getElementById('obs-stream-btn').classList.toggle('active', obs.streaming);
@@ -145,31 +162,54 @@ function chKey(ch) {
 
 function renderX32(x32) {
   const grid = document.getElementById('x32-channels');
-  grid.innerHTML = x32.channels
-    .map(
-      (ch) => `
-    <div class="channel-strip">
-      <span class="ch-label">${esc(ch.label)}</span>
-      <div class="fader-wrap">
-        <input type="range" min="0" max="1" step="0.005"
-          value="${ch.fader}"
-          data-ch="${ch.index}"
-          data-type="${ch.type}"
-          oninput="handleFader(this, ${ch.index}, '${ch.type}')"
-          ontouchstart="faderTouched['${chKey(ch)}']=true"
-          ontouchend="setTimeout(()=>faderTouched['${chKey(ch)}']=false, 500)"
-          onmousedown="faderTouched['${chKey(ch)}']=true"
-          onmouseup="setTimeout(()=>faderTouched['${chKey(ch)}']=false, 500)">
-      </div>
-      <button class="ch-mute${ch.muted ? ' muted' : ''}" onclick="toggleX32Mute(${ch.index}, '${ch.type}')">
-        ${ch.muted ? 'MUTED' : 'ON'}
-      </button>
-    </div>`
-    )
-    .join('');
 
-  // Restore fader positions for currently-touched faders
-  // (don't override the user's drag with server state)
+  x32.channels.forEach((ch) => {
+    const key = chKey(ch);
+    let strip = grid.querySelector(`.channel-strip[data-key="${key}"]`);
+
+    if (!strip) {
+      strip = document.createElement('div');
+      strip.className = 'channel-strip';
+      strip.dataset.key = key;
+      strip.innerHTML = `
+        <span class="ch-label"></span>
+        <div class="fader-wrap">
+          <input type="range" min="0" max="1" step="0.005">
+          <div class="ch-meter"><div class="ch-meter-fill"></div></div>
+        </div>
+        <button class="ch-mute"></button>`;
+
+      const input = strip.querySelector('input');
+      input.addEventListener('input', () => handleFader(input, ch.index, ch.type));
+      input.addEventListener('mousedown', () => { faderTouched[key] = true; });
+      input.addEventListener('touchstart', () => { faderTouched[key] = true; }, { passive: true });
+      input.addEventListener('mouseup', () => { setTimeout(() => { faderTouched[key] = false; }, 500); });
+      input.addEventListener('touchend', () => { setTimeout(() => { faderTouched[key] = false; }, 500); });
+
+      const btn = strip.querySelector('.ch-mute');
+      btn.addEventListener('click', () => toggleX32Mute(ch.index, ch.type));
+
+      grid.appendChild(strip);
+    }
+
+    strip.querySelector('.ch-label').textContent = ch.label;
+
+    if (!faderTouched[key]) {
+      strip.querySelector('input').value = ch.fader;
+    }
+
+    strip.querySelector('.ch-meter-fill').style.height = (ch.level * 100).toFixed(1) + '%';
+
+    const btn = strip.querySelector('.ch-mute');
+    btn.className = 'ch-mute' + (ch.muted ? ' muted' : '');
+    btn.textContent = ch.muted ? 'MUTED' : 'ON';
+  });
+
+  // Remove strips for channels no longer present
+  const keys = new Set(x32.channels.map(chKey));
+  grid.querySelectorAll('.channel-strip[data-key]').forEach((el) => {
+    if (!keys.has(el.dataset.key)) el.remove();
+  });
 }
 
 let faderDebounce = {};
@@ -332,36 +372,64 @@ function renderOverview(s) {
     refreshScreenshot();
   }
 
-  // X32 compact channel list — read-only fader bars + muted label
+  // X32 compact channel list — fader bar + live level bar
   const chList = document.getElementById('ov-channels');
-  chList.innerHTML = s.x32.channels
-    .map(
-      (ch) => `
-    <div class="ov-channel-row">
-      <span class="ov-ch-label${ch.muted ? ' muted' : ''}">${esc(ch.label)}</span>
-      <div class="ov-fader-bar">
-        <div class="ov-fader-fill${ch.muted ? ' muted' : ''}" style="width:${(ch.fader * 100).toFixed(1)}%"></div>
-      </div>
-    </div>`
-    )
-    .join('');
+  s.x32.channels.forEach((ch) => {
+    const key = chKey(ch);
+    let row = chList.querySelector(`.ov-channel-row[data-key="${key}"]`);
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'ov-channel-row';
+      row.dataset.key = key;
+      row.innerHTML = `
+        <span class="ov-ch-label"></span>
+        <div class="ov-bars">
+          <div class="ov-fader-bar"><div class="ov-fader-fill"></div></div>
+          <div class="ov-level-bar"><div class="ov-level-fill"></div></div>
+        </div>`;
+      chList.appendChild(row);
+    }
+    const muted = ch.muted;
+    row.querySelector('.ov-ch-label').className = 'ov-ch-label' + (muted ? ' muted' : '');
+    row.querySelector('.ov-ch-label').textContent = ch.label;
+    row.querySelector('.ov-fader-fill').className = 'ov-fader-fill' + (muted ? ' muted' : '');
+    row.querySelector('.ov-fader-fill').style.width = (ch.fader * 100).toFixed(1) + '%';
+    row.querySelector('.ov-level-fill').style.width = (ch.level * 100).toFixed(1) + '%';
+  });
+  const chKeys = new Set(s.x32.channels.map(chKey));
+  chList.querySelectorAll('.ov-channel-row[data-key]').forEach((el) => {
+    if (!chKeys.has(el.dataset.key)) el.remove();
+  });
 
-  // OBS audio compact levels — read-only volume bars (dB normalized to 0–1)
+  // OBS audio — fader bar + live level bar
   const obsAudioEl = document.getElementById('ov-obs-audio');
   if (obsAudioEl) {
-    obsAudioEl.innerHTML = s.obs.audioSources
-      .map((src) => {
-        const vol = src.volume != null && isFinite(src.volume) ? src.volume : -60;
-        const barWidth = ((vol + 60) / 60 * 100).toFixed(1);
-        return `
-    <div class="ov-channel-row">
-      <span class="ov-ch-label${src.muted ? ' muted' : ''}">${esc(src.name)}</span>
-      <div class="ov-fader-bar">
-        <div class="ov-fader-fill${src.muted ? ' muted' : ''}" style="width:${barWidth}%"></div>
-      </div>
-    </div>`;
-      })
-      .join('');
+    s.obs.audioSources.forEach((src) => {
+      let row = obsAudioEl.querySelector(`.ov-channel-row[data-name="${CSS.escape(src.name)}"]`);
+      if (!row) {
+        row = document.createElement('div');
+        row.className = 'ov-channel-row';
+        row.dataset.name = src.name;
+        row.innerHTML = `
+          <span class="ov-ch-label"></span>
+          <div class="ov-bars">
+            <div class="ov-fader-bar"><div class="ov-fader-fill"></div></div>
+            <div class="ov-level-bar"><div class="ov-level-fill"></div></div>
+          </div>`;
+        obsAudioEl.appendChild(row);
+      }
+      const muted = src.muted;
+      const vol = src.volume != null && isFinite(src.volume) ? src.volume : -60;
+      row.querySelector('.ov-ch-label').className = 'ov-ch-label' + (muted ? ' muted' : '');
+      row.querySelector('.ov-ch-label').textContent = src.name;
+      row.querySelector('.ov-fader-fill').className = 'ov-fader-fill' + (muted ? ' muted' : '');
+      row.querySelector('.ov-fader-fill').style.width = ((vol + 60) / 60 * 100).toFixed(1) + '%';
+      row.querySelector('.ov-level-fill').style.width = (src.level * 100).toFixed(1) + '%';
+    });
+    const srcNames = new Set(s.obs.audioSources.map((s) => s.name));
+    obsAudioEl.querySelectorAll('.ov-channel-row[data-name]').forEach((el) => {
+      if (!srcNames.has(el.dataset.name)) el.remove();
+    });
   }
 }
 
