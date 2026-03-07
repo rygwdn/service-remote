@@ -240,6 +240,7 @@
                x-show="$store.ui.editMode.x32 || !$store.ui.isHiddenX32(ch.type+'/'+ch.index)"
                x-data="x32Fader(ch)">
             <button class="ch-mute" :class="{ muted: ch.muted }"
+                    :disabled="!$store.ui.faderEnabled.x32"
                     @click="toggleX32Mute(ch.index, ch.type)"
                     x-text="ch.muted ? 'MUTED' : 'ON'"></button>
             <span class="ch-label" x-text="ch.label"></span>

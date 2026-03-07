@@ -52,7 +52,11 @@ test.describe('Sound (X32) panel', () => {
 
     await setState({ x32: { connected: true, channels: [channels[0]] } });
 
-    await panel(page).locator('.ch-mute').first().click();
+    // Unlock faders first so the mute button is enabled
+    const p = panel(page);
+    await p.locator('.btn-edit-toggle').filter({ hasText: /Locked|Unlocked/ }).click();
+
+    await p.locator('.ch-mute').first().click();
     await page.waitForTimeout(100);
 
     expect(muteCall).not.toBeNull();
@@ -132,5 +136,45 @@ test.describe('Sound (X32) panel', () => {
     await lockBtn.click();
     await expect(fader).toBeDisabled();
     await expect(lockBtn).toHaveText('Locked');
+  });
+
+  test('mute button is disabled when faders are locked', async ({ page, setState }) => {
+    await setState({ x32: { connected: true, channels: [channels[0]] } });
+
+    const p = panel(page);
+    const muteBtn = p.locator('.ch-mute').first();
+    // By default faders are locked, so mute should be disabled
+    await expect(muteBtn).toBeDisabled();
+  });
+
+  test('mute button is enabled when faders are unlocked', async ({ page, setState }) => {
+    await setState({ x32: { connected: true, channels: [channels[0]] } });
+
+    const p = panel(page);
+    const lockBtn = p.locator('.btn-edit-toggle').filter({ hasText: /Locked|Unlocked/ });
+    const muteBtn = p.locator('.ch-mute').first();
+
+    // Unlock faders
+    await lockBtn.click();
+    await expect(muteBtn).toBeEnabled();
+  });
+
+  test('Lock/Unlock toggle disables and enables the mute button', async ({ page, setState }) => {
+    await setState({ x32: { connected: true, channels: [channels[0]] } });
+
+    const p = panel(page);
+    const lockBtn = p.locator('.btn-edit-toggle').filter({ hasText: /Locked|Unlocked/ });
+    const muteBtn = p.locator('.ch-mute').first();
+
+    // Initially locked
+    await expect(muteBtn).toBeDisabled();
+
+    // Unlock
+    await lockBtn.click();
+    await expect(muteBtn).toBeEnabled();
+
+    // Lock again
+    await lockBtn.click();
+    await expect(muteBtn).toBeDisabled();
   });
 });
