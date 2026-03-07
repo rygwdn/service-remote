@@ -94,7 +94,7 @@ async function authenticateRemote(): Promise<{ onAirSessionId: string; connectio
 
   if (!controlRes.ok) {
     // Likely running on the same machine as Proclaim — proceed with sessionId only
-    logger.info('[Proclaim] auth/control failed, proceeding with OnAirSessionId only (same-machine mode)');
+    logger.log('[Proclaim] auth/control failed, proceeding with OnAirSessionId only (same-machine mode)');
     return { onAirSessionId: sessionId, connectionId: '' };
   }
 
@@ -172,7 +172,7 @@ async function pollStatus(): Promise<void> {
 
     // Session active — ensure remote auth is valid for this session
     if (sessionId !== onAirSessionId) {
-      logger.log('[Proclaim] Session changed, re-authenticating remote control');
+      logger.log(`[Proclaim] Session changed (${onAirSessionId} → ${sessionId}), re-authenticating remote control`);
       try {
         const auth = await authenticateRemote();
         onAirSessionId = auth.onAirSessionId;
