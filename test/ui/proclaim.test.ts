@@ -112,13 +112,21 @@ test.describe('Proclaim panel', () => {
     });
 
     const p = panel(page);
-    await p.locator('.proclaim-controls button').filter({ hasText: 'Prev Item' }).click();
-    await p.locator('.proclaim-controls button').filter({ hasText: 'Next Item' }).click();
     await p.locator('.proclaim-controls button').filter({ hasText: 'Prev Slide' }).click();
     await p.locator('.proclaim-controls button').filter({ hasText: 'Next Slide' }).click();
 
     await page.waitForTimeout(200);
-    expect(calls).toEqual(['PreviousServiceItem', 'NextServiceItem', 'PreviousSlide', 'NextSlide']);
+    expect(calls).toEqual(['PreviousSlide', 'NextSlide']);
+  });
+
+  test('Prev Item and Next Item buttons are not present', async ({ page, setState }) => {
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item2', slideIndex: 1, serviceItems },
+    });
+
+    const p = panel(page);
+    await expect(p.locator('.proclaim-controls button').filter({ hasText: 'Prev Item' })).toHaveCount(0);
+    await expect(p.locator('.proclaim-controls button').filter({ hasText: 'Next Item' })).toHaveCount(0);
   });
 
   test('shows no items when not on air', async ({ page, setState }) => {

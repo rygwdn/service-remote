@@ -102,10 +102,6 @@
       <div class="proclaim-now-playing" x-html="ovNowPlaying($store.state.proclaim)"></div>
       <div class="proclaim-controls">
         <div class="control-row">
-          <button class="btn btn-large" @click="sendAction('PreviousServiceItem')">Prev Item</button>
-          <button class="btn btn-large" @click="sendAction('NextServiceItem')">Next Item</button>
-        </div>
-        <div class="control-row">
           <button class="btn btn-large btn-primary" @click="sendAction('PreviousSlide')">Prev Slide</button>
           <button class="btn btn-large btn-primary" @click="sendAction('NextSlide')">Next Slide</button>
         </div>
