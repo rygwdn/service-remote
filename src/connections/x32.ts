@@ -66,8 +66,20 @@ function connect(): void {
   }
 
   connected = false;
-  // Start with empty channels — populated via auto-discovery
+  // Pre-populate all channels in sorted order with default labels
   channels = [];
+  for (let i = 1; i <= CH_COUNT; i++) {
+    channels.push({ index: i, type: 'ch', label: `CH ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false });
+  }
+  for (let i = 1; i <= BUS_COUNT; i++) {
+    channels.push({ index: i, type: 'bus', label: `Bus ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false });
+  }
+  for (let i = 1; i <= MTX_COUNT; i++) {
+    channels.push({ index: i, type: 'mtx', label: `Mtx ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false });
+  }
+  for (const [idx, lbl] of Object.entries(MAIN_LABELS)) {
+    channels.push({ index: Number(idx), type: 'main', label: lbl, fader: 0, muted: false, level: 0, source: 1, linkedToNext: false });
+  }
 
   // Bind to 0.0.0.0 so the OS accepts inbound packets on any local network
   // interface (LAN, loopback, etc.) and picks an ephemeral source port.
@@ -249,6 +261,11 @@ function parseOscMessage(address: string, args: OscArg[]): OscResult | null {
     return { index: parseInt(chNameMatch[1], 10), type: 'ch', patch: { label: name } };
   }
 
+  const chSourceMatch = address.match(/^\/ch\/(\d+)\/config\/source$/);
+  if (chSourceMatch) {
+    return { index: parseInt(chSourceMatch[1], 10), type: 'ch', patch: { source: (args?.[0]?.value as number) ?? 0 } };
+  }
+
   // Mix buses: /bus/XX/...
   const busFaderMatch = address.match(/^\/bus\/(\d+)\/mix\/fader$/);
   if (busFaderMatch) {
@@ -325,11 +342,12 @@ function handleMessage(address: string, args: OscArg[]): void {
     // Subscriptions expire after ~10s; renew periodically
     subscribeInterval = setInterval(subscribeToChanges, 8000);
 
-    // Request names for all channels — non-empty names indicate active channels.
+    // Request names, sources, and link state for all channels.
     // Throttled via the send queue to avoid flooding the mixer.
-    logger.log(`[X32] Requesting names for ${CH_COUNT} input channels, ${BUS_COUNT} buses, ${MTX_COUNT} matrices, and main`);
+    logger.log(`[X32] Requesting names/sources/links for ${CH_COUNT} ch, ${BUS_COUNT} bus, ${MTX_COUNT} mtx, and main`);
     for (let i = 1; i <= CH_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'ch')}/config/name`);
+      sendOsc(`${channelPrefix(i, 'ch')}/config/source`);
     }
     for (let i = 1; i <= BUS_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'bus')}/config/name`);
@@ -337,15 +355,18 @@ function handleMessage(address: string, args: OscArg[]): void {
     for (let i = 1; i <= MTX_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'mtx')}/config/name`);
     }
-    // Main L/R and Mono/Center are always present — seed them directly
-    for (const [idx, lbl] of Object.entries(MAIN_LABELS)) {
-      const index = Number(idx);
-      const label = lbl;
-      let ch = channels.find((c) => c.index === index && c.type === 'main');
-      if (!ch) {
-        ch = { index, type: 'main', label, fader: 0, muted: false, level: 0 };
-        channels.push(ch);
-      }
+    // Link state: one request per odd/even pair
+    for (let i = 1; i <= CH_COUNT; i += 2) {
+      sendOsc(`/config/chlink/${i}-${i + 1}`);
+    }
+    for (let i = 1; i <= BUS_COUNT; i += 2) {
+      sendOsc(`/config/buslink/${i}-${i + 1}`);
+    }
+    for (let i = 1; i <= MTX_COUNT; i += 2) {
+      sendOsc(`/config/mtxlink/${i}-${i + 1}`);
+    }
+    // Request initial fader/mute state for main channels
+    for (const index of Object.keys(MAIN_LABELS).map(Number)) {
       const prefix = channelPrefix(index, 'main');
       sendOsc(`${prefix}/mix/fader`);
       sendOsc(`${prefix}/mix/on`);
@@ -364,36 +385,33 @@ function handleMessage(address: string, args: OscArg[]): void {
     return;
   }
 
+  // Link state responses: /config/chlink/1-2, /config/buslink/1-2, /config/mtxlink/1-2, etc.
+  const linkMatch = address.match(/^\/config\/(ch|bus|mtx)link\/(\d+)-(\d+)$/);
+  if (linkMatch) {
+    const type = linkMatch[1] as 'ch' | 'bus' | 'mtx';
+    const oddIndex = parseInt(linkMatch[2], 10);
+    const linked = ((args?.[0]?.value as number) ?? 0) === 1;
+    const oddCh = channels.find((c) => c.index === oddIndex && c.type === type);
+    const evenCh = channels.find((c) => c.index === oddIndex + 1 && c.type === type);
+    if (oddCh) oddCh.linkedToNext = linked;
+    if (evenCh) evenCh.linkedToNext = false; // even channel is always the follower
+    state.update('x32', { connected: true, channels: [...channels] });
+    return;
+  }
+
   const result = parseOscMessage(address, args);
   if (result) {
     updateChannel(result.index, result.type, result.patch);
   }
 }
 
-const TYPE_ORDER: Record<string, number> = { ch: 0, bus: 1, mtx: 2, main: 3 };
-
 function updateChannel(index: number, type: 'ch' | 'bus' | 'main' | 'mtx', patch: Partial<Channel>): void {
-  let ch = channels.find((c) => c.index === index && c.type === type);
+  const ch = channels.find((c) => c.index === index && c.type === type);
   if (!ch) {
-    // Only create a new channel entry when a name is received (auto-discovery)
-    if (!patch.label) {
-      logger.log(`[X32] Ignoring patch for unknown ${type} ${index} (no label yet)`);
-      return;
-    }
-    logger.log(`[X32] Discovered ${type} ${index}: "${patch.label}" — requesting fader/mute state`);
-    ch = { index, type, label: patch.label, fader: 0, muted: false, level: 0 };
-    channels.push(ch);
-    channels.sort((a, b) => {
-      const to = (TYPE_ORDER[a.type] ?? 99) - (TYPE_ORDER[b.type] ?? 99);
-      return to !== 0 ? to : a.index - b.index;
-    });
-    // Request initial fader/mute state for newly discovered channel
-    const prefix = channelPrefix(index, type);
-    sendOsc(`${prefix}/mix/fader`);
-    sendOsc(`${prefix}/mix/on`);
-  } else {
-    Object.assign(ch, patch);
+    logger.warn(`[X32] updateChannel: unknown ${type} ${index} — ignoring`);
+    return;
   }
+  Object.assign(ch, patch);
   state.update('x32', { connected: true, channels: [...channels] });
 }
 

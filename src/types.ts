@@ -13,6 +13,8 @@ export interface Channel {
   fader: number;
   muted: boolean;
   level: number; // Linear peak level 0.0–1.0 (updated when a WS client is connected)
+  source: number; // Physical input source (0 = unpatched); only meaningful for 'ch'
+  linkedToNext: boolean; // True if this channel is linked with the next (odd/even pair)
 }
 
 export interface ServiceItem {

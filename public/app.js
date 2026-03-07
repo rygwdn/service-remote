@@ -143,7 +143,8 @@ function applyObsVisibility() {
 function applyX32Visibility() {
   document.getElementById('x32-channels').querySelectorAll('.channel-strip[data-key]').forEach((el) => {
     const isHidden = hidden.x32.has(el.dataset.key);
-    el.style.display = (!editModeActive.x32 && isHidden) ? 'none' : '';
+    const isUnpatched = el.dataset.unpatched === 'true';
+    el.style.display = (!editModeActive.x32 && (isHidden || isUnpatched)) ? 'none' : '';
   });
 }
 
@@ -265,15 +266,51 @@ function chKey(ch) {
 function renderX32(x32) {
   const grid = document.getElementById('x32-channels');
 
+  // Build a map for quick lookup
+  const chMap = new Map(x32.channels.map((ch) => [chKey(ch), ch]));
+
+  // Track which strip keys are rendered this pass (odd key for pairs, own key otherwise)
+  const renderedKeys = new Set();
+
   x32.channels.forEach((ch) => {
+    // Even channel of a linked pair — rendered as part of the odd strip
+    if (ch.index % 2 === 0) {
+      const oddKey = `${ch.type}/${ch.index - 1}`;
+      const oddCh = chMap.get(oddKey);
+      if (oddCh && oddCh.linkedToNext) return;
+    }
+
     const key = chKey(ch);
+    const isPair = ch.linkedToNext;
+    const evenCh = isPair ? chMap.get(`${ch.type}/${ch.index + 1}`) : null;
+    renderedKeys.add(key);
+
     let strip = grid.querySelector(`.channel-strip[data-key="${key}"]`);
+    const wasPair = strip ? strip.dataset.paired === 'true' : null;
+
+    // Recreate strip if pair status changed
+    if (strip && wasPair !== isPair) {
+      strip.remove();
+      strip = null;
+    }
 
     if (!strip) {
       strip = document.createElement('div');
       strip.className = 'channel-strip';
       strip.dataset.key = key;
-      strip.innerHTML = `
+      strip.dataset.paired = isPair ? 'true' : 'false';
+      strip.innerHTML = isPair ? `
+        <span class="ch-label"></span>
+        <div class="fader-wrap">
+          <input type="range" min="0" max="1" step="0.005">
+          <div class="ch-meters-pair">
+            <div class="ch-meter"><div class="ch-meter-fill"></div></div>
+            <div class="ch-meter"><div class="ch-meter-fill"></div></div>
+          </div>
+        </div>
+        <button class="ch-mute"></button>
+        <label class="fader-visibility-label" style="display:none"><input type="checkbox" class="fader-visibility-cb" checked> Show</label>`
+      : `
         <span class="ch-label"></span>
         <div class="fader-wrap">
           <input type="range" min="0" max="1" step="0.005">
@@ -303,29 +340,39 @@ function renderX32(x32) {
       grid.appendChild(strip);
     }
 
-    strip.querySelector('.ch-label').textContent = ch.label;
+    // Label: "L / R" for pairs, plain label otherwise
+    strip.querySelector('.ch-label').textContent = isPair && evenCh
+      ? `${ch.label} / ${evenCh.label}`
+      : ch.label;
 
     if (!faderTouched[key]) {
       strip.querySelector('input').value = ch.fader;
     }
 
-    strip.querySelector('.ch-meter-fill').style.height = (ch.level * 100).toFixed(1) + '%';
+    if (isPair && evenCh) {
+      const fills = strip.querySelectorAll('.ch-meter-fill');
+      fills[0].style.height = (ch.level * 100).toFixed(1) + '%';
+      fills[1].style.height = (evenCh.level * 100).toFixed(1) + '%';
+    } else {
+      strip.querySelector('.ch-meter-fill').style.height = (ch.level * 100).toFixed(1) + '%';
+    }
 
     const btn = strip.querySelector('.ch-mute');
     btn.className = 'ch-mute' + (ch.muted ? ' muted' : '');
     btn.textContent = ch.muted ? 'MUTED' : 'ON';
 
-    // Sync visibility checkbox
+    // Auto-hide unpatched input channels (not in edit mode)
+    strip.dataset.unpatched = (ch.type === 'ch' && ch.source === 0) ? 'true' : 'false';
+
     const cb = strip.querySelector('.fader-visibility-cb');
     cb.checked = !hidden.x32.has(key);
     const label = strip.querySelector('.fader-visibility-label');
     label.style.display = editModeActive.x32 ? '' : 'none';
   });
 
-  // Remove strips for channels no longer present
-  const keys = new Set(x32.channels.map(chKey));
+  // Remove strips for keys no longer rendered
   grid.querySelectorAll('.channel-strip[data-key]').forEach((el) => {
-    if (!keys.has(el.dataset.key)) el.remove();
+    if (!renderedKeys.has(el.dataset.key)) el.remove();
   });
   applyX32Visibility();
 }
