@@ -2,7 +2,7 @@ import fs = require('fs');
 
 interface LogEntry {
   ts: string;
-  level: 'info' | 'warn' | 'error';
+  level: 'debug' | 'info' | 'warn' | 'error';
   msg: string;
 }
 
@@ -24,8 +24,10 @@ function write(level: LogEntry['level'], args: unknown[]): void {
   entries.push(entry);
   if (entries.length > MAX_MEMORY) entries.shift();
 
-  const consoleFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
-  consoleFn(msg);
+  if (level !== 'debug') {
+    const consoleFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+    consoleFn(msg);
+  }
 
   if (logFilePath) {
     try {
@@ -48,8 +50,12 @@ function error(...args: unknown[]): void {
   write('error', args);
 }
 
+function debug(...args: unknown[]): void {
+  write('debug', args);
+}
+
 function getLogs(): LogEntry[] {
   return [...entries];
 }
 
-export = { log, warn, error, getLogs, setLogFile };
+export = { log, warn, error, debug, getLogs, setLogFile };

@@ -336,7 +336,7 @@ function handleMessage(address: string, args: OscArg[]): void {
     // X32 requires /xremote every <10s to stay subscribed to updates
     sendOsc('/xremote');
     keepAliveInterval = setInterval(() => {
-      logger.log('[X32] keepalive /xremote');
+      logger.debug('[X32] keepalive /xremote');
       sendOsc('/xremote');
     }, 8000);
     // Subscriptions expire after ~10s; renew periodically
@@ -416,7 +416,7 @@ function updateChannel(index: number, type: 'ch' | 'bus' | 'main' | 'mtx', patch
 }
 
 function subscribeToChanges(): void {
-  logger.log(`[X32] Renewing subscriptions for ${channels.length} channel(s)`);
+  logger.debug(`[X32] Renewing subscriptions for ${channels.length} channel(s)`);
   for (const ch of channels) {
     const prefix = channelPrefix(ch.index, ch.type);
     sendOsc('/subscribe', [
