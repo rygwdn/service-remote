@@ -194,6 +194,10 @@ function sendAction(action, index) {
   post('/api/proclaim/action', body);
 }
 
+function gotoItem(itemId) {
+  post('/api/proclaim/goto-item', { itemId });
+}
+
 function setScene(scene)                { post('/api/obs/scene', { scene }); }
 function toggleObsMute(input)           { post('/api/obs/mute', { input }); }
 function setObsVolume(input, volumeDb)  { post('/api/obs/volume', { input, volumeDb }); }

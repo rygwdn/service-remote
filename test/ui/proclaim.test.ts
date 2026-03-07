@@ -1,9 +1,9 @@
 import { test, expect } from './fixtures';
 
 const serviceItems = [
-  { id: 'item1', title: 'Welcome', kind: 'Slide', slideCount: 1, index: 0, section: 'Opening', group: null },
-  { id: 'item2', title: 'Amazing Grace', kind: 'Song', slideCount: 4, index: 1, section: 'Worship', group: null },
-  { id: 'item3', title: 'Sermon', kind: 'Slide', slideCount: 8, index: 2, section: 'Message', group: null },
+  { id: 'item1', title: 'Welcome', kind: 'Slide', slideCount: 1, index: 1, sectionIndex: 1, sectionCommand: 'StartPreService', section: 'Opening', group: null },
+  { id: 'item2', title: 'Amazing Grace', kind: 'Song', slideCount: 4, index: 2, sectionIndex: 1, sectionCommand: 'StartService', section: 'Worship', group: null },
+  { id: 'item3', title: 'Sermon', kind: 'Slide', slideCount: 8, index: 3, sectionIndex: 2, sectionCommand: 'StartService', section: 'Message', group: null },
 ];
 
 test.describe('Proclaim panel', () => {
@@ -82,9 +82,9 @@ test.describe('Proclaim panel', () => {
     await expect(items.nth(0)).not.toContainText('slides');
   });
 
-  test('clicking an item sends GoToServiceItem action', async ({ page, setState }) => {
-    let lastCall: { action: string; index?: number } | null = null;
-    await page.route('**/api/proclaim/action', async (route) => {
+  test('clicking an item calls goto-item with the item id', async ({ page, setState }) => {
+    let lastCall: { itemId: string } | null = null;
+    await page.route('**/api/proclaim/goto-item', async (route) => {
       lastCall = route.request().postDataJSON();
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
     });
@@ -97,8 +97,7 @@ test.describe('Proclaim panel', () => {
     await page.waitForTimeout(100);
 
     expect(lastCall).not.toBeNull();
-    expect(lastCall!.action).toBe('GoToServiceItem');
-    expect(lastCall!.index).toBe(2);
+    expect(lastCall!.itemId).toBe('item3');
   });
 
   test('slide nav buttons send correct actions', async ({ page, setState }) => {

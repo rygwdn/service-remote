@@ -273,12 +273,23 @@ async function fetchDetailedStatus(): Promise<void> {
     const serviceStartIndex: number | null = cache?.serviceStartIndex ?? null;
     const postServiceStartIndex: number | null = cache?.postServiceStartIndex ?? null;
 
-    function getSection(zeroBasedIdx: number): string {
-      if (postServiceStartIndex != null && zeroBasedIdx >= postServiceStartIndex) return 'Post-Service';
-      if (serviceStartIndex != null && zeroBasedIdx >= serviceStartIndex) return 'Service';
-      if (warmupStartIndex != null && zeroBasedIdx >= warmupStartIndex) return 'Warmup';
-      return 'Pre-Service';
+    type SectionName = 'Pre-Service' | 'Warmup' | 'Service' | 'Post-Service';
+    const SECTION_COMMANDS: Record<SectionName, string> = {
+      'Pre-Service': 'StartPreService',
+      'Warmup': 'StartWarmUp',
+      'Service': 'StartService',
+      'Post-Service': 'StartPostService',
+    };
+
+    function getSectionInfo(zeroBasedIdx: number): { section: SectionName } {
+      if (postServiceStartIndex != null && zeroBasedIdx >= postServiceStartIndex) return { section: 'Post-Service' };
+      if (serviceStartIndex != null && zeroBasedIdx >= serviceStartIndex) return { section: 'Service' };
+      if (warmupStartIndex != null && zeroBasedIdx >= warmupStartIndex) return { section: 'Warmup' };
+      return { section: 'Pre-Service' };
     }
+
+    // Count non-excluded, non-Grouping items per section to compute sectionIndex
+    const sectionItemCounters: Partial<Record<SectionName, number>> = {};
 
     let currentGroup: string | null = null;
     const serviceItems: ServiceItem[] = [];
@@ -289,13 +300,17 @@ async function fetchDetailedStatus(): Promise<void> {
         currentGroup = item.title === 'Slide Group' ? null : item.title;
         continue;
       }
+      const { section } = getSectionInfo(i);
+      sectionItemCounters[section] = (sectionItemCounters[section] ?? 0) + 1;
       serviceItems.push({
         id: item.id,
         title: item.title,
         kind: item.kind,
         slideCount: item.slides ? item.slides.length : 0,
         index: i + 1,
-        section: getSection(i),
+        sectionIndex: sectionItemCounters[section]!,
+        sectionCommand: SECTION_COMMANDS[section],
+        section,
         group: currentGroup,
       });
     }
@@ -347,10 +362,23 @@ function disconnect(): void {
   connectionId = null;
 }
 
+async function goToItem(itemId: string): Promise<boolean> {
+  const currentState = require('../state').get() as import('../types').AppState;
+  const item = currentState.proclaim.serviceItems.find((i) => i.id === itemId);
+  if (!item) {
+    logger.log(`[Proclaim] goToItem: item ${itemId} not found in state`);
+    return false;
+  }
+  const sectionOk = await sendAction(item.sectionCommand);
+  if (!sectionOk) return false;
+  return sendAction('GoToServiceItem', item.sectionIndex);
+}
+
 export = {
   connect,
   disconnect,
   sendAction,
+  goToItem,
   getThumbUrl,
   getToken,
   getOnAirSessionId,

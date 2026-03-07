@@ -62,6 +62,10 @@ function createTestApp(): TestApp {
         calls.proclaim.sendAction = { action, index };
         return true;
       },
+      goToItem: async (itemId: string) => {
+        calls.proclaim.goToItem = itemId;
+        return true;
+      },
       getThumbUrl: (itemId?: string, slideIndex?: string, localRevision?: string) => `/fake-thumb/${itemId}/${slideIndex}`,
       getToken: () => 'test-token',
       getOnAirSessionId: () => null,

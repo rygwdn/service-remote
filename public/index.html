@@ -118,7 +118,7 @@
             <button x-show="entry.type==='item'"
                     class="item-btn"
                     :class="{ active: entry.isActive, 'item-grouped': entry.item.group }"
-                    @click="sendAction('GoToServiceItem', entry.item.index)">
+                    @click="gotoItem(entry.item.id)">
               <span x-text="entry.item.title || entry.item.kind"></span>
               <span class="item-slide-count" x-show="entry.slideCountLabel" x-text="' '+entry.slideCountLabel"></span>
             </button>

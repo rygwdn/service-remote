@@ -23,6 +23,8 @@ export interface ServiceItem {
   kind: string;
   slideCount: number;
   index: number; // 1-based position in the full (unfiltered) Proclaim service item list
+  sectionIndex: number; // 1-based position within the item's section (for GoToServiceItem)
+  sectionCommand: string; // App Command to activate the item's section (e.g. 'StartService')
   section: string; // e.g. 'Pre-Service', 'Warmup', 'Service', 'Post-Service'
   group: string | null; // name of the containing Grouping item, or null
 }
@@ -107,6 +109,7 @@ export interface ProclaimConnection {
   connect(): Promise<void>;
   disconnect(): void;
   sendAction(commandName: string, index?: number): Promise<boolean>;
+  goToItem(itemId: string): Promise<boolean>;
   getThumbUrl(itemId: string | undefined, slideIndex: string | undefined, localRevision: string | undefined): string;
   getToken(): string | null;
   getOnAirSessionId(): string | null;

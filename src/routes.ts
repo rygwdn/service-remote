@@ -86,6 +86,15 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
     }
   });
 
+  app.post('/api/proclaim/goto-item', async (req: Request, res: Response) => {
+    try {
+      const ok = await proclaim.goToItem(req.body.itemId);
+      res.json({ ok });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   app.get('/api/proclaim/thumb', async (req: Request, res: Response) => {
     try {
       const url = proclaim.getThumbUrl(
