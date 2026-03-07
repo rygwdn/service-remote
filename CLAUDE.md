@@ -136,6 +136,27 @@ When adding new features:
 3. Add a UI test in `test/ui/` for any visible behaviour (use `setState()` to drive state).
 4. Keep connection modules mockable — `routes.ts` accepts `{ obs, x32, proclaim }` as an argument so tests can inject stubs.
 
+## Workflow
+
+After completing a task, always run the relevant tests and, once they pass, commit the changes.
+
+### Commit message format
+
+Use Conventional Commits: `<type>(<scope>): <short description>`
+
+Common types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
+Scope is the affected area, e.g. `proclaim`, `obs`, `x32`, `ui`, `server`, `config`.
+
+Examples:
+```
+feat(ui): show disconnected overlay when WebSocket drops
+fix(proclaim): use long-poll loop for statusChanged
+fix(server): disconnect all connections on graceful shutdown
+```
+
+- Subject line ≤ 72 characters, imperative mood ("add", not "added")
+- Add a blank line + body paragraph when the "why" isn't obvious from the subject
+
 ## Key conventions
 
 - TypeScript throughout. Use `import X = require('y')` for runtime CJS imports; `import type { X }` for type-only imports.
