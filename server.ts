@@ -32,6 +32,9 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 function shutdown(signal: string): void {
   logger.log(`[Server] Received ${signal}, shutting down...`);
+  obs.disconnect();
+  x32.disconnect();
+  proclaim.disconnect();
   server.close(() => {
     logger.log('[Server] Shutdown complete');
     process.exit(0);
