@@ -102,7 +102,43 @@ test.describe('OBS panel', () => {
 
     const p = panel(page);
     await expect(p.locator('.fader-visibility-label').first()).not.toBeVisible();
-    await p.locator('.btn-edit-toggle').click();
+    await p.locator('.btn-edit-toggle').filter({ hasText: 'Edit' }).click();
     await expect(p.locator('.fader-visibility-label').first()).toBeVisible();
+  });
+
+  test('fader is disabled by default (locked)', async ({ page, setState }) => {
+    await setState({
+      obs: {
+        connected: true,
+        audioSources: [{ name: 'Mic 1', volume: -10, muted: false, level: 0.5 }],
+      },
+    });
+
+    const p = panel(page);
+    const fader = p.locator('input[type="range"]').first();
+    await expect(fader).toBeDisabled();
+    await expect(p.locator('.btn-edit-toggle').filter({ hasText: 'Lock' })).toBeVisible();
+  });
+
+  test('Lock/Unlock toggle enables and disables the fader', async ({ page, setState }) => {
+    await setState({
+      obs: {
+        connected: true,
+        audioSources: [{ name: 'Mic 1', volume: -10, muted: false, level: 0.5 }],
+      },
+    });
+
+    const p = panel(page);
+    const fader = p.locator('input[type="range"]').first();
+    const lockBtn = p.locator('.btn-edit-toggle').filter({ hasText: /Lock|Unlock/ });
+
+    await expect(fader).toBeDisabled();
+    await lockBtn.click();
+    await expect(fader).toBeEnabled();
+    await expect(lockBtn).toHaveText('Unlock');
+
+    await lockBtn.click();
+    await expect(fader).toBeDisabled();
+    await expect(lockBtn).toHaveText('Lock');
   });
 });

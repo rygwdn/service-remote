@@ -93,6 +93,23 @@ test.describe('Overview panel', () => {
     await expect(rows.nth(1).locator('.ov-ch-label')).toHaveClass(/muted/);
   });
 
+  test('disconnected overlay is hidden when WebSocket is connected', async ({ page }) => {
+    await page.evaluate(() => {
+      (window as any).Alpine.store('ui').serverConnected = true;
+    });
+    await page.waitForTimeout(50);
+    await expect(page.locator('.disconnected-overlay')).not.toBeVisible();
+  });
+
+  test('disconnected overlay appears when WebSocket disconnects', async ({ page }) => {
+    await page.evaluate(() => {
+      (window as any).Alpine.store('ui').serverConnected = false;
+    });
+    await page.waitForTimeout(50);
+    await expect(page.locator('.disconnected-overlay')).toBeVisible();
+    await expect(page.locator('.disconnected-message')).toContainText('reconnecting');
+  });
+
   test('slide nav buttons send proclaim action API calls', async ({ page, setState }) => {
     const apiCalls: string[] = [];
     await page.route('**/api/proclaim/action', async (route) => {
