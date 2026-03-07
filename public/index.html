@@ -167,7 +167,7 @@
             <button class="btn btn-edit-toggle"
                     :class="{ active: $store.ui.faderEnabled.obs }"
                     @click="$store.ui.toggleFaderEnabled('obs')"
-                    x-text="$store.ui.faderEnabled.obs ? 'Unlock' : 'Lock'"></button>
+                    x-text="$store.ui.faderEnabled.obs ? 'Unlocked' : 'Locked'"></button>
             <button class="btn btn-edit-toggle"
                     :class="{ active: $store.ui.editMode.obs }"
                     @click="$store.ui.toggleEditMode('obs')"
@@ -221,7 +221,7 @@
           <button class="btn btn-edit-toggle"
                   :class="{ active: $store.ui.faderEnabled.x32 }"
                   @click="$store.ui.toggleFaderEnabled('x32')"
-                  x-text="$store.ui.faderEnabled.x32 ? 'Unlock' : 'Lock'"></button>
+                  x-text="$store.ui.faderEnabled.x32 ? 'Unlocked' : 'Locked'"></button>
           <button class="btn btn-edit-toggle"
                   :class="{ active: $store.ui.editMode.x32 }"
                   @click="$store.ui.toggleEditMode('x32')"

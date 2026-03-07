@@ -95,7 +95,7 @@ test.describe('Sound (X32) panel', () => {
     const p = panel(page);
     const fader = p.locator('input[type="range"]').first();
     await expect(fader).toBeDisabled();
-    await expect(p.locator('.btn-edit-toggle').filter({ hasText: 'Lock' })).toBeVisible();
+    await expect(p.locator('.btn-edit-toggle').filter({ hasText: 'Locked' })).toBeVisible();
   });
 
   test('Lock/Unlock toggle enables and disables the fader', async ({ page, setState }) => {
@@ -103,15 +103,15 @@ test.describe('Sound (X32) panel', () => {
 
     const p = panel(page);
     const fader = p.locator('input[type="range"]').first();
-    const lockBtn = p.locator('.btn-edit-toggle').filter({ hasText: /Lock|Unlock/ });
+    const lockBtn = p.locator('.btn-edit-toggle').filter({ hasText: /Locked|Unlocked/ });
 
     await expect(fader).toBeDisabled();
     await lockBtn.click();
     await expect(fader).toBeEnabled();
-    await expect(lockBtn).toHaveText('Unlock');
+    await expect(lockBtn).toHaveText('Unlocked');
 
     await lockBtn.click();
     await expect(fader).toBeDisabled();
-    await expect(lockBtn).toHaveText('Lock');
+    await expect(lockBtn).toHaveText('Locked');
   });
 });
