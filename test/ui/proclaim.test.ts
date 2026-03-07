@@ -343,8 +343,6 @@ test.describe('Proclaim panel', () => {
     await p.locator('.proclaim-av-controls button').filter({ hasText: '⏪' }).first().click();
     await p.locator('.proclaim-av-controls button').filter({ hasText: '⏩' }).first().click();
     await p.locator('.proclaim-av-controls button').filter({ hasText: '⏮' }).first().click();
-    await p.locator('.proclaim-av-controls button').filter({ hasText: /Audio.*/ }).first().click();
-    await p.locator('.proclaim-av-controls button').filter({ hasText: /Audio.*/ }).last().click();
 
     await page.waitForTimeout(200);
     expect(calls).toContain('VideoPause');
@@ -352,7 +350,28 @@ test.describe('Proclaim panel', () => {
     expect(calls).toContain('VideoRewind');
     expect(calls).toContain('VideoFastForward');
     expect(calls).toContain('VideoRestart');
-    expect(calls).toContain('PreviousAudioItem');
-    expect(calls).toContain('NextAudioItem');
+    expect(calls).not.toContain('PreviousAudioItem');
+  });
+
+  test('audio controls row has no PreviousAudioItem button', async ({ page, setState }) => {
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item2', currentItemType: 'Song', slideIndex: 0, serviceItems },
+    });
+    await expect(panel(page).locator('.proclaim-av-controls button').filter({ hasText: /Audio/ }).filter({ hasText: /◀|◁|⏪|prev/i })).toHaveCount(0);
+    await expect(panel(page).locator('.proclaim-av-controls button').filter({ hasText: /Audio/ })).toHaveCount(1);
+  });
+
+  test('audio controls row is hidden when current item is a Video', async ({ page, setState }) => {
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item1', currentItemType: 'Video', slideIndex: 0, serviceItems },
+    });
+    await expect(panel(page).locator('.proclaim-av-controls').filter({ hasText: /Audio/ })).toBeHidden();
+  });
+
+  test('audio controls row is visible when current item is not a Video', async ({ page, setState }) => {
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item2', currentItemType: 'Song', slideIndex: 0, serviceItems },
+    });
+    await expect(panel(page).locator('.proclaim-av-controls').filter({ hasText: /Audio/ })).toBeVisible();
   });
 });

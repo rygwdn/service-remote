@@ -122,8 +122,7 @@
           <button class="btn" @click="sendAction('VideoFastForward')">⏩</button>
           <button class="btn" @click="sendAction('VideoRestart')">⏮</button>
         </div>
-        <div class="control-row proclaim-av-controls">
-          <button class="btn" @click="sendAction('PreviousAudioItem')">&#9664;&#9664; Audio</button>
+        <div class="control-row proclaim-av-controls" x-show="$store.state.proclaim.currentItemType !== 'Video'">
           <button class="btn" @click="sendAction('NextAudioItem')">Audio &#9654;&#9654;</button>
         </div>
       </div>
