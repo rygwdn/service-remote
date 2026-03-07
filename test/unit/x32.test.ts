@@ -1,7 +1,7 @@
 import assert = require('node:assert/strict');
 import x32 = require('../../src/connections/x32');
 
-const { parseOscMessage, parseMeterBlob } = x32;
+const { parseOscMessage, parseMeterBlob, buildMeterRequests } = x32;
 
 describe('x32 parseOscMessage()', () => {
   describe('fader messages (/ch/XX/mix/fader)', () => {
@@ -219,5 +219,39 @@ describe('x32 parseMeterBlob()', () => {
     const result = parseMeterBlob(makeBlob(floats));
     assert.ok(Math.abs(result[4] - 0.8) < 1e-6);
     assert.equal(result[0], 0);
+  });
+});
+
+describe('x32 buildMeterRequests()', () => {
+  test('returns three OSC messages for banks 0, 2, and 3', () => {
+    const requests = buildMeterRequests();
+    assert.equal(requests.length, 3);
+  });
+
+  test('each meter request uses /meters/N address (not /meters)', () => {
+    const requests = buildMeterRequests();
+    const addresses = requests.map((r) => r.address);
+    assert.ok(addresses.includes('/meters/0'), 'must include /meters/0 for input channels');
+    assert.ok(addresses.includes('/meters/2'), 'must include /meters/2 for mix buses');
+    assert.ok(addresses.includes('/meters/3'), 'must include /meters/3 for main/matrix');
+    for (const addr of addresses) {
+      assert.notEqual(addr, '/meters', `address "${addr}" must not be bare /meters — X32 ignores that`);
+    }
+  });
+
+  test('each meter request has exactly one arg (duration), not two', () => {
+    const requests = buildMeterRequests();
+    for (const req of requests) {
+      assert.equal(req.args.length, 1, `${req.address} should have 1 arg (duration), not ${req.args.length}`);
+    }
+  });
+
+  test('duration arg is a positive integer', () => {
+    const requests = buildMeterRequests();
+    for (const req of requests) {
+      const duration = req.args[0].value;
+      assert.ok(typeof duration === 'number' && Number.isInteger(duration) && duration > 0,
+        `${req.address} duration must be a positive integer, got ${duration}`);
+    }
   });
 });

@@ -200,16 +200,25 @@ function parseMeterBlob(blob: Buffer): number[] {
   return values;
 }
 
-// Send /meters subscription requests to the X32 for input channels, mix buses, and main/matrix.
-// The X32 responds with /meters/0, /meters/2, /meters/3 blobs every 100 ms for the given duration.
+// Returns the list of OSC meter subscription requests for input channels, mix buses, and main/matrix.
+// The X32 expects /meters/N with a single int arg (duration in 100ms ticks).
+// It responds with /meters/0, /meters/2, /meters/3 blobs every 100 ms for the given duration.
 // We renew every 1.5 s to keep the stream active (duration = 20 × 100 ms = 2 s).
+function buildMeterRequests(): Array<{ address: string; args: OscArg[] }> {
+  return [
+    // Bank 0: input channel pre-fader levels (positions 0–31 = ch 1–32)
+    { address: '/meters/0', args: [{ value: 20 }] },
+    // Bank 2: mix bus output levels (positions 0–15 = bus 1–16)
+    { address: '/meters/2', args: [{ value: 20 }] },
+    // Bank 3: main/matrix output levels (pos 0=main L, 1=main R, 2=main M/C, 3–8 = mtx 1–6)
+    { address: '/meters/3', args: [{ value: 20 }] },
+  ];
+}
+
 function requestMeterUpdates(): void {
-  // Bank 0: input channel pre-fader levels (positions 0–31 = ch 1–32)
-  sendOsc('/meters', [{ value: 0 }, { value: 20 }]);
-  // Bank 2: mix bus output levels (positions 0–15 = bus 1–16)
-  sendOsc('/meters', [{ value: 2 }, { value: 20 }]);
-  // Bank 3: main/matrix output levels (pos 0=main L, 1=main R, 2=main M/C, 3–8 = mtx 1–6)
-  sendOsc('/meters', [{ value: 3 }, { value: 20 }]);
+  for (const { address, args } of buildMeterRequests()) {
+    sendOsc(address, args);
+  }
 }
 
 function handleMeterMessage(address: string, args: OscArg[]): void {
@@ -427,6 +436,7 @@ function disconnect(): void {
 export = {
   parseOscMessage,
   parseMeterBlob,
+  buildMeterRequests,
   connect,
   disconnect,
 
