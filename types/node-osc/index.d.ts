@@ -18,5 +18,22 @@ declare module 'node-osc' {
     on(event: string, listener: (...args: any[]) => void): this;
   }
 
-  export { Client, Server };
+  class Message {
+    constructor(address: string, ...args: any[]);
+    oscType: 'message';
+    address: string;
+    args: any[];
+    append(arg: any): void;
+  }
+
+  interface OscDecodedMessage {
+    oscType: 'message';
+    address: string;
+    args: { value: unknown }[];
+  }
+
+  function encode(message: Message): Buffer;
+  function decode(buffer: Buffer): OscDecodedMessage;
+
+  export { Client, Server, Message, encode, decode };
 }

@@ -116,12 +116,13 @@ describe('x32 parseOscMessage()', () => {
 });
 
 describe('x32 parseMeterBlob()', () => {
-  // Helper: build a meter blob with the given float32 big-endian values.
+  // Helper: build a meter blob matching the X32 wire format:
+  // 4-byte big-endian count, followed by little-endian float32 values.
   function makeBlob(floats: number[]): Buffer {
     const buf = Buffer.allocUnsafe(4 + floats.length * 4);
     buf.writeUInt32BE(floats.length, 0);
     for (let i = 0; i < floats.length; i++) {
-      buf.writeFloatBE(floats[i], 4 + i * 4);
+      buf.writeFloatLE(floats[i], 4 + i * 4);
     }
     return buf;
   }
@@ -156,8 +157,8 @@ describe('x32 parseMeterBlob()', () => {
     // Declare 4 floats but only provide data for 2
     const buf = Buffer.allocUnsafe(4 + 2 * 4);
     buf.writeUInt32BE(4, 0);       // claims 4 floats
-    buf.writeFloatBE(0.1, 4);
-    buf.writeFloatBE(0.2, 8);
+    buf.writeFloatLE(0.1, 4);
+    buf.writeFloatLE(0.2, 8);
     // bytes 12-19 are missing → only 2 values should be returned
     const result = parseMeterBlob(buf);
     assert.equal(result.length, 2);

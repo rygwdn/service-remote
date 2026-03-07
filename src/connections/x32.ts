@@ -1,13 +1,18 @@
+import dgram = require('dgram');
 import nodeOsc = require('node-osc');
 import config = require('../config');
 import state = require('../state');
 import logger = require('../logger');
 import type { Channel } from '../types';
 
-const { Client, Server } = nodeOsc;
+const { Message: OscMessage, encode: oscEncode, decode: oscDecode } = nodeOsc;
 
-let client: InstanceType<typeof Client> | null = null;
-let server: InstanceType<typeof Server> | null = null;
+// Single UDP socket used for both sending and receiving.
+// The X32 replies to the source port of packets it receives, so we must use the
+// same socket for send and recv — matching how the C reference tools work
+// (single fd for both sendto() and recvfrom()). The separate Client+Server
+// approach used different ports, so X32 replies were going to the wrong socket.
+let sock: dgram.Socket | null = null;
 let connected = false;
 let wantConnected = false;
 let keepAliveInterval: ReturnType<typeof setInterval> | null = null;
@@ -16,6 +21,12 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let meterInterval: ReturnType<typeof setInterval> | null = null;
 let metersActive = false;
 let loggedNoResponse = false;
+
+// Send queue: throttle outgoing messages to avoid flooding the mixer.
+// The X32 can silently drop packets if commands arrive faster than it can process them.
+const SEND_INTERVAL_MS = 20; // 20 ms between packets ≈ 50 msg/s max
+let sendQueue: Buffer[] = [];
+let sendTimer: ReturnType<typeof setInterval> | null = null;
 
 interface OscArg {
   value: unknown;
@@ -38,60 +49,69 @@ function connect(): void {
   logger.log('[X32] Attempting to connect to', config.x32.address, 'port', config.x32.port);
   wantConnected = true;
   if (reconnectTimer) clearTimeout(reconnectTimer);
-  if (keepAliveInterval) clearInterval(keepAliveInterval);
-  if (subscribeInterval) clearInterval(subscribeInterval);
+  if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
+  if (subscribeInterval) { clearInterval(subscribeInterval); subscribeInterval = null; }
   if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
+  if (sendTimer) { clearInterval(sendTimer); sendTimer = null; }
+  sendQueue = [];
 
-  if (server) { logger.log('[X32] Closing existing OSC server'); server.close(); }
-  if (client) { logger.log('[X32] Closing existing OSC client'); client.close(); }
+  if (sock) {
+    logger.log('[X32] Closing existing socket');
+    try { sock.close(); } catch (_) { /* ignore if already closed */ }
+    sock = null;
+  }
 
+  connected = false;
   // Start with empty channels — populated via auto-discovery
   channels = [];
 
-  server = new Server(0, '0.0.0.0');
-  server.on('message', (msg: unknown[]) => handleMessage(msg));
-  logger.log('[X32] OSC server listening on ephemeral port');
+  // Bind to 0.0.0.0 so the OS accepts inbound packets on any local network
+  // interface (LAN, loopback, etc.) and picks an ephemeral source port.
+  // The X32 will reply to that same ephemeral port because it echoes back
+  // to the source address/port of each UDP packet it receives.
+  sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
 
-  client = new Client(config.x32.address, config.x32.port);
-  logger.log('[X32] OSC client created, target:', config.x32.address + ':' + config.x32.port);
+  sock.on('error', (err) => {
+    logger.warn('[X32] Socket error:', err.message);
+  });
 
-  // X32 requires /xremote every <10s to stay connected
-  logger.log('[X32] Sending /xremote and starting keepalive (8s interval)');
-  sendOsc('/xremote');
-  keepAliveInterval = setInterval(() => {
-    logger.log('[X32] keepalive /xremote');
-    sendOsc('/xremote');
-  }, 8000);
-  // Subscriptions expire after ~10s; renew periodically
-  subscribeInterval = setInterval(subscribeToChanges, 8000);
-
-  // Request names for all input channels and buses — non-empty names indicate active channels
-  logger.log(`[X32] Requesting names for ${CH_COUNT} input channels and ${BUS_COUNT} buses`);
-  for (let i = 1; i <= CH_COUNT; i++) {
-    sendOsc(`${channelPrefix(i, 'ch')}/config/name`);
-  }
-  for (let i = 1; i <= BUS_COUNT; i++) {
-    sendOsc(`${channelPrefix(i, 'bus')}/config/name`);
-  }
-
-  // Restart meter updates immediately if they were active before reconnect
-  if (metersActive) {
-    logger.log('[X32] Restarting meter updates after reconnect');
-    requestMeterUpdates();
-    meterInterval = setInterval(requestMeterUpdates, 1500);
-  }
-
-  // If we get responses, we're connected
-  setTimeout(() => {
-    if (wantConnected && !connected) {
-      if (!loggedNoResponse) {
-        logger.log('[X32] No response after 3s, will retry...');
-        loggedNoResponse = true;
-      }
-      state.update('x32', { connected: false, channels });
-      scheduleReconnect();
+  sock.on('message', (raw: Buffer) => {
+    let address: string;
+    let args: OscArg[];
+    try {
+      const decoded = oscDecode(raw) as { address: string; args: { value: unknown }[] };
+      address = decoded.address;
+      args = decoded.args;
+    } catch (e) {
+      logger.warn('[X32] Failed to decode OSC packet:', (e as Error).message);
+      return;
     }
-  }, 3000);
+    handleMessage(address, args);
+  });
+
+  sock.bind(0, '0.0.0.0', () => {
+    const port = sock!.address().port;
+    logger.log(`[X32] Socket bound on ephemeral port ${port}`);
+
+    // Start the throttled send queue pump
+    sendTimer = setInterval(flushSendQueue, SEND_INTERVAL_MS);
+
+    // Validate connection like the C tools: send /info and wait for a /info reply.
+    // Bypass the queue so this goes immediately.
+    logger.log('[X32] Sending /info to validate connection');
+    sendImmediate('/info');
+
+    setTimeout(() => {
+      if (wantConnected && !connected) {
+        if (!loggedNoResponse) {
+          logger.log('[X32] No /info reply after 3s, will retry...');
+          loggedNoResponse = true;
+        }
+        state.update('x32', { connected: false, channels });
+        scheduleReconnect();
+      }
+    }, 3000);
+  });
 }
 
 function scheduleReconnect(): void {
@@ -106,23 +126,48 @@ function channelPrefix(index: number, type: 'ch' | 'bus'): string {
   return `/${type}/${padded}`;
 }
 
+function buildOscBuffer(address: string, args?: OscArg[]): Buffer {
+  const msg = new OscMessage(address);
+  if (args) {
+    for (const a of args) {
+      msg.append(a.value as number | string);
+    }
+  }
+  return oscEncode(msg) as Buffer;
+}
+
+// Send immediately, bypassing the queue — used for connection handshake only.
+function sendImmediate(address: string, args?: OscArg[]): void {
+  if (!sock) return;
+  const buf = buildOscBuffer(address, args);
+  sock.send(buf, 0, buf.length, config.x32.port, config.x32.address, (err) => {
+    if (err) logger.warn('[X32] Send error:', err.message);
+  });
+}
+
+function flushSendQueue(): void {
+  if (!sock || sendQueue.length === 0) return;
+  const buf = sendQueue.shift()!;
+  sock.send(buf, 0, buf.length, config.x32.port, config.x32.address, (err) => {
+    if (err) logger.warn('[X32] Send error:', err.message);
+  });
+}
+
 function sendOsc(address: string, args?: OscArg[]): void {
-  if (!client) {
-    logger.warn('[X32] sendOsc called but no client:', address);
+  if (!sock) {
+    logger.warn('[X32] sendOsc called but no socket:', address);
     return;
   }
   const argVals = args?.map((a) => a.value);
-  logger.log('[X32] send', address, argVals ? JSON.stringify(argVals) : '');
-  if (args && args.length > 0) {
-    client.send(address, ...args.map((a) => a.value as number | string), () => {});
-  } else {
-    client.send(address, () => {});
-  }
+  logger.log('[X32] queue', address, argVals ? JSON.stringify(argVals) : '');
+  sendQueue.push(buildOscBuffer(address, args));
 }
 
 // Parse a meter blob into an array of float32 values.
-// X32 blob format: 4-byte big-endian uint32 count, followed by count × 4-byte big-endian float32.
-// Values are linear peak level 0.0–1.0 (1.0 = 0 dBFS).
+// X32 blob format: 4-byte big-endian uint32 count, followed by count × 4-byte
+// little-endian float32 values (linear peak level 0.0–1.0, 1.0 = 0 dBFS).
+// The count is big-endian (standard OSC int32), but the float payload within
+// the blob is little-endian — confirmed by Xdump.c in the C reference tools.
 function parseMeterBlob(blob: Buffer): number[] {
   if (blob.length < 4) return [];
   const count = blob.readUInt32BE(0);
@@ -130,7 +175,7 @@ function parseMeterBlob(blob: Buffer): number[] {
   for (let i = 0; i < count; i++) {
     const offset = 4 + i * 4;
     if (offset + 4 > blob.length) break;
-    values.push(blob.readFloatBE(offset));
+    values.push(blob.readFloatLE(offset));
   }
   return values;
 }
@@ -209,15 +254,38 @@ function parseOscMessage(address: string, args: OscArg[]): OscResult | null {
   return null;
 }
 
-function handleMessage(msg: unknown[]): void {
-  // node-osc delivers messages as [address, arg1, arg2, ...]
-  const [address, ...rawArgs] = msg as [string, ...unknown[]];
-  const args = rawArgs.map((v) => ({ value: v }));
-
-  if (!connected) {
+function handleMessage(address: string, args: OscArg[]): void {
+  // Connection validation: /info reply means the X32 is reachable
+  if (address === '/info' && !connected) {
     connected = true;
     loggedNoResponse = false;
-    logger.log('[X32] Connected — first message received');
+    logger.log('[X32] /info reply — connection confirmed, starting discovery');
+
+    // X32 requires /xremote every <10s to stay subscribed to updates
+    sendOsc('/xremote');
+    keepAliveInterval = setInterval(() => {
+      logger.log('[X32] keepalive /xremote');
+      sendOsc('/xremote');
+    }, 8000);
+    // Subscriptions expire after ~10s; renew periodically
+    subscribeInterval = setInterval(subscribeToChanges, 8000);
+
+    // Request names for all channels — non-empty names indicate active channels.
+    // Throttled via the send queue to avoid flooding the mixer.
+    logger.log(`[X32] Requesting names for ${CH_COUNT} input channels and ${BUS_COUNT} buses`);
+    for (let i = 1; i <= CH_COUNT; i++) {
+      sendOsc(`${channelPrefix(i, 'ch')}/config/name`);
+    }
+    for (let i = 1; i <= BUS_COUNT; i++) {
+      sendOsc(`${channelPrefix(i, 'bus')}/config/name`);
+    }
+
+    if (metersActive) {
+      logger.log('[X32] Restarting meter updates after reconnect');
+      requestMeterUpdates();
+      meterInterval = setInterval(requestMeterUpdates, 1500);
+    }
+    return;
   }
 
   if (address === '/meters/0' || address === '/meters/2') {
@@ -225,7 +293,7 @@ function handleMessage(msg: unknown[]): void {
     return;
   }
 
-  logger.log('[X32] recv', address, rawArgs.length ? JSON.stringify(rawArgs) : '');
+  logger.log('[X32] recv', address, args.length ? JSON.stringify(args.map((a) => a.value)) : '');
 
   const result = parseOscMessage(address, args);
   if (result) {
@@ -282,9 +350,10 @@ function disconnect(): void {
   if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
   if (subscribeInterval) { clearInterval(subscribeInterval); subscribeInterval = null; }
   if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
+  if (sendTimer) { clearInterval(sendTimer); sendTimer = null; }
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-  if (server) { server.close(); server = null; }
-  if (client) { client.close(); client = null; }
+  sendQueue = [];
+  if (sock) { try { sock.close(); } catch (_) { /* ignore */ } sock = null; }
   connected = false;
   metersActive = false;
   logger.log('[X32] Disconnected');
