@@ -127,6 +127,17 @@
           <button class="btn" @click="sendAction('NextAudioItem')">Audio &#9654;&#9654;</button>
         </div>
       </div>
+      <div class="slide-grid"
+           x-show="slideGridVisible($store.state.proclaim)"
+           x-data>
+        <template x-for="i in slideGridItems($store.state.proclaim)" :key="i">
+          <button class="slide-thumb-btn"
+                  :class="{ active: i === $store.state.proclaim.slideIndex }"
+                  @click="sendAction('GoToSlide', i)">
+            <img :src="thumbUrl($store.state.proclaim.currentItemId, i)" alt="">
+          </button>
+        </template>
+      </div>
       <div class="proclaim-items">
         <template x-for="entry in flatServiceItems($store.state.proclaim)" :key="entry.key">
           <div style="display:contents">

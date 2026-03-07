@@ -211,6 +211,121 @@ test.describe('Proclaim panel', () => {
     await expect(panel(page).locator('.proclaim-av-controls').filter({ hasText: '⏸' })).toBeVisible();
   });
 
+  // --- Slide thumbnail grid tests ---
+
+  test('slide grid is not shown when current item has slideCount <= 1', async ({ page, setState }) => {
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item1', slideIndex: 0, serviceItems },
+    });
+    // item1 has slideCount: 1, so no grid
+    await expect(panel(page).locator('.slide-grid')).toBeHidden();
+  });
+
+  test('slide grid is not shown when there is no current item', async ({ page, setState }) => {
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: false },
+    });
+    await expect(panel(page).locator('.slide-grid')).toBeHidden();
+  });
+
+  test('slide grid is shown when current item has slideCount > 1', async ({ page, setState }) => {
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item2', slideIndex: 0, serviceItems },
+    });
+    // item2 has slideCount: 4
+    await expect(panel(page).locator('.slide-grid')).toBeVisible();
+  });
+
+  test('slide grid shows correct number of thumbnails for current item', async ({ page, setState }) => {
+    await page.route('**/api/proclaim/thumb**', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.alloc(0) })
+    );
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item2', slideIndex: 0, serviceItems },
+    });
+    // item2 has slideCount: 4
+    await expect(panel(page).locator('.slide-grid .slide-thumb-btn')).toHaveCount(4);
+  });
+
+  test('each thumbnail uses correct itemId and slideIndex in URL', async ({ page, setState }) => {
+    const requestedUrls: string[] = [];
+    await page.route('**/api/proclaim/thumb**', (route) => {
+      requestedUrls.push(route.request().url());
+      return route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.alloc(0) });
+    });
+
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item3', slideIndex: 0, serviceItems },
+    });
+    // item3 has slideCount: 8
+    const thumbs = panel(page).locator('.slide-grid .slide-thumb-btn img');
+    await expect(thumbs).toHaveCount(8);
+
+    // Check that all slide indices 0-7 are present in image src attributes
+    for (let i = 0; i < 8; i++) {
+      const src = await thumbs.nth(i).getAttribute('src');
+      expect(src).toContain('itemId=item3');
+      expect(src).toContain(`slideIndex=${i}`);
+    }
+  });
+
+  test('clicking a thumbnail sends GoToSlide action with correct index', async ({ page, setState }) => {
+    let lastCall: { action: string; index?: number } | null = null;
+    await page.route('**/api/proclaim/action', async (route) => {
+      lastCall = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    });
+    await page.route('**/api/proclaim/thumb**', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.alloc(0) })
+    );
+
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item2', slideIndex: 0, serviceItems },
+    });
+
+    // Click the 3rd thumbnail (index 2)
+    await panel(page).locator('.slide-grid .slide-thumb-btn').nth(2).click();
+    await page.waitForTimeout(100);
+
+    expect(lastCall).not.toBeNull();
+    expect(lastCall!.action).toBe('GoToSlide');
+    expect(lastCall!.index).toBe(2);
+  });
+
+  test('active slide thumbnail is highlighted', async ({ page, setState }) => {
+    await page.route('**/api/proclaim/thumb**', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.alloc(0) })
+    );
+
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item2', slideIndex: 1, serviceItems },
+    });
+
+    // slideIndex 1 should be active
+    const thumbBtns = panel(page).locator('.slide-grid .slide-thumb-btn');
+    await expect(thumbBtns.nth(1)).toHaveClass(/active/);
+    await expect(thumbBtns.nth(0)).not.toHaveClass(/active/);
+    await expect(thumbBtns.nth(2)).not.toHaveClass(/active/);
+  });
+
+  test('slide grid appears above service item list', async ({ page, setState }) => {
+    await page.route('**/api/proclaim/thumb**', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.alloc(0) })
+    );
+
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item2', slideIndex: 0, serviceItems },
+    });
+
+    const grid = panel(page).locator('.slide-grid');
+    const itemList = panel(page).locator('.proclaim-items');
+    const gridBox = await grid.boundingBox();
+    const listBox = await itemList.boundingBox();
+    expect(gridBox).not.toBeNull();
+    expect(listBox).not.toBeNull();
+    expect(gridBox!.y + gridBox!.height).toBeLessThanOrEqual(listBox!.y);
+  });
+
   test('AV transport buttons send correct actions', async ({ page, setState }) => {
     const calls: string[] = [];
     await page.route('**/api/proclaim/action', async (route) => {

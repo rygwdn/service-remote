@@ -367,6 +367,20 @@ function ovThumbs(p) {
   };
 }
 
+function slideGridVisible(p) {
+  if (!p.onAir || !p.currentItemId) return false;
+  const items = p.serviceItems || [];
+  const item = items.find((it) => it.id === p.currentItemId);
+  return item && item.slideCount > 1;
+}
+
+function slideGridItems(p) {
+  const items = p.serviceItems || [];
+  const item = items.find((it) => it.id === p.currentItemId);
+  if (!item || item.slideCount <= 1) return [];
+  return Array.from({ length: item.slideCount }, (_, i) => i);
+}
+
 function flatServiceItems(p) {
   if (!p.onAir || !p.currentItemId) return [];
   const items = p.serviceItems || [];
