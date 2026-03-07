@@ -105,12 +105,21 @@ function setDot(id, connected) {
 function renderObs(obs) {
   // Scenes
   const grid = document.getElementById('obs-scenes');
-  grid.innerHTML = obs.scenes
-    .map(
-      (name) =>
-        `<button class="scene-btn${name === obs.currentScene ? ' active' : ''}" onclick="setScene('${esc(name)}')">${esc(name)}</button>`
-    )
-    .join('');
+  obs.scenes.forEach((name) => {
+    let btn = grid.querySelector(`[data-scene="${CSS.escape(name)}"]`);
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.dataset.scene = name;
+      btn.textContent = name;
+      btn.addEventListener('click', () => setScene(name));
+      grid.appendChild(btn);
+    }
+    btn.className = 'scene-btn' + (name === obs.currentScene ? ' active' : '');
+  });
+  const sceneNames = new Set(obs.scenes);
+  grid.querySelectorAll('[data-scene]').forEach((el) => {
+    if (!sceneNames.has(el.dataset.scene)) el.remove();
+  });
 
   // Audio
   const audioEl = document.getElementById('obs-audio');
@@ -295,35 +304,77 @@ function renderProclaim(p) {
   setThumb(document.getElementById('proclaim-thumb-current'), p.currentItemId, slideIndex);
   setThumb(document.getElementById('proclaim-thumb-next'), nextItemId, nextSlideIndex);
 
-  // Service item list — use the original full-list 1-based index for GoToServiceItem
+  // Service item list — incremental update to preserve click events during state updates
+  // Build the ordered list of elements we want
+  const desiredElements = [];
   let currentSection = null;
   let currentGroup = null;
-  const parts = [];
   for (const item of items) {
     if (item.section !== currentSection) {
       currentSection = item.section;
       currentGroup = null;
-      parts.push(`<div class="item-section-header">${esc(item.section)}</div>`);
+      desiredElements.push({ type: 'section', key: `section:${item.section}`, label: item.section });
     }
     if (item.group !== currentGroup) {
       currentGroup = item.group;
       if (currentGroup) {
-        parts.push(`<div class="item-group-header">${esc(currentGroup)}</div>`);
+        desiredElements.push({ type: 'group', key: `group:${item.section}:${currentGroup}`, label: currentGroup });
       }
     }
     const isActive = item.id === p.currentItemId;
     let slideCountLabel = '';
     if (item.slideCount > 1) {
       if (isActive && p.slideIndex !== null) {
-        slideCountLabel = ` <span class="item-slide-count">(${p.slideIndex + 1} of ${item.slideCount})</span>`;
+        slideCountLabel = `(${p.slideIndex + 1} of ${item.slideCount})`;
       } else {
-        slideCountLabel = ` <span class="item-slide-count">(${item.slideCount} slides)</span>`;
+        slideCountLabel = `(${item.slideCount} slides)`;
       }
     }
-    const indentClass = item.group ? ' item-grouped' : '';
-    parts.push(`<button class="item-btn${isActive ? ' active' : ''}${indentClass}" onclick="sendAction('GoToServiceItem', ${item.index})">${esc(item.title || item.kind)}${slideCountLabel}</button>`);
+    desiredElements.push({ type: 'item', key: `item:${item.id}`, item, isActive, slideCountLabel });
   }
-  itemsEl.innerHTML = parts.join('');
+
+  // Sync DOM to desired elements
+  const seen = new Set();
+  desiredElements.forEach((def, i) => {
+    seen.add(def.key);
+    let el = itemsEl.querySelector(`[data-item-key="${CSS.escape(def.key)}"]`);
+    if (!el) {
+      if (def.type === 'section') {
+        el = document.createElement('div');
+        el.className = 'item-section-header';
+        el.textContent = def.label;
+      } else if (def.type === 'group') {
+        el = document.createElement('div');
+        el.className = 'item-group-header';
+        el.textContent = def.label;
+      } else {
+        el = document.createElement('button');
+        el.addEventListener('click', () => sendAction('GoToServiceItem', def.item.index));
+      }
+      el.dataset.itemKey = def.key;
+      itemsEl.appendChild(el);
+    }
+    // Move to correct position if needed
+    const children = Array.from(itemsEl.children);
+    if (children[i] !== el) itemsEl.insertBefore(el, children[i] || null);
+    // Update mutable state
+    if (def.type === 'item') {
+      el.className = 'item-btn' + (def.isActive ? ' active' : '') + (def.item.group ? ' item-grouped' : '');
+      el.childNodes.forEach((n) => { if (n.nodeType === Node.TEXT_NODE) n.remove(); });
+      el.querySelector('.item-slide-count')?.remove();
+      el.appendChild(document.createTextNode(def.item.title || def.item.kind));
+      if (def.slideCountLabel) {
+        const span = document.createElement('span');
+        span.className = 'item-slide-count';
+        span.textContent = ' ' + def.slideCountLabel;
+        el.appendChild(span);
+      }
+    }
+  });
+  // Remove stale elements
+  itemsEl.querySelectorAll('[data-item-key]').forEach((el) => {
+    if (!seen.has(el.dataset.itemKey)) el.remove();
+  });
 }
 
 // --- Overview rendering ---
