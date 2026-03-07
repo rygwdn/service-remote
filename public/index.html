@@ -163,10 +163,16 @@
       <div class="obs-section">
         <div class="section-header-row">
           <h2>Audio</h2>
-          <button class="btn btn-edit-toggle"
-                  :class="{ active: $store.ui.editMode.obs }"
-                  @click="$store.ui.toggleEditMode('obs')"
-                  x-text="$store.ui.editMode.obs ? 'Done' : 'Edit'"></button>
+          <div class="header-btn-group">
+            <button class="btn btn-edit-toggle"
+                    :class="{ active: $store.ui.faderEnabled.obs }"
+                    @click="$store.ui.toggleFaderEnabled('obs')"
+                    x-text="$store.ui.faderEnabled.obs ? 'Unlock' : 'Lock'"></button>
+            <button class="btn btn-edit-toggle"
+                    :class="{ active: $store.ui.editMode.obs }"
+                    @click="$store.ui.toggleEditMode('obs')"
+                    x-text="$store.ui.editMode.obs ? 'Done' : 'Edit'"></button>
+          </div>
         </div>
         <div class="audio-list">
           <template x-for="src in $store.state.obs.audioSources" :key="src.name">
@@ -176,6 +182,7 @@
                  x-data="obsFader(src)">
               <span class="name" x-text="src.name"></span>
               <input type="range" min="-60" max="0" step="0.5"
+                     :disabled="!$store.ui.faderEnabled.obs"
                      :value="src.volume != null && isFinite(src.volume) ? src.volume.toFixed(1) : -60"
                      @input="setObsVolume(src.name, parseFloat($event.target.value))">
               <button class="mute-btn" :class="{ muted: src.muted }"
@@ -210,28 +217,35 @@
     <section class="panel" :class="{ active: $store.ui.tab==='sound' }">
       <div class="section-header-row x32-header-row">
         <span></span>
-        <button class="btn btn-edit-toggle"
-                :class="{ active: $store.ui.editMode.x32 }"
-                @click="$store.ui.toggleEditMode('x32')"
-                x-text="$store.ui.editMode.x32 ? 'Done' : 'Edit'"></button>
+        <div class="header-btn-group">
+          <button class="btn btn-edit-toggle"
+                  :class="{ active: $store.ui.faderEnabled.x32 }"
+                  @click="$store.ui.toggleFaderEnabled('x32')"
+                  x-text="$store.ui.faderEnabled.x32 ? 'Unlock' : 'Lock'"></button>
+          <button class="btn btn-edit-toggle"
+                  :class="{ active: $store.ui.editMode.x32 }"
+                  @click="$store.ui.toggleEditMode('x32')"
+                  x-text="$store.ui.editMode.x32 ? 'Done' : 'Edit'"></button>
+        </div>
       </div>
-      <div class="channel-grid">
+      <div class="channel-list-vert">
         <template x-for="ch in $store.state.x32.channels" :key="ch.type+'/'+ch.index">
-          <div class="channel-strip"
+          <div class="channel-row-h"
                x-show="$store.ui.editMode.x32 || !$store.ui.isHiddenX32(ch.type+'/'+ch.index)"
                x-data="x32Fader(ch)">
+            <button class="ch-mute" :class="{ muted: ch.muted }"
+                    @click="toggleX32Mute(ch.index, ch.type)"
+                    x-text="ch.muted ? 'MUTED' : 'ON'"></button>
             <span class="ch-label" x-text="ch.label"></span>
-            <div class="fader-wrap">
+            <div class="fader-wrap-h">
               <input type="range" min="0" max="1" step="0.005"
+                     :disabled="!$store.ui.faderEnabled.x32"
                      :value="touched ? undefined : ch.fader"
                      @input="onFaderInput(ch, $event.target)"
                      @mousedown="touched=true" @touchstart.passive="touched=true"
                      @mouseup="releaseSoon()" @touchend="releaseSoon()">
-              <div class="ch-meter"><div class="ch-meter-fill" :style="'height:'+(ch.level*100).toFixed(1)+'%'"></div></div>
+              <div class="ch-meter-h"><div class="ch-meter-fill-h" :style="'width:'+(ch.level*100).toFixed(1)+'%'"></div></div>
             </div>
-            <button class="ch-mute" :class="{ muted: ch.muted }"
-                    @click="toggleX32Mute(ch.index, ch.type)"
-                    x-text="ch.muted ? 'MUTED' : 'ON'"></button>
             <label class="fader-visibility-label" x-show="$store.ui.editMode.x32">
               <input type="checkbox"
                      class="fader-visibility-cb"

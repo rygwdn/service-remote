@@ -12,6 +12,7 @@ document.addEventListener('alpine:init', () => {
   Alpine.store('ui', {
     tab: 'overview',
     editMode: { obs: false, x32: false },
+    faderEnabled: { obs: false, x32: false },
     hidden: { obs: [], x32: [] },
     serverConnected: false,
 
@@ -25,6 +26,9 @@ document.addEventListener('alpine:init', () => {
     },
     toggleEditMode(panel) {
       this.editMode[panel] = !this.editMode[panel];
+    },
+    toggleFaderEnabled(panel) {
+      this.faderEnabled[panel] = !this.faderEnabled[panel];
     },
     isHiddenObs(name) { return this.hidden.obs.includes(name); },
     isHiddenX32(key)  { return this.hidden.x32.includes(key); },
