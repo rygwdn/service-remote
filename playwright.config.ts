@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: './test/ui',
   fullyParallel: false,
   retries: 0,
+  reporter: process.env.CI ? 'github' : 'list',
   use: {
     // baseURL is set per-test via the fixture
     headless: true,
