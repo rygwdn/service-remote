@@ -94,7 +94,7 @@ async function authenticateRemote(): Promise<{ onAirSessionId: string; connectio
 
   if (!controlRes.ok) {
     // Likely running on the same machine as Proclaim — proceed with sessionId only
-    console.log('[Proclaim] auth/control failed, proceeding with OnAirSessionId only (same-machine mode)');
+    logger.info('[Proclaim] auth/control failed, proceeding with OnAirSessionId only (same-machine mode)');
     return { onAirSessionId: sessionId, connectionId: '' };
   }
 
