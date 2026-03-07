@@ -428,13 +428,14 @@ async function goToItem(itemId: string): Promise<boolean> {
     logger.log(`[Proclaim] goToItem: item ${itemId} not found in state`);
     return false;
   }
-  // GoToServiceItem is only valid within the 'Service' section.
-  // For Pre-Service, Warmup, and Post-Service, the section command alone
-  // navigates to the start of that section — do not follow with GoToServiceItem.
-  const sectionOk = await sendAction(item.sectionCommand);
-  if (!sectionOk) return false;
-  if (item.section !== 'Service') return true;
-  return sendAction('GoToServiceItem', item.sectionIndex);
+  // For the Service section, GoToServiceItem navigates directly to the item
+  // without needing StartService first.
+  // For Pre-Service, Warmup, and Post-Service, the section command navigates
+  // to the start of that section (GoToServiceItem is not applicable there).
+  if (item.section === 'Service') {
+    return sendAction('GoToServiceItem', item.sectionIndex);
+  }
+  return sendAction(item.sectionCommand);
 }
 
 export = {

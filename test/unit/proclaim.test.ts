@@ -18,19 +18,19 @@ describe('proclaim.goToItem', () => {
 
     function simulateGoToItem(section: SectionName, sectionIndex: number) {
       sentActions.length = 0;
-      const sectionCommand = `Start${section.replace('-', '').replace(' ', '')}`;
-      sentActions.push({ action: sectionCommand });
       if (section === 'Service') {
         sentActions.push({ action: 'GoToServiceItem', index: sectionIndex });
+      } else {
+        const sectionCommand = `Start${section.replace('-', '').replace(' ', '')}`;
+        sentActions.push({ action: sectionCommand });
       }
     }
 
-    // Service: sends both sectionCommand and GoToServiceItem
+    // Service: sends GoToServiceItem directly (no StartService)
     simulateGoToItem('Service', 3);
-    assert.equal(sentActions.length, 2);
-    assert.equal(sentActions[0].action, 'StartService');
-    assert.equal(sentActions[1].action, 'GoToServiceItem');
-    assert.equal(sentActions[1].index, 3);
+    assert.equal(sentActions.length, 1);
+    assert.equal(sentActions[0].action, 'GoToServiceItem');
+    assert.equal(sentActions[0].index, 3);
 
     // Pre-Service: only sends sectionCommand
     simulateGoToItem('Pre-Service', 1);
@@ -69,23 +69,21 @@ describe('proclaim.goToItem', () => {
     async function goToItem(itemId: string, getItems: () => typeof serviceItems): Promise<string[]> {
       const item = getItems().find((i) => i.id === itemId);
       if (!item) return [];
-      const result: string[] = [];
-      result.push(item.sectionCommand);
       if (item.section === 'Service') {
-        result.push(`GoToServiceItem:${item.sectionIndex}`);
+        return [`GoToServiceItem:${item.sectionIndex}`];
       }
-      return result;
+      return [item.sectionCommand];
     }
 
-    // Pre-Service item: no GoToServiceItem
+    // Pre-Service item: only the section command
     const preResult = await goToItem('pre1', () => serviceItems);
     assert.deepEqual(preResult, ['StartPreService']);
 
-    // Service item: includes GoToServiceItem with sectionIndex
+    // Service item: only GoToServiceItem (no StartService)
     const svcResult = await goToItem('svc2', () => serviceItems);
-    assert.deepEqual(svcResult, ['StartService', 'GoToServiceItem:2']);
+    assert.deepEqual(svcResult, ['GoToServiceItem:2']);
 
-    // Post-Service item: no GoToServiceItem
+    // Post-Service item: only the section command
     const postResult = await goToItem('post1', () => serviceItems);
     assert.deepEqual(postResult, ['StartPostService']);
   });
