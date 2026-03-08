@@ -8,6 +8,27 @@ import defaultState = require('./state');
 
 const userConfigPath = config.userConfigPath;
 
+// Concurrency limiter for Proclaim thumbnail fetches
+let activeThumbFetches = 0;
+const MAX_CONCURRENT_THUMBS = 3;
+const thumbQueue: Array<() => void> = [];
+
+function acquireThumbSlot(): Promise<void> {
+  return new Promise((resolve) => {
+    if (activeThumbFetches < MAX_CONCURRENT_THUMBS) {
+      activeThumbFetches++;
+      resolve();
+    } else {
+      thumbQueue.push(() => { activeThumbFetches++; resolve(); });
+    }
+  });
+}
+
+function releaseThumbSlot(): void {
+  activeThumbFetches--;
+  if (thumbQueue.length > 0) thumbQueue.shift()!();
+}
+
 function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stateOverride?: typeof defaultState, configPathOverride?: string): void {
   const state = stateOverride ?? defaultState;
   const cfgPath = configPathOverride ?? userConfigPath;
@@ -97,6 +118,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
   });
 
   app.get('/api/proclaim/thumb', async (req: Request, res: Response) => {
+    await acquireThumbSlot();
     try {
       const url = proclaim.getThumbUrl(
         req.query.itemId as string | undefined,
@@ -111,11 +133,18 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
         logger.error(`[Proclaim] Thumb ${r.status} for: ${url} (sessionId=${sessionId})`);
         return res.status(r.status).end();
       }
+      const contentType = r.headers.get('content-type') || '';
+      if (!contentType.startsWith('image/')) {
+        logger.warn(`[Proclaim] Thumb returned non-image content-type: ${contentType} for: ${url}`);
+        return res.status(204).end();
+      }
       res.set('Content-Type', 'image/png');
       res.send(Buffer.from(await r.arrayBuffer()));
     } catch (err) {
       logger.error('[Proclaim] Thumb fetch failed:', (err as Error).message);
       res.status(500).end();
+    } finally {
+      releaseThumbSlot();
     }
   });
 

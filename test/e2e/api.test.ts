@@ -146,6 +146,35 @@ describe('API routes', () => {
       // Route exists (not 404); will be 500 since fake URL is not reachable
       assert.notEqual(res.status, 404);
     });
+
+    test('returns 204 when Proclaim responds with JSON instead of an image', async () => {
+      // Override getThumbUrl on a fresh test app stub, and mock globalThis.fetch
+      // to return a JSON response (simulating Proclaim not-ready response).
+      const { createTestApp, startServer } = require('../helpers/app');
+      const { server: thumbServer, stubs: thumbStubs } = createTestApp();
+      thumbStubs.proclaim.getThumbUrl = () => 'http://fake-proclaim/thumb';
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (_url: string) => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'Content-Type': 'application/json' }),
+        arrayBuffer: async () => new ArrayBuffer(0),
+      }) as Response;
+
+      await startServer(thumbServer);
+      const thumbReq = supertest(thumbServer);
+
+      let res: import('supertest').Response;
+      try {
+        res = await thumbReq.get('/api/proclaim/thumb?itemId=abc&slideIndex=0');
+      } finally {
+        thumbServer.close();
+        globalThis.fetch = originalFetch;
+      }
+
+      assert.equal(res!.status, 204);
+    });
   });
 
   describe('error handling', () => {
