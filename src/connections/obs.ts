@@ -21,8 +21,8 @@ async function captureScreenshot(): Promise<void> {
     const result = await (obs as any).call('GetSourceScreenshot', {
       sourceName: currentScene,
       imageFormat: 'jpeg',
-      imageWidth: 480,
-      imageCompressionQuality: 70,
+      imageWidth: 320,
+      imageCompressionQuality: 50,
     });
     const b64 = (result.imageData as string).replace(/^data:image\/\w+;base64,/, '');
     screenshotWs.broadcast(Buffer.from(b64, 'base64'));
@@ -301,8 +301,8 @@ export = {
     const result = await obs.call('GetSourceScreenshot', {
       sourceName: sceneName,
       imageFormat: 'jpeg',
-      imageWidth: 480,
-      imageCompressionQuality: 70,
+      imageWidth: 320,
+      imageCompressionQuality: 50,
     });
     const b64 = result.imageData.replace(/^data:image\/\w+;base64,/, '');
     return Buffer.from(b64, 'base64');

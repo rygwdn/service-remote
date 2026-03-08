@@ -30,8 +30,8 @@ describe('OBS screenshot push logic', () => {
     const result = await mockObs.call('GetSourceScreenshot', {
       sourceName,
       imageFormat: 'jpeg',
-      imageWidth: 480,
-      imageCompressionQuality: 70,
+      imageWidth: 320,
+      imageCompressionQuality: 50,
     });
     mockState.update('obs', { screenshot: result.imageData });
 
@@ -40,8 +40,8 @@ describe('OBS screenshot push logic', () => {
     assert.deepEqual(calls[0].params, {
       sourceName: 'Test Scene',
       imageFormat: 'jpeg',
-      imageWidth: 480,
-      imageCompressionQuality: 70,
+      imageWidth: 320,
+      imageCompressionQuality: 50,
     });
 
     assert.equal(stateUpdates.length, 1);
