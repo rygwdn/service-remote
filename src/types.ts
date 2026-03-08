@@ -64,6 +64,7 @@ export interface AppState {
 export interface Config {
   server: {
     port: number;
+    openBrowser: boolean;
   };
   obs: {
     address: string;

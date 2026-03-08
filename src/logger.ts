@@ -6,12 +6,31 @@ interface LogEntry {
   msg: string;
 }
 
+interface LogFileOptions {
+  /** Rotate when the log file exceeds this many bytes. Default: 5 MB. */
+  maxFileSizeBytes?: number;
+}
+
 const MAX_MEMORY = 500;
+const DEFAULT_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
 const entries: LogEntry[] = [];
 let logFilePath: string | null = null;
+let maxFileSizeBytes = DEFAULT_MAX_FILE_SIZE;
 
-function setLogFile(filePath: string): void {
+function setLogFile(filePath: string, opts?: LogFileOptions): void {
   logFilePath = filePath;
+  maxFileSizeBytes = opts?.maxFileSizeBytes ?? DEFAULT_MAX_FILE_SIZE;
+}
+
+/** Rotate logFile → logFile.1 (overwriting any previous .1), then start fresh. */
+function rotate(): void {
+  if (!logFilePath) return;
+  try {
+    fs.renameSync(logFilePath, logFilePath + '.1');
+  } catch (_) {
+    // If rename fails (e.g. file doesn't exist yet), continue silently
+  }
 }
 
 function write(level: LogEntry['level'], args: unknown[]): void {
@@ -31,6 +50,10 @@ function write(level: LogEntry['level'], args: unknown[]): void {
 
   if (logFilePath) {
     try {
+      // Check size before appending and rotate if needed
+      let size = 0;
+      try { size = fs.statSync(logFilePath).size; } catch (_) { /* file may not exist yet */ }
+      if (size >= maxFileSizeBytes) rotate();
       fs.appendFileSync(logFilePath, JSON.stringify(entry) + '\n', 'utf-8');
     } catch (_) {
       // best-effort

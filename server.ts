@@ -102,6 +102,6 @@ const port = config.server.port;
 const url = `http://localhost:${port}`;
 server.listen(port, () => {
   logger.log(`[Server] Service Remote v${version} running at ${url}`);
-  openBrowser(url);
+  if (config.server.openBrowser) openBrowser(url);
   startTray(port, version, state, () => shutdown('tray'));
 });
