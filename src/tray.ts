@@ -137,6 +137,7 @@ $tray.Dispose()
 
 function startTray(
   port: number,
+  version: string,
   state: { on: (event: 'change', listener: (ev: ChangeEvent) => void) => void },
   shutdown: () => void
 ): void {
@@ -230,7 +231,7 @@ function startTray(
     const obs      = s.obs.connected      ? 'OBS:on'      : 'OBS:off';
     const x32      = s.x32.connected      ? 'X32:on'      : 'X32:off';
     const proclaim = s.proclaim.connected ? 'Proclaim:on' : 'Proclaim:off';
-    send({ cmd: 'status', text: `${obs}  ${x32}  ${proclaim}` });
+    send({ cmd: 'status', text: `v${version}  ${obs}  ${x32}  ${proclaim}` });
   });
 
   // Kill the tray process when the server exits

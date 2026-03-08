@@ -4,6 +4,8 @@ import path = require('path');
 import childProcess = require('child_process');
 import config = require('./src/config');
 import logger = require('./src/logger');
+import versionModule = require('./src/version');
+const { version } = versionModule;
 
 const { exec } = childProcess;
 import state = require('./src/state');
@@ -99,7 +101,7 @@ logger.setLogFile(logFile);
 const port = config.server.port;
 const url = `http://localhost:${port}`;
 server.listen(port, () => {
-  logger.log(`[Server] Service Remote running at ${url}`);
+  logger.log(`[Server] Service Remote v${version} running at ${url}`);
   openBrowser(url);
-  startTray(port, state, () => shutdown('tray'));
+  startTray(port, version, state, () => shutdown('tray'));
 });

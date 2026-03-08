@@ -27,6 +27,13 @@ run('bun scripts/embed-public.js');
 console.log('\nStep 2: Compiling single executable …');
 fs.mkdirSync(dist, { recursive: true });
 
+// Embed the git SHA so it's available at runtime without needing `git`
+let gitSha = 'unknown';
+try {
+  gitSha = execSync('git rev-parse --short HEAD', { cwd: root, encoding: 'utf8' }).trim();
+} catch (_) {}
+console.log(`  Git SHA: ${gitSha}`);
+
 // Accept an explicit --target=<bun-target> argument, e.g. bun-windows-x64.
 // Falls back to the native platform target.
 const targetArg = process.argv.find((a) => a.startsWith('--target='));
@@ -47,6 +54,7 @@ run(
     '--minify',
     `--target=${target}`,
     ...windowsFlags,
+    `--define 'process.env.GIT_SHA="${gitSha}"'`,
     'server.ts',
     `--outfile=${outfile}`,
   ].join(' ')
