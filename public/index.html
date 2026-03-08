@@ -128,7 +128,7 @@
         <template x-for="i in slideGridItems($store.state.proclaim)" :key="i">
           <button class="slide-thumb-btn"
                   :class="{ active: i === $store.state.proclaim.slideIndex }"
-                  @click="sendAction('GoToSlide', i)">
+                  @click="sendAction('GoToSlide', i + 1)">
             <img :src="thumbUrl($store.state.proclaim.currentItemId, i)" alt="">
           </button>
         </template>

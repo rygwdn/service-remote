@@ -350,13 +350,13 @@ test.describe('Proclaim panel', () => {
       proclaim: { connected: true, onAir: true, currentItemId: 'item2', slideIndex: 0, serviceItems },
     });
 
-    // Click the 3rd thumbnail (index 2)
+    // Click the 3rd thumbnail (0-based index 2, but Proclaim expects 1-based so index=3)
     await panel(page).locator('.slide-grid .slide-thumb-btn').nth(2).click();
     await page.waitForTimeout(100);
 
     expect(lastCall).not.toBeNull();
     expect(lastCall!.action).toBe('GoToSlide');
-    expect(lastCall!.index).toBe(2);
+    expect(lastCall!.index).toBe(3);
   });
 
   test('active slide thumbnail is highlighted', async ({ page, setState }) => {
