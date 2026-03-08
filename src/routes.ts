@@ -125,14 +125,16 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
     const itemId = req.query.itemId as string | undefined;
     const slideIndex = req.query.slideIndex as string | undefined;
 
-    // Look up the canonical localRevision for this slide (server-side cache key)
+    // Look up the canonical localRevision for this slide (used for cache key + HTTP headers)
     const localRevision = proclaim.getSlideLocalRevision(itemId, slideIndex);
+    // Include itemId + slideIndex in cache key — localRevision alone may be shared across slides
+    const cacheKey = localRevision ? `${itemId}:${slideIndex}:${localRevision}` : null;
 
     // Serve from server-side cache if available
-    if (localRevision && thumbCache.has(localRevision)) {
+    if (cacheKey && thumbCache.has(cacheKey)) {
       res.set('Content-Type', 'image/png');
       res.set('Cache-Control', 'public, max-age=31536000, immutable');
-      return res.send(thumbCache.get(localRevision));
+      return res.send(thumbCache.get(cacheKey));
     }
 
     await acquireThumbSlot();
@@ -180,9 +182,9 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
         return res.status(204).end();
       }
 
-      // Cache by localRevision if available (immutable per content version)
-      if (localRevision) {
-        thumbCache.set(localRevision, imageBuffer);
+      // Cache by (itemId, slideIndex, localRevision) if available
+      if (cacheKey) {
+        thumbCache.set(cacheKey, imageBuffer);
         res.set('Cache-Control', 'public, max-age=31536000, immutable');
       } else {
         res.set('Cache-Control', 'no-store');
