@@ -3,6 +3,7 @@ import nodeOsc = require('node-osc');
 import config = require('../config');
 import state = require('../state');
 import logger = require('../logger');
+import levelsWs = require('../levels-ws');
 import type { Channel } from '../types';
 
 const { Message: OscMessage, encode: oscEncode, decode: oscDecode } = nodeOsc;
@@ -248,7 +249,13 @@ function handleMeterMessage(address: string, args: OscArg[]): void {
     }
   }
   if (updated) {
-    state.update('x32', { connected: true, channels: [...channels] });
+    // Broadcast level-only updates directly to /ws/levels — do NOT call state.update
+    // so the main WebSocket doesn't re-render all Alpine x-for elements on every meter tick.
+    const x32Levels: Record<string, number> = {};
+    for (const ch of channels) {
+      x32Levels[`${ch.type}-${ch.index}`] = ch.level;
+    }
+    levelsWs.broadcast({ x32: x32Levels, obs: {} });
   }
 }
 

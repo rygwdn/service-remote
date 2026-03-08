@@ -15,6 +15,7 @@ function setupWebSocket(server: http.Server, state: StateHandle, connections?: C
   // Only handle upgrade requests that are NOT for dedicated sub-paths.
   server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws/screenshot') return; // handled by screenshot-ws.ts
+    if (req.url === '/ws/levels') return;     // handled by levels-ws.ts
     wss.handleUpgrade(req, socket as import('stream').Duplex, head, (client) => {
       wss.emit('connection', client, req);
     });

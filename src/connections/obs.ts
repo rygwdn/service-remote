@@ -3,6 +3,7 @@ import config = require('../config');
 import state = require('../state');
 import logger = require('../logger');
 import screenshotWs = require('../screenshot-ws');
+import levelsWs = require('../levels-ws');
 
 const OBSWebSocket = obsWebSocketJs.default;
 
@@ -102,7 +103,7 @@ obs.on('InputVolumeChanged', ({ inputName, inputVolumeMul }) => {
 });
 
 obs.on('InputVolumeMeters', ({ inputs }) => {
-  const updates: Record<string, number> = {};
+  const obsLevels: Record<string, number> = {};
   for (const input of inputs) {
     // inputLevelsMul is [[left_pre, right_pre, left_post, right_post], ...]
     const levels = input.inputLevelsMul as number[][];
@@ -113,12 +114,11 @@ obs.on('InputVolumeMeters', ({ inputs }) => {
       if (ch[2] != null && ch[2] > peak) peak = ch[2];
       if (ch[3] != null && ch[3] > peak) peak = ch[3];
     }
-    updates[input.inputName as string] = Math.round(peak * 1000) / 1000;
+    obsLevels[input.inputName as string] = Math.round(peak * 1000) / 1000;
   }
-  const sources = state.get().obs.audioSources.map((s) =>
-    updates[s.name] != null ? { ...s, level: updates[s.name] } : s
-  );
-  state.update('obs', { audioSources: sources });
+  // Broadcast level-only updates directly to /ws/levels — do NOT call state.update
+  // so the main WebSocket doesn't re-render all Alpine x-for elements on every meter tick.
+  levelsWs.broadcast({ x32: {}, obs: obsLevels });
 });
 
 obs.on('InputMuteStateChanged', ({ inputName, inputMuted }) => {

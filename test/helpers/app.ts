@@ -6,6 +6,7 @@ const { setupRoutes } = require('../../src/routes');
 const { setupWebSocket } = require('../../src/ws');
 import type { Connections } from '../../src/types';
 import screenshotWsModule = require('../../src/screenshot-ws');
+import levelsWsModule = require('../../src/levels-ws');
 
 
 interface TestCalls {
@@ -94,6 +95,7 @@ function createTestApp(): TestApp {
   const server = http.createServer(app);
   setupWebSocket(server, state, stubs, { disconnectDelay: 0 });
   screenshotWsModule.setupScreenshotWs(server);
+  levelsWsModule.setupLevelsWs(server);
 
   return { app, server, state, stubs, calls };
 }

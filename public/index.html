@@ -69,7 +69,7 @@
                 <span class="ov-ch-label" :class="{ muted: ch.muted }" x-text="ch.label"></span>
                 <div class="ov-bars">
                   <div class="ov-fader-bar"><div class="ov-fader-fill" :class="{ muted: ch.muted }" :style="'width:'+((ch.fader*100).toFixed(1))+'%'"></div></div>
-                  <div class="ov-level-bar"><div class="ov-level-fill" :style="'width:'+((ch.level*100).toFixed(1))+'%'"></div></div>
+                  <div class="ov-level-bar"><div class="ov-level-fill" :data-level-key="`${ch.type}-${ch.index}`" :style="'width:'+((ch.level*100).toFixed(1))+'%'"></div></div>
                 </div>
               </div>
             </template>
@@ -83,7 +83,7 @@
                 <span class="ov-ch-label" :class="{ muted: src.muted }" x-text="src.name"></span>
                 <div class="ov-bars">
                   <div class="ov-fader-bar"><div class="ov-fader-fill" :class="{ muted: src.muted }" :style="'width:'+(((src.volume??-60)+60)/60*100).toFixed(1)+'%'"></div></div>
-                  <div class="ov-level-bar"><div class="ov-level-fill" :style="'width:'+((src.level*100).toFixed(1))+'%'"></div></div>
+                  <div class="ov-level-bar"><div class="ov-level-fill" :data-level-obs="src.name" :style="'width:'+((src.level*100).toFixed(1))+'%'"></div></div>
                 </div>
               </div>
             </template>
@@ -205,7 +205,7 @@
               <button class="mute-btn" :class="{ muted: src.muted }"
                       @click="toggleObsMute(src.name)"
                       x-text="src.muted ? 'M' : '🔊'"></button>
-              <div class="obs-meter"><div class="obs-meter-fill" :style="'width:'+(src.level*100).toFixed(1)+'%'"></div></div>
+              <div class="obs-meter"><div class="obs-meter-fill" :data-level-obs="src.name" :style="'width:'+(src.level*100).toFixed(1)+'%'"></div></div>
               <label class="fader-visibility-label" x-show="$store.ui.editMode.obs">
                 <input type="checkbox"
                        class="fader-visibility-cb"
@@ -251,7 +251,7 @@
                      @input="onFaderInput(ch, $event.target)"
                      @mousedown="touched=true" @touchstart.passive="touched=true"
                      @mouseup="releaseSoon()" @touchend="releaseSoon()">
-              <div class="ch-meter-h"><div class="ch-meter-fill-h" :style="'width:'+(ch.level*100).toFixed(1)+'%'"></div></div>
+              <div class="ch-meter-h"><div class="ch-meter-fill-h" :data-level-key="`${ch.type}-${ch.index}`" :style="'width:'+(ch.level*100).toFixed(1)+'%'"></div></div>
             </div>
             <label class="fader-visibility-label" x-show="$store.ui.editMode.x32">
               <input type="checkbox"

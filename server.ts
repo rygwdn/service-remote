@@ -10,6 +10,7 @@ import state = require('./src/state');
 const { startTray } = require('./src/tray');
 const { setupWebSocket } = require('./src/ws');
 const { setupRoutes } = require('./src/routes');
+const { setupLevelsWs } = require('./src/levels-ws');
 import obs = require('./src/connections/obs');
 import x32 = require('./src/connections/x32');
 import proclaim = require('./src/connections/proclaim');
@@ -87,6 +88,7 @@ if (Object.keys(embeddedPublic).length > 0) {
 
 setupRoutes(app, { obs, x32, proclaim });
 setupWebSocket(server, state, { obs, x32, proclaim });
+setupLevelsWs(server);
 
 // Set up file logging next to config.json
 const logFile = path.join(path.dirname(config.userConfigPath), 'service-remote.log');

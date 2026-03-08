@@ -217,6 +217,44 @@ function connectScreenshotWs() {
 
 connectScreenshotWs();
 
+// --- Levels WebSocket (direct DOM updates, bypasses Alpine) ---
+let levelsWsConn;
+let levelsReconnectDelay = 1000;
+
+function connectLevelsWs() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  levelsWsConn = new WebSocket(`${proto}://${location.host}/ws/levels`);
+
+  levelsWsConn.onopen = () => { levelsReconnectDelay = 1000; };
+
+  levelsWsConn.onmessage = (e) => {
+    const { x32, obs } = JSON.parse(e.data);
+    if (x32) {
+      for (const [key, level] of Object.entries(x32)) {
+        const els = document.querySelectorAll(`[data-level-key="${key}"]`);
+        for (const el of els) {
+          el.style.width = (level * 100).toFixed(1) + '%';
+        }
+      }
+    }
+    if (obs) {
+      for (const [name, level] of Object.entries(obs)) {
+        const els = document.querySelectorAll(`[data-level-obs="${CSS.escape(name)}"]`);
+        for (const el of els) {
+          el.style.width = (level * 100).toFixed(1) + '%';
+        }
+      }
+    }
+  };
+
+  levelsWsConn.onclose = () => {
+    setTimeout(connectLevelsWs, levelsReconnectDelay);
+    levelsReconnectDelay = Math.min(levelsReconnectDelay * 2, 10000);
+  };
+}
+
+connectLevelsWs();
+
 // --- API helpers ---
 function post(url, body) {
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
