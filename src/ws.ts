@@ -10,7 +10,15 @@ interface StateHandle {
 }
 
 function setupWebSocket(server: http.Server, state: StateHandle, connections?: Connections, { disconnectDelay = 5000 }: { disconnectDelay?: number } = {}): void {
-  const wss = new WebSocketServer({ server });
+  const wss = new WebSocketServer({ noServer: true });
+
+  // Only handle upgrade requests that are NOT for dedicated sub-paths.
+  server.on('upgrade', (req, socket, head) => {
+    if (req.url === '/ws/screenshot') return; // handled by screenshot-ws.ts
+    wss.handleUpgrade(req, socket as import('stream').Duplex, head, (client) => {
+      wss.emit('connection', client, req);
+    });
+  });
   let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let connectionsStarted = false;
 

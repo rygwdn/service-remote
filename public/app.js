@@ -3,7 +3,7 @@ document.addEventListener('alpine:init', () => {
 
   // Main server state mirror
   Alpine.store('state', {
-    obs: { connected: false, scenes: [], currentScene: '', streaming: false, recording: false, audioSources: [], screenshot: '' },
+    obs: { connected: false, scenes: [], currentScene: '', streaming: false, recording: false, audioSources: [] },
     x32: { connected: false, channels: [] },
     proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [] },
   });
@@ -183,6 +183,39 @@ function connectWs() {
 }
 
 connectWs();
+
+// --- Screenshot WebSocket ---
+let screenshotWs;
+let screenshotReconnectDelay = 1000;
+let currentScreenshotUrl = null;
+
+function connectScreenshotWs() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  screenshotWs = new WebSocket(`${proto}://${location.host}/ws/screenshot`);
+  screenshotWs.binaryType = 'blob';
+
+  screenshotWs.onopen = () => { screenshotReconnectDelay = 1000; };
+
+  screenshotWs.onmessage = (e) => {
+    if (!(e.data instanceof Blob)) return;
+    const newUrl = URL.createObjectURL(e.data);
+    // Update both preview elements
+    const p1 = document.getElementById('obs-preview');
+    const p2 = document.getElementById('ov-obs-preview');
+    if (p1) p1.src = newUrl;
+    if (p2) p2.src = newUrl;
+    // Revoke the previous object URL to avoid memory leaks
+    if (currentScreenshotUrl) URL.revokeObjectURL(currentScreenshotUrl);
+    currentScreenshotUrl = newUrl;
+  };
+
+  screenshotWs.onclose = () => {
+    setTimeout(connectScreenshotWs, screenshotReconnectDelay);
+    screenshotReconnectDelay = Math.min(screenshotReconnectDelay * 2, 10000);
+  };
+}
+
+connectScreenshotWs();
 
 // --- API helpers ---
 function post(url, body) {

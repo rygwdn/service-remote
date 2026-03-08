@@ -2,6 +2,7 @@ import obsWebSocketJs = require('obs-websocket-js');
 import config = require('../config');
 import state = require('../state');
 import logger = require('../logger');
+import screenshotWs = require('../screenshot-ws');
 
 const OBSWebSocket = obsWebSocketJs.default;
 
@@ -23,7 +24,8 @@ async function captureScreenshot(): Promise<void> {
       imageWidth: 480,
       imageCompressionQuality: 70,
     });
-    state.update('obs', { screenshot: result.imageData as string });
+    const b64 = (result.imageData as string).replace(/^data:image\/\w+;base64,/, '');
+    screenshotWs.broadcast(Buffer.from(b64, 'base64'));
   } catch {
     // Ignore screenshot errors (e.g. scene not yet loaded)
   }
@@ -68,7 +70,7 @@ function scheduleReconnect(): void {
 obs.on('ConnectionClosed', () => {
   logger.log('[OBS] Disconnected');
   stopScreenshotCapture();
-  state.update('obs', { connected: false, screenshot: undefined });
+  state.update('obs', { connected: false });
   if (wantConnected) scheduleReconnect();
 });
 

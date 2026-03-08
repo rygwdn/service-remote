@@ -16,7 +16,6 @@ type AppState = {
     streaming?: boolean;
     recording?: boolean;
     audioSources?: { name: string; volume: number; muted: boolean; level: number; live?: boolean }[];
-    screenshot?: string;
   };
   x32?: {
     connected?: boolean;
@@ -39,7 +38,7 @@ type Fixtures = {
 };
 
 const defaultState: Required<AppState> = {
-  obs: { connected: false, scenes: [], currentScene: '', streaming: false, recording: false, audioSources: [], screenshot: '' },
+  obs: { connected: false, scenes: [], currentScene: '', streaming: false, recording: false, audioSources: [] },
   x32: { connected: false, channels: [] },
   proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [] },
 };
@@ -82,11 +81,12 @@ export const test = base.extend<Fixtures & { page: Page }>({
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
     });
     // Drop WebSocket messages from the real server so they don't overwrite test state.
+    // This intercepts both the main state WS and the /ws/screenshot binary WS.
     let wsRoute: WebSocketRoute | null = null;
     await page.routeWebSocket(/.*/, (ws) => {
       wsRoute = ws;
       const server = ws.connectToServer();
-      server.onMessage(() => { /* absorb server state pushes */ });
+      server.onMessage(() => { /* absorb server pushes (state and screenshot frames) */ });
       ws.onMessage((msg) => server.send(msg));
     });
 

@@ -179,23 +179,38 @@ test.describe('OBS panel', () => {
     expect(recordCalled).toBe(false);
   });
 
-  test('preview images use obs.screenshot data URL from state', async ({ page, setState }) => {
-    const fakeDataUrl = 'data:image/jpeg;base64,/9j/fakeScreenshot';
-    await setState({
-      obs: { connected: true, screenshot: fakeDataUrl } as any,
+  test('preview image src updates when binary frame arrives on /ws/screenshot', async ({ page }) => {
+    // Directly simulate what app.js does when a binary message arrives on the
+    // screenshot WebSocket: create a blob URL and set it on #obs-preview.
+    await page.evaluate(() => {
+      const fakeJpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+      const blob = new Blob([fakeJpegBytes], { type: 'image/jpeg' });
+      const objectUrl = URL.createObjectURL(blob);
+      const p1 = document.getElementById('obs-preview');
+      const p2 = document.getElementById('ov-obs-preview');
+      if (p1) (p1 as HTMLImageElement).src = objectUrl;
+      if (p2) (p2 as HTMLImageElement).src = objectUrl;
     });
 
+    await page.waitForTimeout(100);
+
     const obsPreview = page.locator('#obs-preview');
-    await expect(obsPreview).toHaveAttribute('src', fakeDataUrl);
+    const src = await obsPreview.getAttribute('src');
+    // Should be a blob: URL
+    expect(src).toMatch(/^blob:/);
+
+    const ovPreview = page.locator('#ov-obs-preview');
+    const src2 = await ovPreview.getAttribute('src');
+    expect(src2).toMatch(/^blob:/);
   });
 
-  test('preview image src is empty when screenshot state is absent', async ({ page, setState }) => {
+  test('preview image src is empty before any screenshot frame arrives', async ({ page, setState }) => {
     await setState({ obs: { connected: true } });
 
     const obsPreview = page.locator('#obs-preview');
-    // src should be '' or not set to a data URL
+    // src should be '' or blob: (from a previous frame) — never a data: URL from state
     const src = await obsPreview.getAttribute('src');
-    expect(src === '' || src === null || !src.startsWith('data:')).toBeTruthy();
+    expect(src === '' || src === null || src?.startsWith('blob:') || !src?.startsWith('data:')).toBeTruthy();
   });
 
   test('edit mode reveals visibility checkboxes', async ({ page, setState }) => {

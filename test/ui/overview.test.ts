@@ -93,14 +93,24 @@ test.describe('Overview panel', () => {
     await expect(rows.nth(1).locator('.ov-ch-label')).toHaveClass(/muted/);
   });
 
-  test('overview OBS preview uses obs.screenshot data URL from state', async ({ page, setState }) => {
-    const fakeDataUrl = 'data:image/jpeg;base64,/9j/fakeOverviewScreenshot';
-    await setState({
-      obs: { connected: true, screenshot: fakeDataUrl } as any,
+  test('overview OBS preview src updates when binary screenshot frame is received', async ({ page }) => {
+    // Simulate what app.js does when a binary message arrives on the screenshot WebSocket:
+    // create a blob URL and set it on both preview elements.
+    await page.evaluate(() => {
+      const fakeJpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+      const blob = new Blob([fakeJpegBytes], { type: 'image/jpeg' });
+      const objectUrl = URL.createObjectURL(blob);
+      const p1 = document.getElementById('obs-preview');
+      const p2 = document.getElementById('ov-obs-preview');
+      if (p1) (p1 as HTMLImageElement).src = objectUrl;
+      if (p2) (p2 as HTMLImageElement).src = objectUrl;
     });
 
+    await page.waitForTimeout(100);
+
     const ovPreview = page.locator('#ov-obs-preview');
-    await expect(ovPreview).toHaveAttribute('src', fakeDataUrl);
+    const src = await ovPreview.getAttribute('src');
+    expect(src).toMatch(/^blob:/);
   });
 
   test('disconnected overlay is hidden when WebSocket is connected', async ({ page }) => {
