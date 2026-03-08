@@ -13,6 +13,10 @@ let activeThumbFetches = 0;
 const MAX_CONCURRENT_THUMBS = 3;
 const thumbQueue: Array<() => void> = [];
 
+// Server-side image cache keyed by localRevision (stable per slide content)
+const thumbCache = new Map<string, Buffer>();
+const THUMB_POLL_TIMEOUT_MS = 5000;
+
 function acquireThumbSlot(): Promise<void> {
   return new Promise((resolve) => {
     if (activeThumbFetches < MAX_CONCURRENT_THUMBS) {
@@ -118,28 +122,73 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
   });
 
   app.get('/api/proclaim/thumb', async (req: Request, res: Response) => {
+    const itemId = req.query.itemId as string | undefined;
+    const slideIndex = req.query.slideIndex as string | undefined;
+
+    // Look up the canonical localRevision for this slide (server-side cache key)
+    const localRevision = proclaim.getSlideLocalRevision(itemId, slideIndex);
+
+    // Serve from server-side cache if available
+    if (localRevision && thumbCache.has(localRevision)) {
+      res.set('Content-Type', 'image/png');
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.send(thumbCache.get(localRevision));
+    }
+
     await acquireThumbSlot();
     try {
-      const url = proclaim.getThumbUrl(
-        req.query.itemId as string | undefined,
-        req.query.slideIndex as string | undefined,
-        req.query.localRevision as string | undefined
-      );
+      const url = proclaim.getThumbUrl(itemId, slideIndex, req.query.localRevision as string | undefined);
       const sessionId = proclaim.getOnAirSessionId();
       const headers: Record<string, string> = { 'Accept-Encoding': 'identity' };
       if (sessionId) headers['OnAirSessionId'] = sessionId;
-      const r = await fetch(url, { headers });
-      if (!r.ok) {
-        logger.error(`[Proclaim] Thumb ${r.status} for: ${url} (sessionId=${sessionId})`);
-        return res.status(r.status).end();
+
+      const deadline = Date.now() + THUMB_POLL_TIMEOUT_MS;
+      let imageBuffer: Buffer | null = null;
+
+      while (Date.now() < deadline) {
+        const r = await fetch(url, { headers });
+        if (!r.ok) {
+          logger.error(`[Proclaim] Thumb ${r.status} for: ${url} (sessionId=${sessionId})`);
+          return res.status(r.status).end();
+        }
+        const contentType = r.headers.get('content-type') || '';
+        if (contentType.startsWith('image/')) {
+          imageBuffer = Buffer.from(await r.arrayBuffer());
+          break;
+        }
+        // Check for completionEstimateMs in JSON response
+        let estimateMs = 0;
+        try {
+          const json = JSON.parse(await r.text());
+          if (typeof json.completionEstimateMs === 'number') {
+            estimateMs = json.completionEstimateMs;
+          }
+        } catch {
+          // not JSON or no estimate — fall through to 204
+        }
+        if (estimateMs <= 0) {
+          logger.warn(`[Proclaim] Thumb returned non-image content-type: ${contentType} for: ${url}`);
+          return res.status(204).end();
+        }
+        // Wait the estimated time before retrying (clamped to remaining deadline)
+        const wait = Math.min(estimateMs, deadline - Date.now());
+        if (wait > 0) await new Promise<void>((resolve) => setTimeout(resolve, wait));
       }
-      const contentType = r.headers.get('content-type') || '';
-      if (!contentType.startsWith('image/')) {
-        logger.warn(`[Proclaim] Thumb returned non-image content-type: ${contentType} for: ${url}`);
+
+      if (!imageBuffer) {
+        logger.warn(`[Proclaim] Thumb poll timed out after ${THUMB_POLL_TIMEOUT_MS}ms for: ${url}`);
         return res.status(204).end();
       }
+
+      // Cache by localRevision if available (immutable per content version)
+      if (localRevision) {
+        thumbCache.set(localRevision, imageBuffer);
+        res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      } else {
+        res.set('Cache-Control', 'no-store');
+      }
       res.set('Content-Type', 'image/png');
-      res.send(Buffer.from(await r.arrayBuffer()));
+      res.send(imageBuffer);
     } catch (err) {
       logger.error('[Proclaim] Thumb fetch failed:', (err as Error).message);
       res.status(500).end();

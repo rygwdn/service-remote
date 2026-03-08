@@ -58,11 +58,14 @@ function getOnAirSessionId(): string | null {
   return onAirSessionId;
 }
 
-function getThumbUrl(itemId: string | undefined, slideIndex: string | undefined, _localRevision: string | undefined): string {
-  // Look up the per-slide localRevision from the presentation cache
+function getSlideLocalRevision(itemId: string | undefined, slideIndex: string | undefined): string | null {
   const item = presentationCache?.serviceItems?.find((i) => i.id === itemId);
   const slide = item?.slides?.find((s) => String(s.index) === String(slideIndex));
-  const localRevision = slide?.localRevision !== undefined ? String(slide.localRevision) : '';
+  return slide?.localRevision !== undefined ? String(slide.localRevision) : null;
+}
+
+function getThumbUrl(itemId: string | undefined, slideIndex: string | undefined, _localRevision: string | undefined): string {
+  const localRevision = getSlideLocalRevision(itemId, slideIndex) ?? '';
   const params = new URLSearchParams({ width: '480' });
   if (localRevision) params.set('localrevision', localRevision);
   return `${baseUrl()}/presentations/onair/items/${itemId}/slides/${slideIndex}/image?${params}`;
@@ -350,6 +353,7 @@ async function fetchDetailedStatus(): Promise<void> {
 
     let currentGroup: string | null = null;
     const serviceItems: ServiceItem[] = [];
+    const slideRevisions: Record<string, Record<string, string>> = {};
     for (let i = 0; i < rawItems.length; i++) {
       const item = rawItems[i];
       if (EXCLUDED_KINDS.has(item.kind)) continue;
@@ -370,6 +374,17 @@ async function fetchDetailedStatus(): Promise<void> {
         section,
         group: currentGroup,
       });
+      if (item.slides && item.slides.length > 0) {
+        const revMap: Record<string, string> = {};
+        for (const slide of item.slides) {
+          if (slide.localRevision !== undefined) {
+            revMap[String(slide.index)] = String(slide.localRevision);
+          }
+        }
+        if (Object.keys(revMap).length > 0) {
+          slideRevisions[item.id] = revMap;
+        }
+      }
     }
 
     const currentItem = serviceItems.find((item) => item.id === status.itemId);
@@ -380,6 +395,7 @@ async function fetchDetailedStatus(): Promise<void> {
       currentItemType: currentItem ? currentItem.kind : null,
       slideIndex: status.slideIndex !== undefined ? status.slideIndex : null,
       serviceItems,
+      slideRevisions,
     });
   } catch (err) {
     logger.log('[Proclaim] statusChanged error:', (err as Error).toString());
@@ -446,6 +462,7 @@ export = {
   sendAction,
   goToItem,
   getThumbUrl,
+  getSlideLocalRevision,
   getToken,
   getOnAirSessionId,
   _authenticateAppCommand: authenticateAppCommand,

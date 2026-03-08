@@ -29,6 +29,7 @@ class State extends EventEmitter {
         currentItemType: null,
         slideIndex: null,
         serviceItems: [],
+        slideRevisions: {},
       },
     };
   }

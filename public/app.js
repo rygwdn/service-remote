@@ -350,7 +350,9 @@ let currentConfig = null;
 let thumbRevision = 0;
 
 function thumbUrl(itemId, slideIndex) {
-  return `/api/proclaim/thumb?itemId=${encodeURIComponent(itemId)}&slideIndex=${encodeURIComponent(slideIndex)}&localRevision=${thumbRevision}`;
+  const p = Alpine.store('proclaim');
+  const localRevision = p?.slideRevisions?.[itemId]?.[String(slideIndex)] ?? thumbRevision;
+  return `/api/proclaim/thumb?itemId=${encodeURIComponent(itemId)}&slideIndex=${encodeURIComponent(slideIndex)}&localRevision=${encodeURIComponent(localRevision)}`;
 }
 
 function thumbHtml(thumb) {

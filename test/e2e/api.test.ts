@@ -147,20 +147,22 @@ describe('API routes', () => {
       assert.notEqual(res.status, 404);
     });
 
-    test('returns 204 when Proclaim responds with JSON instead of an image', async () => {
+    test('returns 204 when Proclaim responds with JSON instead of an image (no completionEstimateMs)', async () => {
       // Override getThumbUrl on a fresh test app stub, and mock globalThis.fetch
       // to return a JSON response (simulating Proclaim not-ready response).
       const { createTestApp, startServer } = require('../helpers/app');
       const { server: thumbServer, stubs: thumbStubs } = createTestApp();
       thumbStubs.proclaim.getThumbUrl = () => 'http://fake-proclaim/thumb';
+      thumbStubs.proclaim.getSlideLocalRevision = () => null;
 
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = async (_url: string) => ({
+      globalThis.fetch = (async (_url: string) => ({
         ok: true,
         status: 200,
         headers: new Headers({ 'Content-Type': 'application/json' }),
+        text: async () => '{}',
         arrayBuffer: async () => new ArrayBuffer(0),
-      }) as Response;
+      })) as unknown as typeof fetch;
 
       await startServer(thumbServer);
       const thumbReq = supertest(thumbServer);
@@ -174,6 +176,125 @@ describe('API routes', () => {
       }
 
       assert.equal(res!.status, 204);
+    });
+
+    test('waits for completionEstimateMs and retries when Proclaim returns JSON with estimate', async () => {
+      const { createTestApp, startServer } = require('../helpers/app');
+      const { server: thumbServer, stubs: thumbStubs } = createTestApp();
+      thumbStubs.proclaim.getThumbUrl = () => 'http://fake-proclaim/thumb';
+      thumbStubs.proclaim.getSlideLocalRevision = () => null;
+
+      let callCount = 0;
+      const originalFetch = globalThis.fetch;
+      const imageBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]); // PNG header
+      globalThis.fetch = (async (_url: string) => {
+        callCount++;
+        if (callCount === 1) {
+          // First call: return JSON with completionEstimateMs
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            text: async () => JSON.stringify({ completionEstimateMs: 50 }),
+            arrayBuffer: async () => new ArrayBuffer(0),
+          };
+        }
+        // Second call: return an image
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'Content-Type': 'image/png' }),
+          text: async () => '',
+          arrayBuffer: async () => imageBuffer.buffer,
+        };
+      }) as unknown as typeof fetch;
+
+      await startServer(thumbServer);
+      const thumbReq = supertest(thumbServer);
+
+      let res: import('supertest').Response;
+      try {
+        res = await thumbReq.get('/api/proclaim/thumb?itemId=abc&slideIndex=0');
+      } finally {
+        thumbServer.close();
+        globalThis.fetch = originalFetch;
+      }
+
+      assert.equal(res!.status, 200);
+      assert.ok(res!.headers['content-type']?.startsWith('image/'));
+      assert.ok(callCount >= 2, `Expected at least 2 fetch calls, got ${callCount}`);
+    });
+
+    test('serves cached image on second request with same localRevision', async () => {
+      const { createTestApp, startServer } = require('../helpers/app');
+      const { server: thumbServer, stubs: thumbStubs } = createTestApp();
+      thumbStubs.proclaim.getThumbUrl = () => 'http://fake-proclaim/thumb';
+      thumbStubs.proclaim.getSlideLocalRevision = () => 'rev-42';
+
+      let fetchCount = 0;
+      const originalFetch = globalThis.fetch;
+      const imageBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]); // PNG header
+      globalThis.fetch = (async (_url: string) => {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'Content-Type': 'image/png' }),
+          text: async () => '',
+          arrayBuffer: async () => imageBuffer.buffer,
+        };
+      }) as unknown as typeof fetch;
+
+      await startServer(thumbServer);
+      const thumbReq = supertest(thumbServer);
+
+      let res1: import('supertest').Response;
+      let res2: import('supertest').Response;
+      try {
+        res1 = await thumbReq.get('/api/proclaim/thumb?itemId=abc&slideIndex=0&localRevision=rev-42');
+        res2 = await thumbReq.get('/api/proclaim/thumb?itemId=abc&slideIndex=0&localRevision=rev-42');
+      } finally {
+        thumbServer.close();
+        globalThis.fetch = originalFetch;
+      }
+
+      assert.equal(res1!.status, 200);
+      assert.equal(res2!.status, 200);
+      assert.equal(fetchCount, 1, 'Should only fetch from Proclaim once (second served from cache)');
+    });
+
+    test('sets immutable Cache-Control header when localRevision is known', async () => {
+      const { createTestApp, startServer } = require('../helpers/app');
+      const { server: thumbServer, stubs: thumbStubs } = createTestApp();
+      thumbStubs.proclaim.getThumbUrl = () => 'http://fake-proclaim/thumb';
+      thumbStubs.proclaim.getSlideLocalRevision = () => 'rev-99';
+
+      const originalFetch = globalThis.fetch;
+      const imageBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+      globalThis.fetch = (async (_url: string) => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'Content-Type': 'image/png' }),
+        text: async () => '',
+        arrayBuffer: async () => imageBuffer.buffer,
+      })) as unknown as typeof fetch;
+
+      await startServer(thumbServer);
+      const thumbReq = supertest(thumbServer);
+
+      let res: import('supertest').Response;
+      try {
+        res = await thumbReq.get('/api/proclaim/thumb?itemId=abc&slideIndex=0&localRevision=rev-99');
+      } finally {
+        thumbServer.close();
+        globalThis.fetch = originalFetch;
+      }
+
+      assert.equal(res!.status, 200);
+      assert.ok(
+        res!.headers['cache-control']?.includes('immutable'),
+        `Expected immutable cache-control, got: ${res!.headers['cache-control']}`
+      );
     });
   });
 

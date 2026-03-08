@@ -80,6 +80,7 @@ function createTestApp(): TestApp {
         return true;
       },
       getThumbUrl: (itemId?: string, slideIndex?: string, _localRevision?: string) => `/fake-thumb/${itemId}/${slideIndex}`,
+      getSlideLocalRevision: (_itemId?: string, _slideIndex?: string) => null as string | null,
       getToken: () => 'test-token',
       getOnAirSessionId: () => null,
     },

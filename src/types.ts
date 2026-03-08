@@ -51,6 +51,8 @@ export interface ProclaimState {
   currentItemType: string | null;
   slideIndex: number | null;
   serviceItems: ServiceItem[];
+  /** Per-slide localRevision strings, keyed by itemId → slideIndex string → localRevision string */
+  slideRevisions: Record<string, Record<string, string>>;
 }
 
 export interface AppState {
@@ -111,6 +113,7 @@ export interface ProclaimConnection {
   sendAction(commandName: string, index?: number): Promise<boolean>;
   goToItem(itemId: string): Promise<boolean>;
   getThumbUrl(itemId: string | undefined, slideIndex: string | undefined, localRevision: string | undefined): string;
+  getSlideLocalRevision(itemId: string | undefined, slideIndex: string | undefined): string | null;
   getToken(): string | null;
   getOnAirSessionId(): string | null;
 }
