@@ -1,7 +1,8 @@
 import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
 
 test.describe('YouTube section in OBS panel', () => {
-  const obsPanel = (page: Parameters<typeof test>[1]['page']) =>
+  const obsPanel = (page: Page) =>
     page.locator('section.panel.active');
 
   test.beforeEach(async ({ page }) => {

@@ -216,9 +216,13 @@ function connectWs() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}`);
 
-  ws.onopen = () => { reconnectDelay = 1000; Alpine.store('ui').serverConnected = true; };
+  ws.onopen = () => {
+    reconnectDelay = 1000;
+    if (window.Alpine) Alpine.store('ui').serverConnected = true;
+  };
 
   ws.onmessage = (e) => {
+    if (!window.Alpine) return;
     const msg = JSON.parse(e.data);
     if (msg.type === 'state') {
       const store = Alpine.store('state');
@@ -231,13 +235,14 @@ function connectWs() {
   };
 
   ws.onclose = () => {
-    Alpine.store('ui').serverConnected = false;
+    if (window.Alpine) Alpine.store('ui').serverConnected = false;
     // Don't schedule reconnect while the tab is hidden — visibilitychange will reconnect
     if (document.hidden) return;
     setTimeout(connectWs, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 10000);
   };
 }
+
 
 // --- Screenshot WebSocket ---
 let screenshotWs;
