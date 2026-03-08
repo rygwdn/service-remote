@@ -24,6 +24,7 @@ let metersActive = false;
 let loggedNoResponse = false;
 let lastMeterSubscribeLogTime = 0;
 let lastMeterReceiveLogTime = 0;
+const loggedMeterChannels = new Set<string>();
 
 // Send queue: throttle outgoing messages to avoid flooding the mixer.
 // The X32 can silently drop packets if commands arrive faster than it can process them.
@@ -76,6 +77,7 @@ function connect(): void {
   }
 
   connected = false;
+  loggedMeterChannels.clear();
   // Pre-populate all channels in sorted order with default labels
   channels = [];
   for (let i = 1; i <= CH_COUNT; i++) {
@@ -194,16 +196,19 @@ function sendOsc(address: string, args?: OscArg[]): void {
 }
 
 // Parse a meter blob into an array of float32 values.
-// The blob is delivered by node-osc's oscDecode which already strips the OSC
-// blob length prefix. What remains is a packed array of little-endian float32
-// values (linear peak level 0.0–1.0, 1.0 = 0 dBFS) with no leading count field.
-// The count is derived from the buffer length: count = floor(blob.length / 4).
+// The blob is delivered by node-osc's oscDecode which already strips the outer
+// OSC blob length prefix. The X32 then prepends its own 4-byte count field
+// (little-endian uint32) indicating how many float32 values follow.
+// We skip that 4-byte count and read the rest as packed little-endian float32
+// values (linear peak level 0.0–1.0, 1.0 = 0 dBFS).
 function parseMeterBlob(blob: Buffer): number[] {
-  const count = Math.floor(blob.length / 4);
+  if (blob.length < 8) return []; // need at least 4-byte count + 1 float
+  const data = blob.subarray(4); // skip the embedded count prefix
+  const count = Math.floor(data.length / 4);
   const values: number[] = [];
   for (let i = 0; i < count; i++) {
     const offset = i * 4;
-    values.push(Math.round(blob.readFloatLE(offset) * 1000) / 1000);
+    values.push(Math.round(data.readFloatLE(offset) * 1000) / 1000);
   }
   return values;
 }
@@ -261,6 +266,11 @@ function handleMeterMessage(address: string, args: OscArg[]): void {
       }
     }
     if (level !== undefined && isFinite(level)) {
+      const key = `${ch.type}-${ch.index}`;
+      if (!loggedMeterChannels.has(key)) {
+        loggedMeterChannels.add(key);
+        logger.log(`[X32] First meter data for ${key} (${ch.label}): level=${level} via ${address}`);
+      }
       ch.level = level;
       updated = true;
     }
