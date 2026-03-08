@@ -441,4 +441,48 @@ test.describe('Proclaim panel', () => {
     });
     await expect(panel(page).locator('.proclaim-av-controls').filter({ hasText: /Audio/ })).toBeVisible();
   });
+
+  // --- Slide grid column count at different viewport sizes ---
+
+  test('slide grid shows 2 columns on mobile (≤480px wide)', async ({ page, setState }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.route('**/api/proclaim/thumb**', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.alloc(0) })
+    );
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item3', slideIndex: 0, serviceItems },
+    });
+
+    const grid = panel(page).locator('.slide-grid');
+    const gridBox = await grid.boundingBox();
+    const btn = panel(page).locator('.slide-grid .slide-thumb-btn').first();
+    const btnBox = await btn.boundingBox();
+    expect(gridBox).not.toBeNull();
+    expect(btnBox).not.toBeNull();
+    // With 2 columns each button should occupy ~50% of the grid width (±10px for gaps/padding)
+    const ratio = btnBox!.width / gridBox!.width;
+    expect(ratio).toBeGreaterThan(0.4);
+    expect(ratio).toBeLessThan(0.6);
+  });
+
+  test('slide grid shows 4 columns on desktop (>480px wide)', async ({ page, setState }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.route('**/api/proclaim/thumb**', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.alloc(0) })
+    );
+    await goToProclaim(page, setState, {
+      proclaim: { connected: true, onAir: true, currentItemId: 'item3', slideIndex: 0, serviceItems },
+    });
+
+    const grid = panel(page).locator('.slide-grid');
+    const gridBox = await grid.boundingBox();
+    const btn = panel(page).locator('.slide-grid .slide-thumb-btn').first();
+    const btnBox = await btn.boundingBox();
+    expect(gridBox).not.toBeNull();
+    expect(btnBox).not.toBeNull();
+    // With 4 columns each button should occupy ~25% of the grid width
+    const ratio = btnBox!.width / gridBox!.width;
+    expect(ratio).toBeGreaterThan(0.2);
+    expect(ratio).toBeLessThan(0.35);
+  });
 });
