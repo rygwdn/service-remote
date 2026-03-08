@@ -155,10 +155,10 @@
       <div class="obs-section">
         <h2>Output</h2>
         <div class="control-row">
-          <button class="btn" :class="{ active: $store.state.obs.streaming }"
+          <button id="obs-stream-btn" class="btn" :class="{ active: $store.state.obs.streaming }"
                   @click="window.confirm($store.state.obs.streaming ? 'Stop streaming?' : 'Start streaming?') && toggleStream()"
                   x-text="$store.state.obs.streaming ? 'Streaming' : 'Stream'"></button>
-          <button class="btn" :class="{ active: $store.state.obs.recording }"
+          <button id="obs-record-btn" class="btn" :class="{ active: $store.state.obs.recording }"
                   @click="window.confirm($store.state.obs.recording ? 'Stop recording?' : 'Start recording?') && toggleRecord()"
                   x-text="$store.state.obs.recording ? 'Recording' : 'Record'"></button>
         </div>

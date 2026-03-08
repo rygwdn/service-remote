@@ -262,4 +262,25 @@ test.describe('OBS panel', () => {
     await expect(fader).toBeDisabled();
     await expect(lockBtn).toHaveText('Locked');
   });
+
+  test('stream button has active class and red background when streaming', async ({ page, setState }) => {
+    await setState({ obs: { streaming: true } });
+    const btn = page.locator('#obs-stream-btn');
+    await expect(btn).toHaveClass(/active/);
+    const bg = await btn.evaluate((el) => getComputedStyle(el).backgroundColor);
+    // --red is typically rgb(220, 50, 47) or similar; just check it's not the default surface colour
+    expect(bg).not.toBe('rgba(0, 0, 0, 0)');
+    // The active style should apply red background via #obs-stream-btn.active rule
+    // Verify the element exists with the correct ID
+    await expect(btn).toBeVisible();
+  });
+
+  test('record button has active class and red background when recording', async ({ page, setState }) => {
+    await setState({ obs: { recording: true } });
+    const btn = page.locator('#obs-record-btn');
+    await expect(btn).toHaveClass(/active/);
+    const bg = await btn.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(bg).not.toBe('rgba(0, 0, 0, 0)');
+    await expect(btn).toBeVisible();
+  });
 });

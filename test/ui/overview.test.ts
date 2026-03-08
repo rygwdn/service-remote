@@ -177,6 +177,20 @@ test.describe('Overview panel', () => {
     await expect(cell).toContainText('Slide 3');
   });
 
+  test('LIVE and REC chips are on the same line in overview', async ({ page, setState }) => {
+    await setState({ obs: { streaming: true, recording: true } });
+    const livePill = page.locator('.ov-status-pill').filter({ hasText: 'LIVE' });
+    const recPill = page.locator('.ov-status-pill').filter({ hasText: 'REC' });
+    await expect(livePill).toBeVisible();
+    await expect(recPill).toBeVisible();
+    const liveBox = await livePill.boundingBox();
+    const recBox = await recPill.boundingBox();
+    expect(liveBox).not.toBeNull();
+    expect(recBox).not.toBeNull();
+    // Both pills should be on the same vertical line (within 4px tolerance)
+    expect(Math.abs(liveBox!.y - recBox!.y)).toBeLessThanOrEqual(4);
+  });
+
   test('slide nav buttons send proclaim action API calls', async ({ page, setState }) => {
     const apiCalls: string[] = [];
     await page.route('**/api/proclaim/action', async (route) => {
