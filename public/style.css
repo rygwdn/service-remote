@@ -542,6 +542,7 @@ main {
 }
 
 .obs-meter-fill {
+  width: 0%;
   height: 100%;
   background: var(--green);
   border-radius: 2px;
@@ -629,6 +630,7 @@ main {
 }
 
 .ch-meter-fill-h {
+  width: 0%;
   height: 100%;
   background: var(--green);
   border-radius: 2px;
@@ -824,6 +826,7 @@ main {
 }
 
 .ov-level-fill {
+  width: 0%;
   height: 100%;
   background: var(--green);
   border-radius: 2px;
