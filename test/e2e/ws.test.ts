@@ -158,6 +158,75 @@ describe('WebSocket meter subscription lifecycle', () => {
   });
 });
 
+describe('WebSocket level stripping', () => {
+  let server: import('http').Server;
+  let state: InstanceType<typeof import('../../src/state').State>;
+  let port: number;
+
+  beforeAll(async () => {
+    ({ server, state } = createTestApp());
+    port = await startServer(server);
+  });
+
+  afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
+
+  test('initial state broadcast does not include level on audioSources', async () => {
+    state.update('obs', {
+      audioSources: [{ name: 'Mic 1', volume: -10, muted: false, live: true, level: 0.75 }],
+    });
+
+    const { ws, data } = await connectAndReceive(port);
+    ws.close();
+
+    const sources = (data.data as any).obs.audioSources as Array<Record<string, unknown>>;
+    assert.ok(sources.length > 0, 'audioSources should be non-empty');
+    assert.equal(sources[0].level, undefined, 'level must be stripped from audioSources in main WS');
+  });
+
+  test('initial state broadcast does not include level on x32 channels', async () => {
+    state.update('x32', {
+      channels: [{ index: 1, type: 'ch', label: 'Vocals', fader: 0.8, muted: false, level: 0.5, source: 1, linkedToNext: false }],
+    });
+
+    const { ws, data } = await connectAndReceive(port);
+    ws.close();
+
+    const channels = (data.data as any).x32.channels as Array<Record<string, unknown>>;
+    assert.ok(channels.length > 0, 'channels should be non-empty');
+    assert.equal(channels[0].level, undefined, 'level must be stripped from channels in main WS');
+  });
+
+  test('state update broadcast does not include level on audioSources', async () => {
+    const { ws } = await connectAndReceive(port);
+
+    const updatePromise = nextMessage(ws);
+    state.update('obs', {
+      audioSources: [{ name: 'Mic 2', volume: -5, muted: false, live: true, level: 0.9 }],
+    });
+    const update = await updatePromise;
+    ws.close();
+
+    const sources = (update.data as any).obs.audioSources as Array<Record<string, unknown>>;
+    assert.ok(sources.length > 0, 'audioSources should be non-empty');
+    assert.equal(sources[0].level, undefined, 'level must be stripped from audioSources in update broadcast');
+  });
+
+  test('state update broadcast does not include level on x32 channels', async () => {
+    const { ws } = await connectAndReceive(port);
+
+    const updatePromise = nextMessage(ws);
+    state.update('x32', {
+      channels: [{ index: 2, type: 'ch', label: 'Guitar', fader: 0.6, muted: false, level: 0.3, source: 2, linkedToNext: false }],
+    });
+    const update = await updatePromise;
+    ws.close();
+
+    const channels = (update.data as any).x32.channels as Array<Record<string, unknown>>;
+    assert.ok(channels.length > 0, 'channels should be non-empty');
+    assert.equal(channels[0].level, undefined, 'level must be stripped from channels in update broadcast');
+  });
+});
+
 describe('WebSocket connection lifecycle', () => {
   function waitForClose(socket: InstanceType<typeof wsModule.WebSocket>): Promise<void> {
     return new Promise((resolve) => {

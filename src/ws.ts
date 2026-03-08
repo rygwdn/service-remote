@@ -4,6 +4,20 @@ import type { Connections, AppState, ChangeEvent } from './types';
 
 const { WebSocketServer } = ws;
 
+function stripLevels(state: AppState): AppState {
+  return {
+    ...state,
+    obs: {
+      ...state.obs,
+      audioSources: state.obs.audioSources.map(({ level: _, ...s }) => s as typeof s & { level: never }),
+    },
+    x32: {
+      ...state.x32,
+      channels: state.x32.channels.map(({ level: _, ...ch }) => ch as typeof ch & { level: never }),
+    },
+  };
+}
+
 interface StateHandle {
   get(): AppState;
   on(event: 'change', listener: (ev: ChangeEvent) => void): void;
@@ -36,7 +50,7 @@ function setupWebSocket(server: http.Server, state: StateHandle, connections?: C
     if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
 
     // Send full state on connect
-    socket.send(JSON.stringify({ type: 'state', data: state.get() }));
+    socket.send(JSON.stringify({ type: 'state', data: stripLevels(state.get()) }));
 
     // Start connections when the first client connects
     if (connections && !connectionsStarted) {
@@ -72,7 +86,7 @@ function setupWebSocket(server: http.Server, state: StateHandle, connections?: C
   function flushState(): void {
     pendingFlush = null;
     if (latestState === null) return;
-    const msg = JSON.stringify({ type: 'state', data: latestState });
+    const msg = JSON.stringify({ type: 'state', data: stripLevels(latestState as AppState) });
     for (const client of wss.clients) {
       if (client.readyState === ws.WebSocket.OPEN) {
         try {
