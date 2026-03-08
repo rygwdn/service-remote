@@ -10,34 +10,35 @@ import defaultState = require('./state');
 
 const userConfigPath = config.userConfigPath;
 
-// Concurrency limiter for Proclaim thumbnail fetches
-let activeThumbFetches = 0;
-const MAX_CONCURRENT_THUMBS = 3;
-const thumbQueue: Array<() => void> = [];
-
-// Server-side image cache keyed by localRevision (stable per slide content)
-const thumbCache = new Map<string, Buffer>();
 const THUMB_POLL_TIMEOUT_MS = 5000;
-
-function acquireThumbSlot(): Promise<void> {
-  return new Promise((resolve) => {
-    if (activeThumbFetches < MAX_CONCURRENT_THUMBS) {
-      activeThumbFetches++;
-      resolve();
-    } else {
-      thumbQueue.push(() => { activeThumbFetches++; resolve(); });
-    }
-  });
-}
-
-function releaseThumbSlot(): void {
-  activeThumbFetches--;
-  if (thumbQueue.length > 0) thumbQueue.shift()!();
-}
 
 function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stateOverride?: typeof defaultState, configPathOverride?: string): void {
   const state = stateOverride ?? defaultState;
   const cfgPath = configPathOverride ?? userConfigPath;
+
+  // Concurrency limiter for Proclaim thumbnail fetches (instance-local so tests don't share state)
+  let activeThumbFetches = 0;
+  const MAX_CONCURRENT_THUMBS = 3;
+  const thumbQueue: Array<() => void> = [];
+
+  // Server-side image cache keyed by (itemId, slideIndex, localRevision)
+  const thumbCache = new Map<string, Buffer>();
+
+  function acquireThumbSlot(): Promise<void> {
+    return new Promise((resolve) => {
+      if (activeThumbFetches < MAX_CONCURRENT_THUMBS) {
+        activeThumbFetches++;
+        resolve();
+      } else {
+        thumbQueue.push(() => { activeThumbFetches++; resolve(); });
+      }
+    });
+  }
+
+  function releaseThumbSlot(): void {
+    activeThumbFetches--;
+    if (thumbQueue.length > 0) thumbQueue.shift()!();
+  }
 
   // --- OBS ---
   app.post('/api/obs/scene', async (req: Request, res: Response) => {
