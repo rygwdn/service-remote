@@ -177,4 +177,75 @@ test.describe('Sound (X32) panel', () => {
     await lockBtn.click();
     await expect(muteBtn).toBeDisabled();
   });
+
+  // Helper: simulate a levels update by directly invoking the same DOM logic as the WS handler
+  async function injectLevels(page: Parameters<typeof test>[1]['page'], x32: Record<string, number>) {
+    await page.evaluate((x32Levels) => {
+      const mulToDisplayPct = (window as any).mulToDisplayPct;
+      for (const [key, level] of Object.entries(x32Levels)) {
+        const els = document.querySelectorAll(`[data-level-key="${key}"]`);
+        for (const el of els) {
+          (el as HTMLElement).style.width = mulToDisplayPct(level).toFixed(1) + '%';
+        }
+      }
+    }, x32);
+    await page.waitForTimeout(50);
+  }
+
+  test.describe('meter display (dB scale)', () => {
+    test.beforeEach(async ({ page, setState }) => {
+      await setState({
+        x32: {
+          connected: true,
+          channels: [
+            { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0 },
+          ],
+        },
+      });
+    });
+
+    test('silence (level=0) shows 0% meter', async ({ page }) => {
+      await injectLevels(page, { 'ch-1': 0 });
+      const fill = panel(page).locator('.ch-meter-fill-h').first();
+      const width = await fill.evaluate((el) => parseFloat((el as HTMLElement).style.width) || 0);
+      expect(width).toBe(0);
+    });
+
+    test('0 dBFS (level=1.0) shows 100% meter', async ({ page }) => {
+      await injectLevels(page, { 'ch-1': 1.0 });
+      const fill = panel(page).locator('.ch-meter-fill-h').first();
+      const width = await fill.evaluate((el) => parseFloat((el as HTMLElement).style.width));
+      expect(width).toBeCloseTo(100, 0);
+    });
+
+    test('-20 dBFS (level≈0.1) shows ~67% meter (not 10%)', async ({ page }) => {
+      const mul = Math.pow(10, -20 / 20); // ≈ 0.1
+      await injectLevels(page, { 'ch-1': mul });
+      const fill = panel(page).locator('.ch-meter-fill-h').first();
+      const width = await fill.evaluate((el) => parseFloat((el as HTMLElement).style.width));
+      expect(width).toBeGreaterThan(60);
+      expect(width).toBeLessThan(75);
+    });
+
+    test('initial state (level=0 from Alpine store) shows 0% meter', async ({ page, setState }) => {
+      await setState({
+        x32: {
+          connected: true,
+          channels: [
+            { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0 },
+          ],
+        },
+      });
+      const fill = panel(page).locator('.ch-meter-fill-h').first();
+      const width = await fill.evaluate((el) => parseFloat((el as HTMLElement).style.width) || 0);
+      expect(width).toBe(0);
+    });
+
+    test('very loud signal above 0 dBFS clamps to 100%', async ({ page }) => {
+      await injectLevels(page, { 'ch-1': 2.0 });
+      const fill = panel(page).locator('.ch-meter-fill-h').first();
+      const width = await fill.evaluate((el) => parseFloat((el as HTMLElement).style.width));
+      expect(width).toBeCloseTo(100, 0);
+    });
+  });
 });

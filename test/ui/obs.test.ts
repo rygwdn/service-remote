@@ -283,4 +283,73 @@ test.describe('OBS panel', () => {
     expect(bg).not.toBe('rgba(0, 0, 0, 0)');
     await expect(btn).toBeVisible();
   });
+
+  // Helper: simulate a levels update by directly invoking the same DOM logic as the WS handler
+  async function injectLevels(page: Parameters<typeof test>[1]['page'], obs: Record<string, number>) {
+    await page.evaluate((obsLevels) => {
+      const mulToDisplayPct = (window as any).mulToDisplayPct;
+      for (const [name, level] of Object.entries(obsLevels)) {
+        const els = document.querySelectorAll(`[data-level-obs="${CSS.escape(name)}"]`);
+        for (const el of els) {
+          (el as HTMLElement).style.width = mulToDisplayPct(level).toFixed(1) + '%';
+        }
+      }
+    }, obs);
+    await page.waitForTimeout(50);
+  }
+
+  test.describe('meter display (dB scale)', () => {
+    test.beforeEach(async ({ page, setState }) => {
+      await setState({
+        obs: {
+          connected: true,
+          audioSources: [{ name: 'Mic 1', volume: -10, muted: false, level: 0, live: true }],
+        },
+      });
+    });
+
+    test('silence (level=0) shows 0% meter', async ({ page }) => {
+      await injectLevels(page, { 'Mic 1': 0 });
+      const fill = panel(page).locator('.obs-meter-fill').first();
+      const width = await fill.evaluate((el) => parseFloat((el as HTMLElement).style.width));
+      expect(width).toBe(0);
+    });
+
+    test('0 dBFS (level=1.0) shows 100% meter', async ({ page }) => {
+      await injectLevels(page, { 'Mic 1': 1.0 });
+      const fill = panel(page).locator('.obs-meter-fill').first();
+      const width = await fill.evaluate((el) => parseFloat((el as HTMLElement).style.width));
+      expect(width).toBeCloseTo(100, 0);
+    });
+
+    test('-20 dBFS (level≈0.1) shows ~67% meter (not 10%)', async ({ page }) => {
+      // Linear: 0.1 * 100 = 10%. dB scale: (-20+60)/60 * 100 ≈ 66.7%
+      const mul = Math.pow(10, -20 / 20); // ≈ 0.1
+      await injectLevels(page, { 'Mic 1': mul });
+      const fill = panel(page).locator('.obs-meter-fill').first();
+      const width = await fill.evaluate((el) => parseFloat((el as HTMLElement).style.width));
+      expect(width).toBeGreaterThan(60);
+      expect(width).toBeLessThan(75);
+    });
+
+    test('initial state (level=0 from Alpine store) shows 0% meter', async ({ page, setState }) => {
+      // level is 0 in state; Alpine initial render should give 0% (not NaN/100%)
+      await setState({
+        obs: {
+          connected: true,
+          audioSources: [{ name: 'Mic 1', volume: -10, muted: false, level: 0, live: true }],
+        },
+      });
+      const fill = panel(page).locator('.obs-meter-fill').first();
+      const width = await fill.evaluate((el) => parseFloat((el as HTMLElement).style.width) || 0);
+      expect(width).toBe(0);
+    });
+
+    test('very loud signal above 0 dBFS clamps to 100%', async ({ page }) => {
+      await injectLevels(page, { 'Mic 1': 2.0 }); // +6 dBFS
+      const fill = panel(page).locator('.obs-meter-fill').first();
+      const width = await fill.evaluate((el) => parseFloat((el as HTMLElement).style.width));
+      expect(width).toBeCloseTo(100, 0);
+    });
+  });
 });

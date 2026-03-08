@@ -217,6 +217,15 @@ function connectScreenshotWs() {
 
 connectScreenshotWs();
 
+// Convert a linear 0–1 amplitude multiplier (as sent by OBS and X32) to a
+// 0–100 display percentage using a dB scale mapped to [-60 dB, 0 dBFS].
+// This gives perceptually useful meter widths: -20 dBFS ≈ 67%, silence = 0%.
+function mulToDisplayPct(mul) {
+  if (mul <= 0) return 0;
+  const db = 20 * Math.log10(mul);
+  return Math.max(0, Math.min(1, (db + 60) / 60)) * 100;
+}
+
 // --- Levels WebSocket (direct DOM updates, bypasses Alpine) ---
 let levelsWsConn;
 let levelsReconnectDelay = 1000;
@@ -233,7 +242,7 @@ function connectLevelsWs() {
       for (const [key, level] of Object.entries(x32)) {
         const els = document.querySelectorAll(`[data-level-key="${key}"]`);
         for (const el of els) {
-          el.style.width = (level * 100).toFixed(1) + '%';
+          el.style.width = mulToDisplayPct(level).toFixed(1) + '%';
         }
       }
     }
@@ -241,7 +250,7 @@ function connectLevelsWs() {
       for (const [name, level] of Object.entries(obs)) {
         const els = document.querySelectorAll(`[data-level-obs="${CSS.escape(name)}"]`);
         for (const el of els) {
-          el.style.width = (level * 100).toFixed(1) + '%';
+          el.style.width = mulToDisplayPct(level).toFixed(1) + '%';
         }
       }
     }

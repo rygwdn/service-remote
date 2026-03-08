@@ -133,6 +133,48 @@ describe('OBS InputVolumeChanged volume rounding', () => {
   });
 });
 
+describe('mulToDisplayPct()', () => {
+  // Pure function mirroring the meter display conversion in app.js.
+  // Converts a linear 0–1 amplitude multiplier to a 0–100 display percentage
+  // using a dB scale mapped to [-60dB, 0dB].
+  // Formula: clamp((20*log10(mul) + 60) / 60, 0, 1) * 100
+  function mulToDisplayPct(mul: number): number {
+    if (mul <= 0) return 0;
+    const db = 20 * Math.log10(mul);
+    return Math.max(0, Math.min(1, (db + 60) / 60)) * 100;
+  }
+
+  test('0 (silence) → 0%', () => {
+    assert.equal(mulToDisplayPct(0), 0);
+  });
+
+  test('1.0 (0 dBFS) → 100%', () => {
+    assert.equal(mulToDisplayPct(1.0), 100);
+  });
+
+  test('-20 dBFS (mul≈0.1) → 67%', () => {
+    // (20*log10(0.1) + 60) / 60 = (-20 + 60) / 60 = 40/60 ≈ 0.667
+    const mul = Math.pow(10, -20 / 20); // 0.1
+    const result = mulToDisplayPct(mul);
+    assert.ok(Math.abs(result - 66.67) < 0.1, `expected ~66.7%, got ${result}`);
+  });
+
+  test('-60 dBFS (mul≈0.001) → 0%', () => {
+    const mul = Math.pow(10, -60 / 20);
+    const result = mulToDisplayPct(mul);
+    assert.ok(Math.abs(result) < 0.1, `expected ~0%, got ${result}`);
+  });
+
+  test('values below -60 dBFS clamp to 0%', () => {
+    const mul = Math.pow(10, -80 / 20);
+    assert.equal(mulToDisplayPct(mul), 0);
+  });
+
+  test('values above 0 dBFS clamp to 100%', () => {
+    assert.equal(mulToDisplayPct(2.0), 100); // +6 dBFS — clamp to 100%
+  });
+});
+
 describe('OBS refreshLiveStatus logic', () => {
   function applyLiveStatus(
     prevSources: Array<{ name: string; live: boolean; level: number }>,
