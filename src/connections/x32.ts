@@ -42,6 +42,13 @@ interface OscResult {
 // Dynamically discovered channels
 let channels: Channel[] = [];
 
+// Pending fader map: key is `${type}-${index}`, value is { value, sentAt }
+// When the client sends a fader command, we record it here so that stale OSC
+// echoes from the X32 do not snap the slider back during or after a drag.
+const pendingFaders = new Map<string, { value: number; sentAt: number }>();
+const PENDING_FADER_TIMEOUT_MS = 2000;
+const PENDING_FADER_TOLERANCE = 0.05;
+
 // Number of input channels, buses, and matrices on the X32
 const CH_COUNT = 32;
 const BUS_COUNT = 16;
@@ -398,13 +405,60 @@ function handleMessage(address: string, args: OscArg[]): void {
   }
 }
 
+/**
+ * Pure function: apply an OSC-parsed patch to a channel, respecting the
+ * pending fader map.  Returns the filtered patch that should be applied.
+ *
+ * Rules for the fader field:
+ * - If no pending entry exists → apply normally.
+ * - If a pending entry exists AND is younger than PENDING_FADER_TIMEOUT_MS:
+ *   - If |incoming - pending| <= PENDING_FADER_TOLERANCE → confirmation;
+ *     clear the pending entry and apply.
+ *   - Otherwise → stale echo; omit fader from the returned patch.
+ * - If the pending entry has expired (>= PENDING_FADER_TIMEOUT_MS) → clear
+ *   it and apply normally.
+ *
+ * Non-fader fields are always included in the returned patch.
+ */
+function applyOscPatchWithPending(
+  channel: { type: string; index: number },
+  patch: Partial<Channel>,
+  pending: Map<string, { value: number; sentAt: number }>,
+): Partial<Channel> {
+  if (!('fader' in patch)) return patch;
+
+  const key = `${channel.type}-${channel.index}`;
+  const entry = pending.get(key);
+
+  if (!entry) return patch;
+
+  const age = Date.now() - entry.sentAt;
+  if (age >= PENDING_FADER_TIMEOUT_MS) {
+    // Expired: clear and apply normally
+    pending.delete(key);
+    return patch;
+  }
+
+  const diff = Math.abs((patch.fader as number) - entry.value);
+  if (diff <= PENDING_FADER_TOLERANCE) {
+    // Confirmation: X32 echoed back our value; clear pending and apply
+    pending.delete(key);
+    return patch;
+  }
+
+  // Stale echo: omit the fader field, pass through everything else
+  const { fader: _fader, ...rest } = patch;
+  return rest;
+}
+
 function updateChannel(index: number, type: 'ch' | 'bus' | 'main' | 'mtx', patch: Partial<Channel>): void {
   const ch = channels.find((c) => c.index === index && c.type === type);
   if (!ch) {
     logger.warn(`[X32] updateChannel: unknown ${type} ${index} — ignoring`);
     return;
   }
-  Object.assign(ch, patch);
+  const effectivePatch = applyOscPatchWithPending({ type, index }, patch, pendingFaders);
+  Object.assign(ch, effectivePatch);
   state.update('x32', { connected: true, channels: [...channels] });
 }
 
@@ -442,8 +496,19 @@ export = {
   parseOscMessage,
   parseMeterBlob,
   buildMeterRequests,
+  applyOscPatchWithPending,
   connect,
   disconnect,
+
+  /**
+   * Record a pending fader value for the given channel.  Call this immediately
+   * after sending a fader command so that stale OSC echoes are suppressed until
+   * the X32 confirms the new value (or 2 s elapse).
+   */
+  setPendingFader(type: 'ch' | 'bus' | 'main' | 'mtx', index: number, value: number): void {
+    const key = `${type}-${index}`;
+    pendingFaders.set(key, { value, sentAt: Date.now() });
+  },
 
   startMeterUpdates(): void {
     logger.log('[X32] startMeterUpdates (connected=' + connected + ')');
@@ -463,10 +528,20 @@ export = {
   setFader(channelIndex: number, value: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {
     const clamped = Math.max(0, Math.min(1, value));
     logger.log(`[X32] setFader ${type} ${channelIndex} = ${clamped}`);
+    // Record the pending fader before sending so that OSC echoes arriving during
+    // or immediately after the drag are suppressed until the X32 confirms.
+    const key = `${type}-${channelIndex}`;
+    pendingFaders.set(key, { value: clamped, sentAt: Date.now() });
     sendOsc(`${channelPrefix(channelIndex, type)}/mix/fader`, [
       { value: clamped },
     ]);
-    updateChannel(channelIndex, type, { fader: clamped });
+    // Apply the update optimistically in local state (bypassing pending check
+    // so our own setFader always writes through).
+    const ch = channels.find((c) => c.index === channelIndex && c.type === type);
+    if (ch) {
+      ch.fader = clamped;
+      state.update('x32', { connected: true, channels: [...channels] });
+    }
   },
 
   toggleMute(channelIndex: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {
