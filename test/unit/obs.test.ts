@@ -2,6 +2,47 @@ import assert = require('node:assert/strict');
 
 // Test the refreshLiveStatus logic: live flag and level reset when sources go offline.
 
+describe('OBS extractObsPeak()', () => {
+  // Pure function extracted from obs.ts InputVolumeMeters handler.
+  // inputLevelsMul format per obs-websocket spec: [[magnitude, peak, inputPeak], ...]
+  // Each inner array is one stereo channel pair. We want peak (index 1).
+  function extractObsPeak(levels: number[][]): number {
+    if (!levels || levels.length === 0) return 0;
+    let peak = 0;
+    for (const ch of levels) {
+      const val = ch[1];
+      if (val != null && val > peak) peak = val;
+    }
+    return peak;
+  }
+
+  test('returns 0 for empty levels array', () => {
+    assert.equal(extractObsPeak([]), 0);
+  });
+
+  test('returns peak (index 1) from a single channel pair', () => {
+    // [magnitude=0.1, peak=0.6, inputPeak=0.99]
+    assert.equal(extractObsPeak([[0.1, 0.6, 0.99]]), 0.6);
+  });
+
+  test('returns max peak across multiple channel pairs', () => {
+    assert.equal(extractObsPeak([[0.1, 0.4, 0.9], [0.2, 0.7, 0.95]]), 0.7);
+  });
+
+  test('does NOT use inputPeak (index 2) — regression for 100% bug', () => {
+    // inputPeak (index 2) is typically near 1.0 for any active source.
+    // Using it caused meters to always show ~100%.
+    const levels = [[0.05, 0.3, 0.98]]; // inputPeak is 0.98 — should NOT be used
+    const result = extractObsPeak(levels);
+    assert.ok(result < 0.98, `expected < 0.98, got ${result} — likely using inputPeak`);
+    assert.equal(result, 0.3);
+  });
+
+  test('returns 0 when all peaks are 0', () => {
+    assert.equal(extractObsPeak([[0, 0, 0], [0, 0, 0]]), 0);
+  });
+});
+
 describe('OBS InputVolumeMeters level rounding', () => {
   // Pure function mirroring the level-update logic in obs.ts InputVolumeMeters handler
   function applyLevelUpdates(

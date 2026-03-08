@@ -22,6 +22,8 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let meterInterval: ReturnType<typeof setInterval> | null = null;
 let metersActive = false;
 let loggedNoResponse = false;
+let lastMeterSubscribeLogTime = 0;
+let lastMeterReceiveLogTime = 0;
 
 // Send queue: throttle outgoing messages to avoid flooding the mixer.
 // The X32 can silently drop packets if commands arrive faster than it can process them.
@@ -222,6 +224,11 @@ function buildMeterRequests(): Array<{ address: string; args: OscArg[] }> {
 }
 
 function requestMeterUpdates(): void {
+  const now = Date.now();
+  if (now - lastMeterSubscribeLogTime > 30000) {
+    logger.log('[X32] Subscribing to meter banks 0 (ch), 2 (bus), 3 (main/mtx)');
+    lastMeterSubscribeLogTime = now;
+  }
   for (const { address, args } of buildMeterRequests()) {
     sendOsc(address, args);
   }
@@ -231,6 +238,11 @@ function handleMeterMessage(address: string, args: OscArg[]): void {
   const blob = args[0]?.value;
   if (!Buffer.isBuffer(blob)) return;
   const values = parseMeterBlob(blob);
+  const now = Date.now();
+  if (now - lastMeterReceiveLogTime > 30000) {
+    logger.log(`[X32] Meter data: ${address} blob=${blob.length}B values[0..3]=${values.slice(0, 4).join(', ')}`);
+    lastMeterReceiveLogTime = now;
+  }
   let updated = false;
   for (const ch of channels) {
     let level: number | undefined;

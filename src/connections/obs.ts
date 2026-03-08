@@ -105,14 +105,13 @@ obs.on('InputVolumeChanged', ({ inputName, inputVolumeMul }) => {
 obs.on('InputVolumeMeters', ({ inputs }) => {
   const obsLevels: Record<string, number> = {};
   for (const input of inputs) {
-    // inputLevelsMul is [[left_pre, right_pre, left_post, right_post], ...]
+    // inputLevelsMul format per obs-websocket spec: [[magnitude, peak, inputPeak], ...]
+    // Use peak (index 1). inputPeak (index 2) is near 1.0 for any active source — do not use.
     const levels = input.inputLevelsMul as number[][];
     if (!levels || levels.length === 0) continue;
-    // Use post-fader (index 2/3) peak across channels
     let peak = 0;
     for (const ch of levels) {
-      if (ch[2] != null && ch[2] > peak) peak = ch[2];
-      if (ch[3] != null && ch[3] > peak) peak = ch[3];
+      if (ch[1] != null && ch[1] > peak) peak = ch[1];
     }
     obsLevels[input.inputName as string] = Math.round(peak * 1000) / 1000;
   }
