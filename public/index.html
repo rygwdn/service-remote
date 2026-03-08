@@ -63,7 +63,7 @@
         <!-- Row 5: X32 compact levels + OBS compact levels (full width, stacked) -->
         <div class="ov-block ov-full-width">
           <div class="ov-title">Mix</div>
-          <div class="ov-channel-list">
+          <div class="ov-channel-list ov-channel-grid">
             <template x-for="ch in $store.state.x32.channels" :key="ch.type+'/'+ch.index">
               <div class="ov-channel-row" x-show="!$store.ui.isHiddenX32(ch.type+'/'+ch.index)">
                 <span class="ov-ch-label" :class="{ muted: ch.muted }" x-text="ch.label"></span>
@@ -77,7 +77,7 @@
         </div>
         <div class="ov-block ov-full-width">
           <div class="ov-title">OBS</div>
-          <div class="ov-channel-list">
+          <div class="ov-channel-list ov-channel-grid">
             <template x-for="src in $store.state.obs.audioSources" :key="src.name">
               <div class="ov-channel-row" x-show="!$store.ui.isHiddenObs(src.name)">
                 <span class="ov-ch-label" :class="{ muted: src.muted }" x-text="src.name"></span>
@@ -268,6 +268,20 @@
     <!-- ===================== Settings Panel ===================== -->
     <section class="panel" :class="{ active: $store.ui.tab==='settings' }"
              x-data="settingsPanel()">
+
+      <div class="settings-section">
+        <h2>This server</h2>
+        <template x-for="url in serverAddresses" :key="url">
+          <div class="server-address-row">
+            <a :href="url" target="_blank" x-text="url" class="server-address-link"></a>
+            <div class="qr-anchor">
+              <span class="qr-icon">&#x1F4F1;</span>
+              <img class="qr-popup" :src="'/api/server/qr?url='+encodeURIComponent(url)" :alt="'QR for '+url">
+            </div>
+          </div>
+        </template>
+      </div>
+
       <div class="settings-section">
         <h2>OBS</h2>
         <label>Address <input type="text" x-model="cfg.obs.address" placeholder="ws://localhost:4455"></label>

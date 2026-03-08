@@ -18,12 +18,14 @@
     "express": "^4.21.0",
     "node-osc": "^11.2.2",
     "obs-websocket-js": "^5.0.6",
+    "qrcode": "^1.5.4",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@types/express": "^5.0.6",
     "@types/node": "^25.3.3",
+    "@types/qrcode": "^1.5.6",
     "@types/supertest": "^7.2.0",
     "@types/ws": "^8.18.1",
     "alpinejs": "^3.15.8",

@@ -401,4 +401,47 @@ describe('API routes', () => {
       }
     });
   });
+
+  describe('GET /api/server/addresses', () => {
+    test('returns port and addresses array', async () => {
+      const res = await request.get('/api/server/addresses');
+      assert.equal(res.status, 200);
+      assert.ok(typeof res.body.port === 'number');
+      assert.ok(Array.isArray(res.body.addresses));
+    });
+
+    test('always includes localhost address', async () => {
+      const res = await request.get('/api/server/addresses');
+      const addresses: string[] = res.body.addresses;
+      assert.ok(addresses.some((a) => a.startsWith('http://localhost:')));
+    });
+
+    test('all addresses are http URLs ending with the server port', async () => {
+      const res = await request.get('/api/server/addresses');
+      const port: number = res.body.port;
+      for (const addr of res.body.addresses as string[]) {
+        assert.ok(addr.startsWith('http://'), `${addr} should start with http://`);
+        assert.ok(addr.endsWith(`:${port}`), `${addr} should end with :${port}`);
+      }
+    });
+  });
+
+  describe('GET /api/server/qr', () => {
+    test('returns SVG for a valid url param', async () => {
+      const res = await request.get('/api/server/qr?url=http%3A%2F%2Flocalhost%3A3000')
+        .buffer(true).parse((res, callback) => {
+          let data = '';
+          res.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+          res.on('end', () => callback(null, data));
+        });
+      assert.equal(res.status, 200);
+      assert.ok(res.headers['content-type']?.includes('svg'));
+      assert.ok((res.body as string).includes('<svg'));
+    });
+
+    test('returns 400 when url param is missing', async () => {
+      const res = await request.get('/api/server/qr');
+      assert.equal(res.status, 400);
+    });
+  });
 });

@@ -1,5 +1,7 @@
 import type { Application, Request, Response } from 'express';
 import fs = require('fs');
+import os = require('os');
+import qrcode = require('qrcode');
 import type { Connections } from './types';
 import discovery = require('./discovery');
 import config = require('./config');
@@ -316,6 +318,40 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
     try {
       const result = await discovery.discoverProclaim();
       res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // --- Server addresses ---
+  app.get('/api/server/addresses', (req: Request, res: Response) => {
+    const port = config.server.port;
+    const ifaces = os.networkInterfaces();
+    const addresses: string[] = [];
+    for (const iface of Object.values(ifaces)) {
+      if (!iface) continue;
+      for (const addr of iface) {
+        if (addr.family === 'IPv4' && !addr.internal) {
+          addresses.push(`http://${addr.address}:${port}`);
+        }
+      }
+    }
+    // Always include localhost
+    addresses.unshift(`http://localhost:${port}`);
+    res.json({ port, addresses });
+  });
+
+  app.get('/api/server/qr', async (req: Request, res: Response) => {
+    const url = req.query.url as string | undefined;
+    if (!url) {
+      res.status(400).json({ error: 'url query parameter required' });
+      return;
+    }
+    try {
+      const svg = await qrcode.toString(url, { type: 'svg', margin: 1 });
+      res.set('Content-Type', 'image/svg+xml');
+      res.set('Cache-Control', 'public, max-age=300');
+      res.send(svg);
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }

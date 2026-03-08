@@ -72,10 +72,20 @@ document.addEventListener('alpine:init', () => {
     discoverStatus: { obs: '', x32: '', proclaim: '' },
     saveStatus: '',
     logs: [],
+    serverAddresses: [],
 
     async init() {
       await this.loadConfig();
       await this.loadLogs();
+      await this.loadServerAddresses();
+    },
+
+    async loadServerAddresses() {
+      try {
+        const res = await fetch('/api/server/addresses');
+        const data = await res.json();
+        this.serverAddresses = data.addresses ?? [];
+      } catch (_) { /* non-critical */ }
     },
 
     async loadConfig() {

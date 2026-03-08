@@ -1,8 +1,22 @@
 'use strict';
 
 import childProcess = require('child_process');
+import os = require('os');
 import logger = require('./logger');
 import type { ChangeEvent } from './types';
+
+function getFirstLanAddress(port: number): string | null {
+  const ifaces = os.networkInterfaces();
+  for (const iface of Object.values(ifaces)) {
+    if (!iface) continue;
+    for (const addr of iface) {
+      if (addr.family === 'IPv4' && !addr.internal) {
+        return `http://${addr.address}:${port}`;
+      }
+    }
+  }
+  return null;
+}
 
 const { spawn, exec } = childProcess;
 
@@ -226,12 +240,14 @@ function startTray(
     }
   }
 
+  const lanUrl = getFirstLanAddress(port) ?? `http://localhost:${port}`;
+
   // Update the status item whenever any connection state changes
   state.on('change', ({ state: s }: ChangeEvent) => {
     const obs      = s.obs.connected      ? 'OBS:on'      : 'OBS:off';
     const x32      = s.x32.connected      ? 'X32:on'      : 'X32:off';
     const proclaim = s.proclaim.connected ? 'Proclaim:on' : 'Proclaim:off';
-    send({ cmd: 'status', text: `v${version}  ${obs}  ${x32}  ${proclaim}` });
+    send({ cmd: 'status', text: `v${version}  ${obs}  ${x32}  ${proclaim}  ${lanUrl}` });
   });
 
   // Kill the tray process when the server exits
