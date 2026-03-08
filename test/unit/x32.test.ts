@@ -164,25 +164,23 @@ describe('x32 parseOscMessage()', () => {
 });
 
 describe('x32 parseMeterBlob()', () => {
-  // Helper: build a meter blob matching the X32 wire format:
-  // 4-byte big-endian count, followed by little-endian float32 values.
+  // Helper: build a meter blob as delivered by node-osc's oscDecode after it strips
+  // the OSC blob length prefix. The blob is just raw little-endian float32 values
+  // with NO leading 4-byte count — the count is implicit from the buffer length.
   function makeBlob(floats: number[]): Buffer {
-    const buf = Buffer.allocUnsafe(4 + floats.length * 4);
-    buf.writeUInt32BE(floats.length, 0);
+    const buf = Buffer.allocUnsafe(floats.length * 4);
     for (let i = 0; i < floats.length; i++) {
-      buf.writeFloatLE(floats[i], 4 + i * 4);
+      buf.writeFloatLE(floats[i], i * 4);
     }
     return buf;
   }
 
-  test('returns empty array for blob shorter than 4 bytes', () => {
-    assert.deepEqual(parseMeterBlob(Buffer.alloc(3)), []);
+  test('returns empty array for empty blob', () => {
     assert.deepEqual(parseMeterBlob(Buffer.alloc(0)), []);
   });
 
-  test('returns empty array when count is 0', () => {
-    const buf = Buffer.alloc(4); // count = 0, no floats
-    assert.deepEqual(parseMeterBlob(buf), []);
+  test('returns empty array for blob shorter than one float (< 4 bytes)', () => {
+    assert.deepEqual(parseMeterBlob(Buffer.alloc(3)), []);
   });
 
   test('parses a single float value', () => {
@@ -201,13 +199,10 @@ describe('x32 parseMeterBlob()', () => {
     }
   });
 
-  test('stops reading when blob is shorter than declared count', () => {
-    // Declare 4 floats but only provide data for 2
-    const buf = Buffer.allocUnsafe(4 + 2 * 4);
-    buf.writeUInt32BE(4, 0);       // claims 4 floats
-    buf.writeFloatLE(0.1, 4);
-    buf.writeFloatLE(0.2, 8);
-    // bytes 12-19 are missing → only 2 values should be returned
+  test('ignores trailing bytes that do not form a complete float', () => {
+    // 2 full floats (8 bytes) + 3 partial bytes = only 2 values returned
+    const full = makeBlob([0.1, 0.2]);
+    const buf = Buffer.concat([full, Buffer.alloc(3)]);
     const result = parseMeterBlob(buf);
     assert.equal(result.length, 2);
   });
@@ -217,17 +212,18 @@ describe('x32 parseMeterBlob()', () => {
     const floats = new Array(32).fill(0);
     floats[4] = 0.8; // ch 5 is at 0-based position 4
     const result = parseMeterBlob(makeBlob(floats));
+    assert.equal(result.length, 32);
     assert.ok(Math.abs(result[4] - 0.8) < 1e-6);
     assert.equal(result[0], 0);
   });
 });
 
 describe('x32 parseMeterBlob() level rounding', () => {
+  // makeBlob matches what node-osc's oscDecode delivers: raw LE float32s, no count prefix
   function makeBlob(floats: number[]): Buffer {
-    const buf = Buffer.allocUnsafe(4 + floats.length * 4);
-    buf.writeUInt32BE(floats.length, 0);
+    const buf = Buffer.allocUnsafe(floats.length * 4);
     for (let i = 0; i < floats.length; i++) {
-      buf.writeFloatLE(floats[i], 4 + i * 4);
+      buf.writeFloatLE(floats[i], i * 4);
     }
     return buf;
   }

@@ -185,17 +185,15 @@ function sendOsc(address: string, args?: OscArg[]): void {
 }
 
 // Parse a meter blob into an array of float32 values.
-// X32 blob format: 4-byte big-endian uint32 count, followed by count × 4-byte
-// little-endian float32 values (linear peak level 0.0–1.0, 1.0 = 0 dBFS).
-// The count is big-endian (standard OSC int32), but the float payload within
-// the blob is little-endian — confirmed by Xdump.c in the C reference tools.
+// The blob is delivered by node-osc's oscDecode which already strips the OSC
+// blob length prefix. What remains is a packed array of little-endian float32
+// values (linear peak level 0.0–1.0, 1.0 = 0 dBFS) with no leading count field.
+// The count is derived from the buffer length: count = floor(blob.length / 4).
 function parseMeterBlob(blob: Buffer): number[] {
-  if (blob.length < 4) return [];
-  const count = blob.readUInt32BE(0);
+  const count = Math.floor(blob.length / 4);
   const values: number[] = [];
   for (let i = 0; i < count; i++) {
-    const offset = 4 + i * 4;
-    if (offset + 4 > blob.length) break;
+    const offset = i * 4;
     values.push(Math.round(blob.readFloatLE(offset) * 1000) / 1000);
   }
   return values;
