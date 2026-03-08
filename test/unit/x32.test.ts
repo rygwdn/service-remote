@@ -278,35 +278,37 @@ describe('x32 parseMeterBlob() level rounding', () => {
 });
 
 describe('x32 buildMeterRequests()', () => {
-  test('returns three OSC messages for banks 0, 2, and 3', () => {
+  // The X32 protocol uses /meters ,si <bank-path> <time_factor>
+  // where bank-path is e.g. "/meters/0" and time_factor controls update interval (50ms * time_factor).
+  // The X32 replies with messages addressed /meters/0, /meters/2, etc.
+
+  test('returns two OSC messages for banks 0 and 2', () => {
     const requests = buildMeterRequests();
-    assert.equal(requests.length, 3);
+    assert.equal(requests.length, 2);
   });
 
-  test('each meter request uses /meters/N address (not /meters)', () => {
+  test('all requests use /meters address (not /meters/N)', () => {
     const requests = buildMeterRequests();
-    const addresses = requests.map((r) => r.address);
-    assert.ok(addresses.includes('/meters/0'), 'must include /meters/0 for input channels');
-    assert.ok(addresses.includes('/meters/2'), 'must include /meters/2 for mix buses');
-    assert.ok(addresses.includes('/meters/3'), 'must include /meters/3 for main/matrix');
-    for (const addr of addresses) {
-      assert.notEqual(addr, '/meters', `address "${addr}" must not be bare /meters — X32 ignores that`);
+    for (const req of requests) {
+      assert.equal(req.address, '/meters', `address must be "/meters", got "${req.address}"`);
     }
   });
 
-  test('each meter request has exactly one arg (duration), not two', () => {
+  test('bank paths are /meters/0 (channels) and /meters/2 (bus/mtx/main)', () => {
     const requests = buildMeterRequests();
-    for (const req of requests) {
-      assert.equal(req.args.length, 1, `${req.address} should have 1 arg (duration), not ${req.args.length}`);
-    }
+    const bankPaths = requests.map((r) => r.args[0].value);
+    assert.ok(bankPaths.includes('/meters/0'), 'must subscribe to /meters/0 for input channels');
+    assert.ok(bankPaths.includes('/meters/2'), 'must subscribe to /meters/2 for bus/mtx/main');
   });
 
-  test('duration arg is a positive integer', () => {
+  test('each request has exactly two args: bank path string and time_factor int', () => {
     const requests = buildMeterRequests();
     for (const req of requests) {
-      const duration = req.args[0].value;
-      assert.ok(typeof duration === 'number' && Number.isInteger(duration) && duration > 0,
-        `${req.address} duration must be a positive integer, got ${duration}`);
+      assert.equal(req.args.length, 2, `${req.args[0].value} should have 2 args, not ${req.args.length}`);
+      assert.equal(typeof req.args[0].value, 'string', 'first arg must be a string (bank path)');
+      const timeFactor = req.args[1].value;
+      assert.ok(typeof timeFactor === 'number' && Number.isInteger(timeFactor) && timeFactor > 0,
+        `time_factor must be a positive integer, got ${timeFactor}`);
     }
   });
 });

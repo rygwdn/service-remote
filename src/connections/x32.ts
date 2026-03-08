@@ -213,25 +213,31 @@ function parseMeterBlob(blob: Buffer): number[] {
   return values;
 }
 
-// Returns the list of OSC meter subscription requests for input channels, mix buses, and main/matrix.
-// The X32 expects /meters/N with a single int arg (duration in 100ms ticks).
-// It responds with /meters/0, /meters/2, /meters/3 blobs every 100 ms for the given duration.
-// We renew every 1.5 s to keep the stream active (duration = 20 × 100 ms = 2 s).
+// Returns the list of OSC meter subscription requests for input channels, mix buses, matrix, and main.
+// Protocol: /meters ,si <bank-path> <time_factor>
+//   bank-path: "/meters/0", "/meters/2", etc.
+//   time_factor: 1–99; update interval = 50ms × time_factor; active for ~10s.
+// The X32 responds with /meters/0 and /meters/2 blobs every 50ms × time_factor.
+// We renew every 1.5 s to keep the stream active (time_factor=5 → 250ms interval, ~40 updates in 10s).
+//
+// Bank layouts (from the Unofficial X32/M32 OSC Remote Protocol doc):
+//   /meters/0: 32 ch + 8 aux + 4x2 fx returns + 16 bus + 6 mtx = 70 floats
+//              pos 0–31=ch 1–32, pos 32–39=aux, pos 40–47=fx, pos 48–63=bus 1–16, pos 64–69=mtx 1–6
+//   /meters/2: 16 bus + 6 mtx + 2 main LR + 1 mono + dynamics = 49 floats
+//              pos 0–15=bus 1–16, pos 16–21=mtx 1–6, pos 22–23=main L/R, pos 24=main M/C
 function buildMeterRequests(): Array<{ address: string; args: OscArg[] }> {
   return [
-    // Bank 0: input channel pre-fader levels (positions 0–31 = ch 1–32)
-    { address: '/meters/0', args: [{ value: 20 }] },
-    // Bank 2: mix bus output levels (positions 0–15 = bus 1–16)
-    { address: '/meters/2', args: [{ value: 20 }] },
-    // Bank 3: main/matrix output levels (pos 0=main L, 1=main R, 2=main M/C, 3–8 = mtx 1–6)
-    { address: '/meters/3', args: [{ value: 20 }] },
+    // Bank 0: input channels (pos 0–31), bus (pos 48–63), mtx (pos 64–69)
+    { address: '/meters', args: [{ value: '/meters/0' }, { value: 5 }] },
+    // Bank 2: bus (pos 0–15), mtx (pos 16–21), main L/R (pos 22–23), main M/C (pos 24)
+    { address: '/meters', args: [{ value: '/meters/2' }, { value: 5 }] },
   ];
 }
 
 function requestMeterUpdates(): void {
   const now = Date.now();
   if (now - lastMeterSubscribeLogTime > 30000) {
-    logger.log('[X32] Subscribing to meter banks 0 (ch), 2 (bus), 3 (main/mtx)');
+    logger.log('[X32] Subscribing to meter banks 0 (ch/bus/mtx) and 2 (bus/mtx/main)');
     lastMeterSubscribeLogTime = now;
   }
   for (const { address, args } of buildMeterRequests()) {
@@ -251,18 +257,19 @@ function handleMeterMessage(address: string, args: OscArg[]): void {
   let updated = false;
   for (const ch of channels) {
     let level: number | undefined;
-    if (address === '/meters/0' && ch.type === 'ch') {
-      level = values[ch.index - 1]; // ch.index is 1-based; bank 0 pos 0 = ch 1
-    } else if (address === '/meters/2' && ch.type === 'bus') {
-      level = values[ch.index - 1]; // bank 2 pos 0 = bus 1
-    } else if (address === '/meters/3') {
-      // bank 3: pos 0–1 = main L/R (index 1), pos 2 = main M/C (index 2), pos 3–8 = mtx 1–6
-      if (ch.type === 'main') {
-        // Use the higher of L and R for the stereo main (index 1)
-        if (ch.index === 1) level = Math.max(values[0] ?? 0, values[1] ?? 0);
-        else if (ch.index === 2) level = values[2];
-      } else if (ch.type === 'mtx') {
-        level = values[2 + ch.index]; // pos 3 = mtx 1, pos 4 = mtx 2, ...
+    if (address === '/meters/0') {
+      // Bank 0: pos 0–31=ch 1–32, pos 48–63=bus 1–16, pos 64–69=mtx 1–6
+      if (ch.type === 'ch') level = values[ch.index - 1];
+      else if (ch.type === 'bus') level = values[48 + ch.index - 1];
+      else if (ch.type === 'mtx') level = values[64 + ch.index - 1];
+    } else if (address === '/meters/2') {
+      // Bank 2: pos 0–15=bus 1–16, pos 16–21=mtx 1–6, pos 22–23=main L/R, pos 24=main M/C
+      if (ch.type === 'bus') level = values[ch.index - 1];
+      else if (ch.type === 'mtx') level = values[16 + ch.index - 1];
+      else if (ch.type === 'main') {
+        // Use the higher of L and R for stereo main (index 1); mono M/C is index 2
+        if (ch.index === 1) level = Math.max(values[22] ?? 0, values[23] ?? 0);
+        else if (ch.index === 2) level = values[24];
       }
     }
     if (level !== undefined && isFinite(level)) {
@@ -402,7 +409,7 @@ function handleMessage(address: string, args: OscArg[]): void {
     return;
   }
 
-  if (address === '/meters/0' || address === '/meters/2' || address === '/meters/3') {
+  if (address === '/meters/0' || address === '/meters/2') {
     handleMeterMessage(address, args);
     return;
   }
