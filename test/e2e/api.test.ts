@@ -118,6 +118,31 @@ describe('API routes', () => {
     });
   });
 
+  describe('POST /api/x32/dac8', () => {
+    test('calls x32.setDac8 to assign a channel to DCA 8', async () => {
+      resetCalls();
+      const res = await request.post('/api/x32/dac8').send({ channel: 5, type: 'ch', assigned: true });
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body, { ok: true });
+      assert.deepEqual(calls.x32.setDac8, { channel: 5, type: 'ch', assigned: true });
+    });
+
+    test('calls x32.setDac8 to unassign a bus from DCA 8', async () => {
+      resetCalls();
+      const res = await request.post('/api/x32/dac8').send({ channel: 2, type: 'bus', assigned: false });
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body, { ok: true });
+      assert.deepEqual(calls.x32.setDac8, { channel: 2, type: 'bus', assigned: false });
+    });
+
+    test('defaults type to ch when not specified', async () => {
+      resetCalls();
+      const res = await request.post('/api/x32/dac8').send({ channel: 3, assigned: true });
+      assert.equal(res.status, 200);
+      assert.deepEqual(calls.x32.setDac8, { channel: 3, type: 'ch', assigned: true });
+    });
+  });
+
   describe('POST /api/proclaim/action', () => {
     test('calls proclaim.sendAction with command name and returns ok', async () => {
       resetCalls();

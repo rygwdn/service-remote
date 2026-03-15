@@ -1,9 +1,9 @@
 import { test, expect } from './fixtures';
 
 const channels = [
-  { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0.5 },
-  { index: 2, type: 'ch' as const, label: 'Guitar', fader: 0.5, muted: false, level: 0.3 },
-  { index: 1, type: 'bus' as const, label: 'Main Bus', fader: 1.0, muted: false, level: 0.7 },
+  { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0.5, dac8: true },
+  { index: 2, type: 'ch' as const, label: 'Guitar', fader: 0.5, muted: false, level: 0.3, dac8: true },
+  { index: 1, type: 'bus' as const, label: 'Main Bus', fader: 1.0, muted: false, level: 0.7, dac8: true },
 ];
 
 test.describe('Sound (X32) panel', () => {
@@ -74,7 +74,9 @@ test.describe('Sound (X32) panel', () => {
   });
 
   test('unchecking visibility hides a channel row after leaving edit mode', async ({ page, setState }) => {
-    await page.route('**/api/ui/hidden', async (route) => {
+    let dac8Call: { channel: number; type: string; assigned: boolean } | null = null;
+    await page.route('**/api/x32/dac8', async (route) => {
+      dac8Call = route.request().postDataJSON();
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
     });
 
@@ -91,25 +93,30 @@ test.describe('Sound (X32) panel', () => {
     const rows = p.locator('.channel-row-h');
     await expect(rows.nth(0)).not.toBeVisible();
     await expect(rows.nth(1)).toBeVisible();
+
+    // Verify the API call was made
+    expect(dac8Call).not.toBeNull();
+    expect(dac8Call!.assigned).toBe(false);
   });
 
-  test('default-named channels are hidden by default', async ({ page, setState }) => {
+  test('channels with dac8:false are hidden, dac8:true are shown', async ({ page, setState }) => {
     const mixedChannels = [
-      { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0.5 },
-      { index: 2, type: 'ch' as const, label: 'CH 02', fader: 0.5, muted: false, level: 0.0 },
-      { index: 1, type: 'bus' as const, label: 'Bus 01', fader: 0.7, muted: false, level: 0.0 },
-      { index: 1, type: 'main' as const, label: 'Main L/R', fader: 0.9, muted: false, level: 0.6 },
+      { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0.5, dac8: true },
+      { index: 2, type: 'ch' as const, label: 'Guitar', fader: 0.5, muted: false, level: 0.0, dac8: false },
+      { index: 1, type: 'bus' as const, label: 'Main Bus', fader: 0.7, muted: false, level: 0.0, dac8: false },
+      { index: 1, type: 'main' as const, label: 'Main L/R', fader: 0.9, muted: false, level: 0.6, dac8: false },
     ];
 
     await setState({ x32: { connected: true, channels: mixedChannels } });
 
     const p = panel(page);
-    // Custom-named and Main L/R channels should be visible
+    // dac8:true channel is visible
     await expect(p.locator('.channel-row-h').filter({ hasText: 'Vocals' })).toBeVisible();
+    // dac8:false channels are hidden
+    await expect(p.locator('.channel-row-h').filter({ hasText: 'Guitar' })).not.toBeVisible();
+    await expect(p.locator('.channel-row-h').filter({ hasText: 'Main Bus' })).not.toBeVisible();
+    // main type is always shown regardless of dac8
     await expect(p.locator('.channel-row-h').filter({ hasText: 'Main L/R' })).toBeVisible();
-    // Default-named channels should be hidden
-    await expect(p.locator('.channel-row-h').filter({ hasText: 'CH 02' })).not.toBeVisible();
-    await expect(p.locator('.channel-row-h').filter({ hasText: 'Bus 01' })).not.toBeVisible();
   });
 
   test('fader is disabled by default (locked)', async ({ page, setState }) => {
