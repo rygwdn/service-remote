@@ -58,6 +58,10 @@ document.addEventListener('alpine:init', () => {
   // OBS audio row (placeholder — no special touch state needed for horizontal sliders)
   Alpine.data('obsFader', () => ({}));
 
+  // Start WebSocket connections after stores are ready so onopen/onclose can
+  // safely call Alpine.store() without racing against Alpine's own load.
+  connectWs();
+
   // Settings panel state
   Alpine.data('settingsPanel', () => ({
     cfg: {
@@ -191,8 +195,6 @@ function connectWs() {
     reconnectDelay = Math.min(reconnectDelay * 2, 10000);
   };
 }
-
-connectWs();
 
 // --- Screenshot WebSocket ---
 let screenshotWs;
