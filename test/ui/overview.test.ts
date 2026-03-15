@@ -113,6 +113,16 @@ test.describe('Overview panel', () => {
     expect(src).toMatch(/^blob:/);
   });
 
+  test('disconnected overlay hides after WebSocket connects on initial load', async ({ page }) => {
+    // Verify the fix for the Alpine late-load race condition: connectWs() must be
+    // deferred until after alpine:init so the store update is not lost.
+    await page.waitForFunction(
+      () => (window as any).Alpine?.store('ui')?.serverConnected === true,
+      { timeout: 5000 }
+    );
+    await expect(page.locator('.disconnected-overlay')).not.toBeVisible();
+  });
+
   test('disconnected overlay is hidden when WebSocket is connected', async ({ page }) => {
     await page.evaluate(() => {
       (window as any).Alpine.store('ui').serverConnected = true;
