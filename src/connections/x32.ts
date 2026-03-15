@@ -56,6 +56,9 @@ const pendingFaders = new Map<string, { value: number; sentAt: number }>();
 const PENDING_FADER_TIMEOUT_MS = 2000;
 const PENDING_FADER_TOLERANCE = 0.05;
 
+// OSC path suffix used for DCA group assignment messages (e.g. /ch/01/grp/dca)
+const DCA_GROUP_PATH = '/grp/dca';
+
 // Number of input channels, buses, and matrices on the X32
 const CH_COUNT = 32;
 const BUS_COUNT = 16;
@@ -86,16 +89,16 @@ function connect(): void {
   channels = [];
   dcaGroupsMap.clear();
   for (let i = 1; i <= CH_COUNT; i++) {
-    channels.push({ index: i, type: 'ch', label: `CH ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, dac8: false });
+    channels.push({ index: i, type: 'ch', label: `CH ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, spill: false});
   }
   for (let i = 1; i <= BUS_COUNT; i++) {
-    channels.push({ index: i, type: 'bus', label: `Bus ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, dac8: false });
+    channels.push({ index: i, type: 'bus', label: `Bus ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, spill: false});
   }
   for (let i = 1; i <= MTX_COUNT; i++) {
-    channels.push({ index: i, type: 'mtx', label: `Mtx ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, dac8: false });
+    channels.push({ index: i, type: 'mtx', label: `Mtx ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, spill: false});
   }
   for (const [idx, lbl] of Object.entries(MAIN_LABELS)) {
-    channels.push({ index: Number(idx), type: 'main', label: lbl, fader: 0, muted: false, level: 0, source: 1, linkedToNext: false, dac8: false });
+    channels.push({ index: Number(idx), type: 'main', label: lbl, fader: 0, muted: false, level: 0, source: 1, linkedToNext: false, spill: false});
   }
 
   // Bind to 0.0.0.0 so the OS accepts inbound packets on any local network
@@ -326,10 +329,10 @@ function sourcePatch(args: OscArg[]): Partial<Channel> {
 }
 
 // DCA group bitmask: bit 7 (value 128) = DCA group 8.
-// Returns { dac8: true } when bit 7 is set, { dac8: false } otherwise.
+// Returns { spill: true } when bit 7 is set, { spill: false } otherwise.
 function dcaPatch(args: OscArg[]): Partial<Channel> {
   const value = (args?.[0]?.value as number) ?? 0;
-  return { dac8: (value & 128) !== 0 };
+  return { spill: (value & 128) !== 0 };
 }
 
 const OSC_PATTERNS: OscPattern[] = [
@@ -338,12 +341,12 @@ const OSC_PATTERNS: OscPattern[] = [
   { re: /^\/ch\/(\d+)\/mix\/on$/,       type: 'ch',   indexGroup: 1, patch: mutePatch },
   { re: /^\/ch\/(\d+)\/config\/name$/,  type: 'ch',   indexGroup: 1, patch: namePatch },
   { re: /^\/ch\/(\d+)\/config\/source$/,type: 'ch',   indexGroup: 1, patch: sourcePatch },
-  { re: /^\/ch\/(\d+)\/grp\/dca$/,      type: 'ch',   indexGroup: 1, patch: dcaPatch },
+  { re: new RegExp(`^/ch/(\\d+)${DCA_GROUP_PATH}$`),  type: 'ch',   indexGroup: 1, patch: dcaPatch },
   // Mix buses
   { re: /^\/bus\/(\d+)\/mix\/fader$/,   type: 'bus',  indexGroup: 1, patch: faderPatch },
   { re: /^\/bus\/(\d+)\/mix\/on$/,      type: 'bus',  indexGroup: 1, patch: mutePatch },
   { re: /^\/bus\/(\d+)\/config\/name$/, type: 'bus',  indexGroup: 1, patch: namePatch },
-  { re: /^\/bus\/(\d+)\/grp\/dca$/,     type: 'bus',  indexGroup: 1, patch: dcaPatch },
+  { re: new RegExp(`^/bus/(\\d+)${DCA_GROUP_PATH}$`), type: 'bus',  indexGroup: 1, patch: dcaPatch },
   // Matrix
   { re: /^\/mtx\/(\d+)\/mix\/fader$/,   type: 'mtx',  indexGroup: 1, patch: faderPatch },
   { re: /^\/mtx\/(\d+)\/mix\/on$/,      type: 'mtx',  indexGroup: 1, patch: mutePatch },
@@ -391,11 +394,11 @@ function handleMessage(address: string, args: OscArg[]): void {
     for (let i = 1; i <= CH_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'ch')}/config/name`);
       sendOsc(`${channelPrefix(i, 'ch')}/config/source`);
-      sendOsc(`${channelPrefix(i, 'ch')}/grp/dca`);
+      sendOsc(`${channelPrefix(i, 'ch')}${DCA_GROUP_PATH}`);
     }
     for (let i = 1; i <= BUS_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'bus')}/config/name`);
-      sendOsc(`${channelPrefix(i, 'bus')}/grp/dca`);
+      sendOsc(`${channelPrefix(i, 'bus')}${DCA_GROUP_PATH}`);
     }
     for (let i = 1; i <= MTX_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'mtx')}/config/name`);
@@ -445,8 +448,8 @@ function handleMessage(address: string, args: OscArg[]): void {
   }
 
   // Intercept DCA group messages to store the full bitmask for read-modify-write.
-  // The parseOscMessage call below will also extract the dac8 boolean for the channel patch.
-  const dcaMatch = address.match(/^\/(ch|bus)\/(\d+)\/grp\/dca$/);
+  // The parseOscMessage call below will also extract the spill boolean for the channel patch.
+  const dcaMatch = address.match(new RegExp(`^/(ch|bus)/(\\d+)${DCA_GROUP_PATH}$`));
   if (dcaMatch) {
     const type = dcaMatch[1] as 'ch' | 'bus';
     const index = parseInt(dcaMatch[2], 10);
@@ -531,7 +534,7 @@ function subscribeToChanges(): void {
     ]);
     if (ch.type === 'ch' || ch.type === 'bus') {
       sendOsc('/subscribe', [
-        { value: `${prefix}/grp/dca` },
+        { value: `${prefix}${DCA_GROUP_PATH}` },
         { value: 20 },
       ]);
     }
@@ -605,14 +608,14 @@ export = {
     }
   },
 
-  setDac8(channelIndex: number, type: 'ch' | 'bus', assigned: boolean): void {
+  setSpill(channelIndex: number, type: 'ch' | 'bus', assigned: boolean): void {
     const key = `${type}-${channelIndex}`;
     const currentBitmask = dcaGroupsMap.get(key) ?? 0;
     const newBitmask = assigned ? (currentBitmask | 128) : (currentBitmask & ~128);
     dcaGroupsMap.set(key, newBitmask);
-    logger.log(`[X32] setDac8 ${type} ${channelIndex} = ${assigned} (bitmask ${newBitmask})`);
-    sendOsc(`${channelPrefix(channelIndex, type)}/grp/dca`, [{ value: newBitmask }]);
-    updateChannel(channelIndex, type, { dac8: assigned });
+    logger.log(`[X32] setSpill ${type} ${channelIndex} = ${assigned} (bitmask ${newBitmask})`);
+    sendOsc(`${channelPrefix(channelIndex, type)}${DCA_GROUP_PATH}`, [{ value: newBitmask }]);
+    updateChannel(channelIndex, type, { spill: assigned });
   },
 
   toggleMute(channelIndex: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {

@@ -105,10 +105,10 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
     }
   });
 
-  app.post('/api/x32/dac8', (req: Request, res: Response) => {
+  app.post('/api/x32/spill', (req: Request, res: Response) => {
     try {
       const type = req.body.type === 'bus' ? 'bus' : 'ch';
-      x32.setDac8(req.body.channel, type, !!req.body.assigned);
+      x32.setSpill(req.body.channel, type, !!req.body.assigned);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });

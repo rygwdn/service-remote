@@ -28,13 +28,13 @@ document.addEventListener('alpine:init', () => {
     isHiddenObs(name) { return this.hidden.obs.includes(name); },
     isHiddenX32(key) {
       // Main channels are always shown.
-      // All other channels are shown only when assigned to DCA group 8 (ch.dac8 === true).
+      // All other channels are shown only when assigned to DCA group 8 (ch.spill === true).
       const ch = Alpine.store('state').x32.channels.find(
         (c) => c.type + '/' + c.index === key
       );
       if (!ch) return true;
       if (ch.type === 'main') return false;
-      return !ch.dac8;
+      return !ch.spill;
     },
   });
 
@@ -307,13 +307,13 @@ function toggleHiddenX32(key, show) {
   // Optimistic update: reflect the change immediately in the local state so
   // the UI responds without waiting for the X32 to echo back the new DCA assignment.
   const ch = Alpine.store('state').x32.channels.find((c) => c.type + '/' + c.index === key);
-  if (ch && ch.type !== 'main') ch.dac8 = show;
+  if (ch && ch.type !== 'main') ch.spill = show;
 
   // Persist the DCA 8 assignment change to the X32 via the server.
   const parts = key.split('/');
   const type = parts[0];
   const channel = parseInt(parts[1], 10);
-  post('/api/x32/dac8', { channel, type, assigned: show });
+  post('/api/x32/spill', { channel, type, assigned: show });
 }
 
 let saveHiddenTimer = null;
@@ -338,7 +338,7 @@ async function loadHiddenFromServer() {
     const data = await res.json();
     const ui = Alpine.store('ui');
     ui.hidden.obs = data.hiddenObs || [];
-    // X32 visibility is driven by channel.dac8 (received via WebSocket from the X32),
+    // X32 visibility is driven by channel.spill (received via WebSocket from the X32),
     // not stored in config.
   } catch (_) {}
 }

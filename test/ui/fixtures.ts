@@ -19,7 +19,7 @@ type AppState = {
   };
   x32?: {
     connected?: boolean;
-    channels?: { index: number; type: 'ch' | 'bus' | 'main' | 'mtx'; label: string; fader: number; muted: boolean; level: number; dac8?: boolean }[];
+    channels?: { index: number; type: 'ch' | 'bus' | 'main' | 'mtx'; label: string; fader: number; muted: boolean; level: number; spill?: boolean }[];
   };
   proclaim?: {
     connected?: boolean;

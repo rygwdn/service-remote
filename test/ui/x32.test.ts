@@ -1,9 +1,9 @@
 import { test, expect } from './fixtures';
 
 const channels = [
-  { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0.5, dac8: true },
-  { index: 2, type: 'ch' as const, label: 'Guitar', fader: 0.5, muted: false, level: 0.3, dac8: true },
-  { index: 1, type: 'bus' as const, label: 'Main Bus', fader: 1.0, muted: false, level: 0.7, dac8: true },
+  { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0.5, spill: true },
+  { index: 2, type: 'ch' as const, label: 'Guitar', fader: 0.5, muted: false, level: 0.3, spill: true },
+  { index: 1, type: 'bus' as const, label: 'Main Bus', fader: 1.0, muted: false, level: 0.7, spill: true },
 ];
 
 test.describe('Sound (X32) panel', () => {
@@ -74,9 +74,9 @@ test.describe('Sound (X32) panel', () => {
   });
 
   test('unchecking visibility hides a channel row after leaving edit mode', async ({ page, setState }) => {
-    let dac8Call: { channel: number; type: string; assigned: boolean } | null = null;
-    await page.route('**/api/x32/dac8', async (route) => {
-      dac8Call = route.request().postDataJSON();
+    let spillCall: { channel: number; type: string; assigned: boolean } | null = null;
+    await page.route('**/api/x32/spill', async (route) => {
+      spillCall = route.request().postDataJSON();
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
     });
 
@@ -95,27 +95,27 @@ test.describe('Sound (X32) panel', () => {
     await expect(rows.nth(1)).toBeVisible();
 
     // Verify the API call was made
-    expect(dac8Call).not.toBeNull();
-    expect(dac8Call!.assigned).toBe(false);
+    expect(spillCall).not.toBeNull();
+    expect(spillCall!.assigned).toBe(false);
   });
 
-  test('channels with dac8:false are hidden, dac8:true are shown', async ({ page, setState }) => {
+  test('channels with spill:false are hidden, spill:true are shown', async ({ page, setState }) => {
     const mixedChannels = [
-      { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0.5, dac8: true },
-      { index: 2, type: 'ch' as const, label: 'Guitar', fader: 0.5, muted: false, level: 0.0, dac8: false },
-      { index: 1, type: 'bus' as const, label: 'Main Bus', fader: 0.7, muted: false, level: 0.0, dac8: false },
-      { index: 1, type: 'main' as const, label: 'Main L/R', fader: 0.9, muted: false, level: 0.6, dac8: false },
+      { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0.5, spill: true },
+      { index: 2, type: 'ch' as const, label: 'Guitar', fader: 0.5, muted: false, level: 0.0, spill: false },
+      { index: 1, type: 'bus' as const, label: 'Main Bus', fader: 0.7, muted: false, level: 0.0, spill: false },
+      { index: 1, type: 'main' as const, label: 'Main L/R', fader: 0.9, muted: false, level: 0.6, spill: false },
     ];
 
     await setState({ x32: { connected: true, channels: mixedChannels } });
 
     const p = panel(page);
-    // dac8:true channel is visible
+    // spill:true channel is visible
     await expect(p.locator('.channel-row-h').filter({ hasText: 'Vocals' })).toBeVisible();
-    // dac8:false channels are hidden
+    // spill:false channels are hidden
     await expect(p.locator('.channel-row-h').filter({ hasText: 'Guitar' })).not.toBeVisible();
     await expect(p.locator('.channel-row-h').filter({ hasText: 'Main Bus' })).not.toBeVisible();
-    // main type is always shown regardless of dac8
+    // main type is always shown regardless of spill
     await expect(p.locator('.channel-row-h').filter({ hasText: 'Main L/R' })).toBeVisible();
   });
 

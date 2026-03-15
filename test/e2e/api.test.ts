@@ -118,28 +118,28 @@ describe('API routes', () => {
     });
   });
 
-  describe('POST /api/x32/dac8', () => {
-    test('calls x32.setDac8 to assign a channel to DCA 8', async () => {
+  describe('POST /api/x32/spill', () => {
+    test('calls x32.setSpill to assign a channel to DCA 8', async () => {
       resetCalls();
-      const res = await request.post('/api/x32/dac8').send({ channel: 5, type: 'ch', assigned: true });
+      const res = await request.post('/api/x32/spill').send({ channel: 5, type: 'ch', assigned: true });
       assert.equal(res.status, 200);
       assert.deepEqual(res.body, { ok: true });
-      assert.deepEqual(calls.x32.setDac8, { channel: 5, type: 'ch', assigned: true });
+      assert.deepEqual(calls.x32.setSpill, { channel: 5, type: 'ch', assigned: true });
     });
 
-    test('calls x32.setDac8 to unassign a bus from DCA 8', async () => {
+    test('calls x32.setSpill to unassign a bus from DCA 8', async () => {
       resetCalls();
-      const res = await request.post('/api/x32/dac8').send({ channel: 2, type: 'bus', assigned: false });
+      const res = await request.post('/api/x32/spill').send({ channel: 2, type: 'bus', assigned: false });
       assert.equal(res.status, 200);
       assert.deepEqual(res.body, { ok: true });
-      assert.deepEqual(calls.x32.setDac8, { channel: 2, type: 'bus', assigned: false });
+      assert.deepEqual(calls.x32.setSpill, { channel: 2, type: 'bus', assigned: false });
     });
 
     test('defaults type to ch when not specified', async () => {
       resetCalls();
-      const res = await request.post('/api/x32/dac8').send({ channel: 3, assigned: true });
+      const res = await request.post('/api/x32/spill').send({ channel: 3, assigned: true });
       assert.equal(res.status, 200);
-      assert.deepEqual(calls.x32.setDac8, { channel: 3, type: 'ch', assigned: true });
+      assert.deepEqual(calls.x32.setSpill, { channel: 3, type: 'ch', assigned: true });
     });
   });
 
