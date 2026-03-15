@@ -453,6 +453,36 @@ function slideGridItems(p) {
   return Array.from({ length: item.slideCount }, (_, i) => i);
 }
 
+function allServiceItems(p) {
+  const items = p.serviceItems || [];
+  const result = [];
+  let currentSection = null;
+  let currentGroup = null;
+
+  for (const item of items) {
+    if (item.section !== currentSection) {
+      currentSection = item.section;
+      currentGroup = null;
+      result.push({ type: 'section', key: 'section:' + item.section, label: item.section });
+    }
+    if (item.group !== currentGroup) {
+      currentGroup = item.group;
+      if (currentGroup) {
+        result.push({ type: 'group', key: 'group:' + item.section + ':' + currentGroup, label: currentGroup });
+      }
+    }
+    const isActive = item.id === p.currentItemId;
+    let slideCountLabel = '';
+    if (item.slideCount > 1) {
+      slideCountLabel = isActive && p.slideIndex !== null
+        ? `(${p.slideIndex + 1} of ${item.slideCount})`
+        : `(${item.slideCount} slides)`;
+    }
+    result.push({ type: 'item', key: 'item:' + item.id, item, isActive, slideCountLabel });
+  }
+  return result;
+}
+
 function flatServiceItems(p) {
   if (!p.onAir || !p.currentItemId) return [];
   const items = p.serviceItems || [];

@@ -466,7 +466,7 @@ test.describe('Proclaim panel', () => {
   });
 
   test('slide grid shows 4 columns on desktop (>480px wide)', async ({ page, setState }) => {
-    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.setViewportSize({ width: 600, height: 1024 });
     await page.route('**/api/proclaim/thumb**', (route) =>
       route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.alloc(0) })
     );
