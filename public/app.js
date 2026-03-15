@@ -166,6 +166,8 @@ let ws;
 let reconnectDelay = 1000;
 
 function connectWs() {
+  // Don't create a new connection if one is already open or connecting
+  if (ws && ws.readyState < WebSocket.CLOSING) return;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}`);
 
@@ -183,6 +185,8 @@ function connectWs() {
 
   ws.onclose = () => {
     Alpine.store('ui').serverConnected = false;
+    // Don't schedule reconnect while the tab is hidden — visibilitychange will reconnect
+    if (document.hidden) return;
     setTimeout(connectWs, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 10000);
   };
@@ -196,6 +200,8 @@ let screenshotReconnectDelay = 1000;
 let currentScreenshotUrl = null;
 
 function connectScreenshotWs() {
+  // Don't create a new connection if one is already open or connecting
+  if (screenshotWs && screenshotWs.readyState < WebSocket.CLOSING) return;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   screenshotWs = new WebSocket(`${proto}://${location.host}/ws/screenshot`);
   screenshotWs.binaryType = 'blob';
@@ -216,6 +222,7 @@ function connectScreenshotWs() {
   };
 
   screenshotWs.onclose = () => {
+    if (document.hidden) return;
     setTimeout(connectScreenshotWs, screenshotReconnectDelay);
     screenshotReconnectDelay = Math.min(screenshotReconnectDelay * 2, 10000);
   };
@@ -237,6 +244,8 @@ let levelsWsConn;
 let levelsReconnectDelay = 1000;
 
 function connectLevelsWs() {
+  // Don't create a new connection if one is already open or connecting
+  if (levelsWsConn && levelsWsConn.readyState < WebSocket.CLOSING) return;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   levelsWsConn = new WebSocket(`${proto}://${location.host}/ws/levels`);
 
@@ -263,12 +272,34 @@ function connectLevelsWs() {
   };
 
   levelsWsConn.onclose = () => {
+    if (document.hidden) return;
     setTimeout(connectLevelsWs, levelsReconnectDelay);
     levelsReconnectDelay = Math.min(levelsReconnectDelay * 2, 10000);
   };
 }
 
 connectLevelsWs();
+
+// --- Page Visibility: close WebSocket connections when the tab is hidden ---
+// This prevents the browser from queuing stale events (screenshot frames, audio
+// meter updates, state changes) that would all replay rapidly when the tab wakes.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    // Close all connections; their onclose handlers will skip the reconnect timer
+    // when document.hidden is true, so no queuing happens.
+    ws?.close();
+    screenshotWs?.close();
+    levelsWsConn?.close();
+  } else {
+    // Reset backoff delays and reconnect immediately when the tab becomes active.
+    reconnectDelay = 1000;
+    screenshotReconnectDelay = 1000;
+    levelsReconnectDelay = 1000;
+    connectWs();
+    connectScreenshotWs();
+    connectLevelsWs();
+  }
+});
 
 // --- API helpers ---
 function post(url, body) {
