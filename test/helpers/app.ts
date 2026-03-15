@@ -18,6 +18,7 @@ interface TestCalls {
   x32: {
     connect: number; disconnect: number; startMeterUpdates: number; stopMeterUpdates: number;
     setFader?: { channel: number; value: number }; toggleMute?: number;
+    setSpill?: { channel: number; type: string; assigned: boolean };
   };
   proclaim: {
     connect: number; disconnect: number; startMeterUpdates: number; stopMeterUpdates: number;
@@ -67,6 +68,7 @@ function createTestApp(): TestApp {
       parseOscMessage: () => null,
       startMeterUpdates: () => { calls.x32.startMeterUpdates++; },
       stopMeterUpdates: () => { calls.x32.stopMeterUpdates++; },
+      setSpill: (channel: number, type: 'ch' | 'bus', assigned: boolean) => { calls.x32.setSpill = { channel, type, assigned }; },
     },
     proclaim: {
       connect: async () => { calls.proclaim.connect++; },

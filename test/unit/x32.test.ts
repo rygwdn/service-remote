@@ -161,6 +161,48 @@ describe('x32 parseOscMessage()', () => {
       assert.equal(parseOscMessage('/ch/01/eq/on', [{ value: 1 }]), null);
     });
   });
+
+  describe('DCA group messages (/ch/XX/grp/dca and /bus/XX/grp/dca)', () => {
+    test('ch dca bitmask with bit 7 set → spill: true', () => {
+      const result = parseOscMessage('/ch/01/grp/dca', [{ value: 128 }]);
+      assert.deepEqual(result, { index: 1, type: 'ch', patch: { spill: true } });
+    });
+
+    test('ch dca bitmask with bit 7 clear → spill: false', () => {
+      const result = parseOscMessage('/ch/01/grp/dca', [{ value: 0 }]);
+      assert.deepEqual(result, { index: 1, type: 'ch', patch: { spill: false } });
+    });
+
+    test('ch dca bitmask with multiple bits set including bit 7 → spill: true', () => {
+      const result = parseOscMessage('/ch/05/grp/dca', [{ value: 136 }]); // 128 + 8 = DCA 4 + DCA 8
+      assert.deepEqual(result, { index: 5, type: 'ch', patch: { spill: true } });
+    });
+
+    test('ch dca bitmask with only lower bits set → spill: false', () => {
+      const result = parseOscMessage('/ch/03/grp/dca', [{ value: 7 }]); // DCA 1+2+3 only
+      assert.deepEqual(result, { index: 3, type: 'ch', patch: { spill: false } });
+    });
+
+    test('missing args defaults to spill: false', () => {
+      const result = parseOscMessage('/ch/02/grp/dca', []);
+      assert.deepEqual(result, { index: 2, type: 'ch', patch: { spill: false } });
+    });
+
+    test('bus dca bitmask with bit 7 set → spill: true', () => {
+      const result = parseOscMessage('/bus/03/grp/dca', [{ value: 128 }]);
+      assert.deepEqual(result, { index: 3, type: 'bus', patch: { spill: true } });
+    });
+
+    test('bus dca bitmask with bit 7 clear → spill: false', () => {
+      const result = parseOscMessage('/bus/16/grp/dca', [{ value: 64 }]);
+      assert.deepEqual(result, { index: 16, type: 'bus', patch: { spill: false } });
+    });
+
+    test('two-digit channel', () => {
+      const result = parseOscMessage('/ch/32/grp/dca', [{ value: 128 }]);
+      assert.deepEqual(result, { index: 32, type: 'ch', patch: { spill: true } });
+    });
+  });
 });
 
 describe('x32 parseMeterBlob()', () => {

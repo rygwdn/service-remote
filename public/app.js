@@ -13,9 +13,7 @@ document.addEventListener('alpine:init', () => {
     tab: 'overview',
     editMode: { obs: false, x32: false },
     faderEnabled: { obs: false, x32: false },
-    hidden: { obs: [], x32: [] },
-    // Keys of default-named X32 channels that the user has explicitly chosen to show.
-    shownDefaultX32: [],
+    hidden: { obs: [] },
     serverConnected: false,
 
     setTab(tab) {
@@ -29,16 +27,14 @@ document.addEventListener('alpine:init', () => {
     },
     isHiddenObs(name) { return this.hidden.obs.includes(name); },
     isHiddenX32(key) {
-      if (this.hidden.x32.includes(key)) return true;
-      // Channels with default mixer names are hidden by default unless the user
-      // has explicitly shown them.
+      // Main channels are always shown.
+      // All other channels are shown only when assigned to DCA group 8 (ch.spill === true).
       const ch = Alpine.store('state').x32.channels.find(
         (c) => c.type + '/' + c.index === key
       );
-      if (ch && isDefaultX32Label(ch.label, ch.type, ch.index) && !this.shownDefaultX32.includes(key)) {
-        return true;
-      }
-      return false;
+      if (!ch) return true;
+      if (ch.type === 'main') return false;
+      return !ch.spill;
     },
   });
 
@@ -299,19 +295,6 @@ function toggleRecord()                 { post('/api/obs/record', {}); }
 function setX32Fader(channel, type, value) { post('/api/x32/fader', { channel, type, value }); }
 function toggleX32Mute(channel, type)   { post('/api/x32/mute', { channel, type }); }
 
-// Returns true if the label matches the default X32 naming pattern (e.g. "CH 02", "Bus 03", "Mtx 01").
-// Main L/R is NOT considered a default label and is always shown.
-function isDefaultX32Label(label, type, index) {
-  if (type === 'main') return false;
-  const padded = String(index).padStart(2, '0');
-  const defaults = {
-    ch: `CH ${padded}`,
-    bus: `Bus ${padded}`,
-    mtx: `Mtx ${padded}`,
-  };
-  return label === defaults[type];
-}
-
 // --- Fader visibility ---
 function toggleHiddenObs(name, show) {
   const ui = Alpine.store('ui');
@@ -321,18 +304,16 @@ function toggleHiddenObs(name, show) {
 }
 
 function toggleHiddenX32(key, show) {
-  const ui = Alpine.store('ui');
+  // Optimistic update: reflect the change immediately in the local state so
+  // the UI responds without waiting for the X32 to echo back the new DCA assignment.
   const ch = Alpine.store('state').x32.channels.find((c) => c.type + '/' + c.index === key);
-  const isDefault = ch && isDefaultX32Label(ch.label, ch.type, ch.index);
-  if (isDefault) {
-    // For default-named channels, track explicit show intent separately
-    if (show && !ui.shownDefaultX32.includes(key)) ui.shownDefaultX32.push(key);
-    else if (!show) ui.shownDefaultX32 = ui.shownDefaultX32.filter((k) => k !== key);
-  } else {
-    if (show) ui.hidden.x32 = ui.hidden.x32.filter((k) => k !== key);
-    else if (!ui.hidden.x32.includes(key)) ui.hidden.x32.push(key);
-  }
-  saveHiddenToServer();
+  if (ch && ch.type !== 'main') ch.spill = show;
+
+  // Persist the DCA 8 assignment change to the X32 via the server.
+  const parts = key.split('/');
+  const type = parts[0];
+  const channel = parseInt(parts[1], 10);
+  post('/api/x32/spill', { channel, type, assigned: show });
 }
 
 let saveHiddenTimer = null;
@@ -344,7 +325,7 @@ function saveHiddenToServer() {
       await fetch('/api/ui/hidden', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hiddenObs: ui.hidden.obs, hiddenX32: ui.hidden.x32, shownDefaultX32: ui.shownDefaultX32 }),
+        body: JSON.stringify({ hiddenObs: ui.hidden.obs, hiddenX32: [] }),
       });
     } catch (_) {}
   }, 300);
@@ -357,8 +338,8 @@ async function loadHiddenFromServer() {
     const data = await res.json();
     const ui = Alpine.store('ui');
     ui.hidden.obs = data.hiddenObs || [];
-    ui.hidden.x32 = data.hiddenX32 || [];
-    ui.shownDefaultX32 = data.shownDefaultX32 || [];
+    // X32 visibility is driven by channel.spill (received via WebSocket from the X32),
+    // not stored in config.
   } catch (_) {}
 }
 

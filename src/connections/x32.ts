@@ -45,12 +45,19 @@ interface OscResult {
 // Dynamically discovered channels
 let channels: Channel[] = [];
 
+// Internal tracking of full DCA bitmask per channel (key = `${type}-${index}`).
+// Used to preserve other DCA group assignments when toggling only bit 7 (DCA 8).
+const dcaGroupsMap = new Map<string, number>();
+
 // Pending fader map: key is `${type}-${index}`, value is { value, sentAt }
 // When the client sends a fader command, we record it here so that stale OSC
 // echoes from the X32 do not snap the slider back during or after a drag.
 const pendingFaders = new Map<string, { value: number; sentAt: number }>();
 const PENDING_FADER_TIMEOUT_MS = 2000;
 const PENDING_FADER_TOLERANCE = 0.05;
+
+// OSC path suffix used for DCA group assignment messages (e.g. /ch/01/grp/dca)
+const DCA_GROUP_PATH = '/grp/dca';
 
 // Number of input channels, buses, and matrices on the X32
 const CH_COUNT = 32;
@@ -80,17 +87,18 @@ function connect(): void {
   loggedMeterChannels.clear();
   // Pre-populate all channels in sorted order with default labels
   channels = [];
+  dcaGroupsMap.clear();
   for (let i = 1; i <= CH_COUNT; i++) {
-    channels.push({ index: i, type: 'ch', label: `CH ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false });
+    channels.push({ index: i, type: 'ch', label: `CH ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, spill: false});
   }
   for (let i = 1; i <= BUS_COUNT; i++) {
-    channels.push({ index: i, type: 'bus', label: `Bus ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false });
+    channels.push({ index: i, type: 'bus', label: `Bus ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, spill: false});
   }
   for (let i = 1; i <= MTX_COUNT; i++) {
-    channels.push({ index: i, type: 'mtx', label: `Mtx ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false });
+    channels.push({ index: i, type: 'mtx', label: `Mtx ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, spill: false});
   }
   for (const [idx, lbl] of Object.entries(MAIN_LABELS)) {
-    channels.push({ index: Number(idx), type: 'main', label: lbl, fader: 0, muted: false, level: 0, source: 1, linkedToNext: false });
+    channels.push({ index: Number(idx), type: 'main', label: lbl, fader: 0, muted: false, level: 0, source: 1, linkedToNext: false, spill: false});
   }
 
   // Bind to 0.0.0.0 so the OS accepts inbound packets on any local network
@@ -320,16 +328,25 @@ function sourcePatch(args: OscArg[]): Partial<Channel> {
   return { source: (args?.[0]?.value as number) ?? 0 };
 }
 
+// DCA group bitmask: bit 7 (value 128) = DCA group 8.
+// Returns { spill: true } when bit 7 is set, { spill: false } otherwise.
+function dcaPatch(args: OscArg[]): Partial<Channel> {
+  const value = (args?.[0]?.value as number) ?? 0;
+  return { spill: (value & 128) !== 0 };
+}
+
 const OSC_PATTERNS: OscPattern[] = [
   // Input channels
   { re: /^\/ch\/(\d+)\/mix\/fader$/,    type: 'ch',   indexGroup: 1, patch: faderPatch },
   { re: /^\/ch\/(\d+)\/mix\/on$/,       type: 'ch',   indexGroup: 1, patch: mutePatch },
   { re: /^\/ch\/(\d+)\/config\/name$/,  type: 'ch',   indexGroup: 1, patch: namePatch },
   { re: /^\/ch\/(\d+)\/config\/source$/,type: 'ch',   indexGroup: 1, patch: sourcePatch },
+  { re: new RegExp(`^/ch/(\\d+)${DCA_GROUP_PATH}$`),  type: 'ch',   indexGroup: 1, patch: dcaPatch },
   // Mix buses
   { re: /^\/bus\/(\d+)\/mix\/fader$/,   type: 'bus',  indexGroup: 1, patch: faderPatch },
   { re: /^\/bus\/(\d+)\/mix\/on$/,      type: 'bus',  indexGroup: 1, patch: mutePatch },
   { re: /^\/bus\/(\d+)\/config\/name$/, type: 'bus',  indexGroup: 1, patch: namePatch },
+  { re: new RegExp(`^/bus/(\\d+)${DCA_GROUP_PATH}$`), type: 'bus',  indexGroup: 1, patch: dcaPatch },
   // Matrix
   { re: /^\/mtx\/(\d+)\/mix\/fader$/,   type: 'mtx',  indexGroup: 1, patch: faderPatch },
   { re: /^\/mtx\/(\d+)\/mix\/on$/,      type: 'mtx',  indexGroup: 1, patch: mutePatch },
@@ -373,13 +390,15 @@ function handleMessage(address: string, args: OscArg[]): void {
 
     // Request names, sources, and link state for all channels.
     // Throttled via the send queue to avoid flooding the mixer.
-    logger.log(`[X32] Requesting names/sources/links for ${CH_COUNT} ch, ${BUS_COUNT} bus, ${MTX_COUNT} mtx, and main`);
+    logger.log(`[X32] Requesting names/sources/links/dca for ${CH_COUNT} ch, ${BUS_COUNT} bus, ${MTX_COUNT} mtx, and main`);
     for (let i = 1; i <= CH_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'ch')}/config/name`);
       sendOsc(`${channelPrefix(i, 'ch')}/config/source`);
+      sendOsc(`${channelPrefix(i, 'ch')}${DCA_GROUP_PATH}`);
     }
     for (let i = 1; i <= BUS_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'bus')}/config/name`);
+      sendOsc(`${channelPrefix(i, 'bus')}${DCA_GROUP_PATH}`);
     }
     for (let i = 1; i <= MTX_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'mtx')}/config/name`);
@@ -426,6 +445,16 @@ function handleMessage(address: string, args: OscArg[]): void {
     if (evenCh) evenCh.linkedToNext = false; // even channel is always the follower
     state.update('x32', { connected: true, channels: [...channels] });
     return;
+  }
+
+  // Intercept DCA group messages to store the full bitmask for read-modify-write.
+  // The parseOscMessage call below will also extract the spill boolean for the channel patch.
+  const dcaMatch = address.match(new RegExp(`^/(ch|bus)/(\\d+)${DCA_GROUP_PATH}$`));
+  if (dcaMatch) {
+    const type = dcaMatch[1] as 'ch' | 'bus';
+    const index = parseInt(dcaMatch[2], 10);
+    const value = (args?.[0]?.value as number) ?? 0;
+    dcaGroupsMap.set(`${type}-${index}`, value);
   }
 
   const result = parseOscMessage(address, args);
@@ -503,6 +532,12 @@ function subscribeToChanges(): void {
       { value: `${prefix}/mix/on` },
       { value: 20 },
     ]);
+    if (ch.type === 'ch' || ch.type === 'bus') {
+      sendOsc('/subscribe', [
+        { value: `${prefix}${DCA_GROUP_PATH}` },
+        { value: 20 },
+      ]);
+    }
   }
 }
 
@@ -571,6 +606,16 @@ export = {
       ch.fader = clamped;
       state.update('x32', { connected: true, channels: [...channels] });
     }
+  },
+
+  setSpill(channelIndex: number, type: 'ch' | 'bus', assigned: boolean): void {
+    const key = `${type}-${channelIndex}`;
+    const currentBitmask = dcaGroupsMap.get(key) ?? 0;
+    const newBitmask = assigned ? (currentBitmask | 128) : (currentBitmask & ~128);
+    dcaGroupsMap.set(key, newBitmask);
+    logger.log(`[X32] setSpill ${type} ${channelIndex} = ${assigned} (bitmask ${newBitmask})`);
+    sendOsc(`${channelPrefix(channelIndex, type)}${DCA_GROUP_PATH}`, [{ value: newBitmask }]);
+    updateChannel(channelIndex, type, { spill: assigned });
   },
 
   toggleMute(channelIndex: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {

@@ -105,6 +105,16 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
     }
   });
 
+  app.post('/api/x32/spill', (req: Request, res: Response) => {
+    try {
+      const type = req.body.type === 'bus' ? 'bus' : 'ch';
+      x32.setSpill(req.body.channel, type, !!req.body.assigned);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   // --- Proclaim ---
   app.post('/api/proclaim/action', async (req: Request, res: Response) => {
     try {

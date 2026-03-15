@@ -15,6 +15,7 @@ export interface Channel {
   level: number; // Linear peak level 0.0–1.0 (updated when a WS client is connected)
   source: number; // Physical input source (0 = unpatched); only meaningful for 'ch'
   linkedToNext: boolean; // True if this channel is linked with the next (odd/even pair)
+  spill: boolean; // True if assigned to DCA group 8 (shown in the soundboard UI)
 }
 
 export interface ServiceItem {
@@ -106,6 +107,7 @@ export interface X32Connection {
   parseOscMessage(address: string, args: Array<{ value: unknown }>): { index: number; type: 'ch' | 'bus' | 'main' | 'mtx'; patch: Partial<Channel> } | null;
   startMeterUpdates(): void;
   stopMeterUpdates(): void;
+  setSpill(channelIndex: number, type: 'ch' | 'bus', assigned: boolean): void;
 }
 
 export interface ProclaimConnection {
