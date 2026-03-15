@@ -1063,3 +1063,136 @@ main {
 .log-output .log-info {
   color: var(--text-dim);
 }
+
+/* ===== RESPONSIVE BREAKPOINTS ===== */
+
+/* Hide tablet/desktop-only overview elements by default (mobile-first) */
+.ov-on-air { display: none !important; }
+.ov-scenes-block { display: none !important; }
+.ov-service-col { display: none; }
+
+/* === Tablet layout (768px+) === */
+@media (min-width: 768px) {
+  /* Show On Air and Scenes blocks in overview */
+  .ov-on-air { display: block !important; }
+  .ov-scenes-block { display: block !important; }
+
+  /* 3-column scene grid in overview and OBS panel */
+  .scene-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* 5 slide thumbs per row */
+  .slide-thumb-btn {
+    width: calc(20% - 5px);
+  }
+
+  /* Slightly more generous overview spacing */
+  .overview-grid {
+    padding: 14px;
+    gap: 10px;
+  }
+}
+
+/* === Desktop layout (1024px+) === */
+@media (min-width: 1024px) {
+  /* Body becomes a CSS grid for sidebar navigation */
+  body {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    grid-template-columns: 140px 1fr;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  header {
+    grid-column: 1 / -1;
+  }
+
+  /* Vertical tab sidebar */
+  .tabs {
+    flex-direction: column;
+    border-bottom: none;
+    border-right: 2px solid var(--accent);
+    align-items: stretch;
+    overflow-y: auto;
+  }
+
+  .tab {
+    flex: none;
+    padding: 16px 14px;
+    text-align: left;
+    border-bottom: none;
+    border-right: 2px solid transparent;
+    margin-bottom: 0;
+    margin-right: -2px;
+  }
+
+  .tab.active {
+    border-right-color: var(--primary);
+    border-bottom-color: transparent;
+  }
+
+  /* Main fills grid cell */
+  main {
+    height: 100%;
+  }
+
+  /* Overview panel: flex row with service sidebar */
+  .panel-overview.active {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .overview-grid {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    align-content: start;
+  }
+
+  /* Show and style service sidebar */
+  .ov-service-col {
+    display: flex;
+    flex-direction: column;
+    width: 240px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    border-left: 1px solid var(--accent);
+    padding: 12px;
+    gap: 6px;
+  }
+
+  .ov-service-col .ov-title {
+    flex-shrink: 0;
+  }
+
+  /* 4-column scenes in overview and OBS panel on desktop */
+  .scene-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* Tighter item buttons in service sidebar */
+  .ov-service-col .item-btn {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .ov-service-col .item-section-header {
+    padding: 8px 10px 3px;
+    font-size: 11px;
+  }
+
+  .ov-service-col .item-group-header {
+    padding: 4px 10px 2px;
+    font-size: 10px;
+  }
+
+  /* Slightly more compact controls on desktop */
+  .btn-large {
+    padding: 14px 20px;
+    font-size: 14px;
+  }
+}

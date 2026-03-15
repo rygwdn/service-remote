@@ -34,7 +34,7 @@
   <main>
 
     <!-- ===================== Overview Panel ===================== -->
-    <section class="panel" :class="{ active: $store.ui.tab==='overview' }">
+    <section class="panel panel-overview" :class="{ active: $store.ui.tab==='overview' }">
       <div class="overview-grid">
         <!-- Row 1: Proclaim now-playing | OBS scene -->
         <div class="ov-cell ov-slide-desc" x-html="ovNowPlaying($store.state.proclaim)"></div>
@@ -55,6 +55,12 @@
         <!-- Row 3: Slide nav buttons -->
         <button class="btn btn-large" @click="sendAction('PreviousSlide')">&#8592; Slide</button>
         <button class="btn btn-large" @click="sendAction('NextSlide')">Slide &#8594;</button>
+
+        <!-- On Air button (tablet+) -->
+        <button class="btn btn-large btn-on-air ov-on-air ov-full-width"
+                :class="{ active: $store.state.proclaim.onAir }"
+                @click="window.confirm($store.state.proclaim.onAir ? 'Go Off Air?' : 'Go On Air?') && sendAction($store.state.proclaim.onAir ? 'GoOffAir' : 'GoOnAir')"
+                x-text="$store.state.proclaim.onAir ? 'On Air' : 'Go On Air'"></button>
 
         <!-- Row 4: Prev / next slide thumbs -->
         <div class="slide-thumb" x-html="thumbHtml(ovThumbs($store.state.proclaim).prev)"></div>
@@ -88,6 +94,37 @@
               </div>
             </template>
           </div>
+        </div>
+
+        <!-- OBS Scenes (tablet+) -->
+        <div class="ov-block ov-full-width ov-scenes-block">
+          <div class="ov-title">Scenes</div>
+          <div class="scene-grid ov-scene-grid">
+            <template x-for="scene in $store.state.obs.scenes" :key="scene">
+              <button class="scene-btn" :class="{ active: scene===$store.state.obs.currentScene }"
+                      @click="setScene(scene)" x-text="scene"></button>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- Service items sidebar (desktop+) -->
+      <div class="ov-service-col">
+        <div class="ov-title">Service</div>
+        <div class="proclaim-items">
+          <template x-for="entry in flatServiceItems($store.state.proclaim)" :key="entry.key">
+            <div style="display:contents">
+              <div x-show="entry.type==='section'" class="item-section-header" x-text="entry.label"></div>
+              <div x-show="entry.type==='group'"   class="item-group-header"   x-text="entry.label"></div>
+              <button x-show="entry.type==='item'"
+                      class="item-btn"
+                      :class="{ active: entry.isActive, 'item-grouped': entry.item && entry.item.group }"
+                      @click="entry.item && gotoItem(entry.item.id)">
+                <span x-text="entry.item ? (entry.item.title || entry.item.kind) : ''"></span>
+                <span class="item-slide-count" x-show="entry.slideCountLabel" x-text="' '+entry.slideCountLabel"></span>
+              </button>
+            </div>
+          </template>
         </div>
       </div>
     </section>
