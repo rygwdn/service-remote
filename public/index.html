@@ -112,7 +112,7 @@
       <div class="ov-service-col">
         <div class="ov-title">Service</div>
         <div class="proclaim-items">
-          <template x-for="entry in flatServiceItems($store.state.proclaim)" :key="entry.key">
+          <template x-for="entry in allServiceItems($store.state.proclaim)" :key="entry.key">
             <div style="display:contents">
               <div x-show="entry.type==='section'" class="item-section-header" x-text="entry.label"></div>
               <div x-show="entry.type==='group'"   class="item-group-header"   x-text="entry.label"></div>
