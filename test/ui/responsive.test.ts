@@ -112,7 +112,7 @@ test.describe('Desktop layout (1024px+)', () => {
       },
     });
     await expect(page.locator('.ov-service-col')).toBeVisible();
-    const items = page.locator('.ov-service-col .item-btn');
+    const items = page.locator('.ov-service-col .item-btn').filter({ visible: true });
     await expect(items).toHaveCount(2);
     await expect(items.nth(0)).toContainText('Welcome');
     await expect(items.nth(1)).toContainText('Sermon');
