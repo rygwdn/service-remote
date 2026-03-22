@@ -18,6 +18,24 @@
     "password": "proclaim",
     "pollInterval": 1000
   },
+  "ptz": {
+    "cameras": [
+      {
+        "name": "AV-CM20-NDI",
+        "enabled": false,
+        "address": "192.168.1.101",
+        "port": 52381,
+        "cameraId": 1,
+        "numPresets": 9,
+        "panStep": 100,
+        "tiltStep": 70,
+        "zoomStep": 1000,
+        "panRange": [-1700, 1700],
+        "tiltRange": [-300, 900],
+        "zoomRange": [0, 16384]
+      }
+    ]
+  },
   "ui": {
     "hiddenObs": [],
     "hiddenX32": []

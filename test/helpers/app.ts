@@ -24,6 +24,14 @@ interface TestCalls {
     connect: number; disconnect: number; startMeterUpdates: number; stopMeterUpdates: number;
     sendAction?: { action: string; index?: number }; goToItem?: string;
   };
+  ptz: {
+    connect: number; disconnect: number;
+    panTilt?: { camera: number; panDir: number; tiltDir: number; panSpeed?: number; tiltSpeed?: number };
+    zoom?: { camera: number; direction: string };
+    focus?: { camera: number; mode: string };
+    preset?: { camera: number; action: string; preset: number };
+    home?: number;
+  };
 }
 
 interface TestApp {
@@ -47,6 +55,7 @@ function createTestApp(): TestApp {
     obs:     { connect: 0, disconnect: 0, startMeterUpdates: 0, stopMeterUpdates: 0 },
     x32:     { connect: 0, disconnect: 0, startMeterUpdates: 0, stopMeterUpdates: 0 },
     proclaim:{ connect: 0, disconnect: 0, startMeterUpdates: 0, stopMeterUpdates: 0 },
+    ptz:     { connect: 0, disconnect: 0 },
   };
 
   const stubs: Connections = {
@@ -85,6 +94,17 @@ function createTestApp(): TestApp {
       getSlideLocalRevision: (_itemId?: string, _slideIndex?: string) => null as string | null,
       getToken: () => 'test-token',
       getOnAirSessionId: () => null,
+    },
+    ptz: {
+      connect: () => { calls.ptz.connect++; },
+      disconnect: () => { calls.ptz.disconnect++; },
+      panTilt: (camera: number, panDir: number, tiltDir: number, panSpeed?: number, tiltSpeed?: number) => {
+        calls.ptz.panTilt = { camera, panDir, tiltDir, panSpeed, tiltSpeed };
+      },
+      zoom: (camera: number, direction: string) => { calls.ptz.zoom = { camera, direction }; },
+      focus: (camera: number, mode: string) => { calls.ptz.focus = { camera, mode }; },
+      preset: (camera: number, action: string, preset: number) => { calls.ptz.preset = { camera, action, preset }; },
+      home: (camera: number) => { calls.ptz.home = camera; },
     },
   };
 

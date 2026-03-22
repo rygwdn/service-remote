@@ -8,6 +8,8 @@ console.log = noop;
 console.warn = noop;
 console.error = noop;
 
+type PtzCameraState = { name: string; connected: boolean; pan: number | null; tilt: number | null; zoom: number | null; presets: number[] };
+
 type AppState = {
   obs?: {
     connected?: boolean;
@@ -30,6 +32,9 @@ type AppState = {
     slideIndex?: number | null;
     serviceItems?: { id: string; title: string; kind: string; slideCount: number; index: number; section: string; group: string | null }[];
   };
+  ptz?: {
+    cameras?: PtzCameraState[];
+  };
 };
 
 type Fixtures = {
@@ -41,6 +46,7 @@ const defaultState: Required<AppState> = {
   obs: { connected: false, scenes: [], currentScene: '', streaming: false, recording: false, audioSources: [] },
   x32: { connected: false, channels: [] },
   proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [] },
+  ptz: { cameras: [] },
 };
 
 const alpinePath = path.resolve(__dirname, '../../node_modules/alpinejs/dist/cdn.js');
@@ -105,12 +111,14 @@ export const test = base.extend<{ setState: Fixtures['setState'] }, { serverUrl:
         obs: { ...defaultState.obs, ...patch.obs },
         x32: { ...defaultState.x32, ...patch.x32 },
         proclaim: { ...defaultState.proclaim, ...patch.proclaim },
+        ptz: { ...defaultState.ptz, ...patch.ptz },
       };
       await page.evaluate((state) => {
         const store = (window as any).Alpine.store('state');
         store.obs = state.obs;
         store.x32 = state.x32;
         store.proclaim = state.proclaim;
+        store.ptz = state.ptz;
       }, merged);
       // Allow Alpine to process reactive updates
       await page.waitForTimeout(50);

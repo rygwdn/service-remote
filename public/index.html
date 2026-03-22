@@ -20,6 +20,8 @@
       <span class="dot-label">X32</span>
       <span class="dot" :class="{ connected: $store.state.proclaim.connected }" title="Proclaim"></span>
       <span class="dot-label">Proclaim</span>
+      <span class="dot" :class="{ connected: $store.state.ptz.cameras.some(c => c.connected) }" title="PTZ Camera" x-show="$store.state.ptz.cameras.length > 0"></span>
+      <span class="dot-label" x-show="$store.state.ptz.cameras.length > 0">PTZ</span>
     </div>
   </header>
 
@@ -28,6 +30,7 @@
     <button class="tab" :class="{ active: $store.ui.tab==='proclaim' }" @click="$store.ui.setTab('proclaim')">Proclaim</button>
     <button class="tab" :class="{ active: $store.ui.tab==='obs' }"      @click="$store.ui.setTab('obs')">OBS</button>
     <button class="tab" :class="{ active: $store.ui.tab==='sound' }"    @click="$store.ui.setTab('sound')">Sound</button>
+    <button class="tab" :class="{ active: $store.ui.tab==='camera' }"   @click="$store.ui.setTab('camera')">Camera</button>
     <button class="tab" :class="{ active: $store.ui.tab==='settings' }" @click="$store.ui.setTab('settings')">Settings</button>
   </nav>
 
@@ -267,6 +270,93 @@
       </div>
     </section>
 
+    <!-- ===================== Camera (PTZ) Panel ===================== -->
+    <section class="panel" :class="{ active: $store.ui.tab==='camera' }"
+             x-data="{ activeCam: 0 }">
+
+      <!-- Camera selector (only shown when more than one camera is configured) -->
+      <div class="ptz-cam-selector" x-show="$store.state.ptz.cameras.length > 1">
+        <template x-for="(cam, i) in $store.state.ptz.cameras" :key="i">
+          <button class="btn ptz-cam-btn"
+                  :class="{ active: activeCam === i }"
+                  @click="activeCam = i"
+                  x-text="cam.name || ('Cam ' + (i + 1))"></button>
+        </template>
+      </div>
+
+      <template x-if="$store.state.ptz.cameras.length === 0">
+        <div class="ptz-disconnected">No cameras configured</div>
+      </template>
+
+      <template x-for="(cam, camIdx) in $store.state.ptz.cameras" :key="camIdx">
+        <div class="ptz-panel" x-show="activeCam === camIdx">
+          <div class="ptz-disconnected" x-show="!cam.connected" x-text="cam.name + ': disconnected'"></div>
+
+          <!-- D-pad: Pan / Tilt — each press is a discrete go-to step; held = repeat -->
+          <div class="ptz-dpad">
+            <button class="ptz-btn ptz-up"
+                    @pointerdown.prevent="ptzStartRepeat(() => ptzPanTilt(camIdx, 0, 1))"
+                    @pointerup="ptzStopRepeat()"
+                    @pointerleave="ptzStopRepeat()">&#9650;</button>
+            <div class="ptz-middle-row">
+              <button class="ptz-btn ptz-left"
+                      @pointerdown.prevent="ptzStartRepeat(() => ptzPanTilt(camIdx, -1, 0))"
+                      @pointerup="ptzStopRepeat()"
+                      @pointerleave="ptzStopRepeat()">&#9664;</button>
+              <button class="ptz-btn ptz-home" @click="ptzHome(camIdx)" title="Home">&#8962;</button>
+              <button class="ptz-btn ptz-right"
+                      @pointerdown.prevent="ptzStartRepeat(() => ptzPanTilt(camIdx, 1, 0))"
+                      @pointerup="ptzStopRepeat()"
+                      @pointerleave="ptzStopRepeat()">&#9654;</button>
+            </div>
+            <button class="ptz-btn ptz-down"
+                    @pointerdown.prevent="ptzStartRepeat(() => ptzPanTilt(camIdx, 0, -1))"
+                    @pointerup="ptzStopRepeat()"
+                    @pointerleave="ptzStopRepeat()">&#9660;</button>
+          </div>
+
+          <!-- Zoom — go-to steps, no stop command needed -->
+          <div class="ptz-zoom-row">
+            <span class="ptz-label">Zoom</span>
+            <button class="ptz-btn ptz-zoom-out"
+                    @pointerdown.prevent="ptzStartRepeat(() => ptzZoom(camIdx, 'out'))"
+                    @pointerup="ptzStopRepeat()"
+                    @pointerleave="ptzStopRepeat()">W&minus;</button>
+            <button class="ptz-btn ptz-zoom-in"
+                    @pointerdown.prevent="ptzStartRepeat(() => ptzZoom(camIdx, 'in'))"
+                    @pointerup="ptzStopRepeat()"
+                    @pointerleave="ptzStopRepeat()">T+</button>
+          </div>
+
+          <!-- Focus — server auto-stops drive after 500 ms; no stop button needed -->
+          <div class="ptz-focus-row">
+            <span class="ptz-label">Focus</span>
+            <button class="ptz-btn" @click="ptzFocus(camIdx, 'auto')">Auto</button>
+            <button class="ptz-btn"
+                    @pointerdown.prevent="ptzStartRepeat(() => ptzFocus(camIdx, 'near'))"
+                    @pointerup="ptzStopRepeat()"
+                    @pointerleave="ptzStopRepeat()">Near</button>
+            <button class="ptz-btn"
+                    @pointerdown.prevent="ptzStartRepeat(() => ptzFocus(camIdx, 'far'))"
+                    @pointerup="ptzStopRepeat()"
+                    @pointerleave="ptzStopRepeat()">Far</button>
+          </div>
+
+          <!-- Presets -->
+          <div class="ptz-presets" x-show="cam.presets && cam.presets.length > 0">
+            <div class="ptz-preset-row">
+              <span class="ptz-label">Presets</span>
+              <template x-for="p in cam.presets" :key="p">
+                <button class="ptz-btn ptz-preset-btn"
+                        @click="ptzPreset(camIdx, 'recall', p)"
+                        x-text="p + 1"></button>
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+    </section>
+
     <!-- ===================== Settings Panel ===================== -->
     <section class="panel" :class="{ active: $store.ui.tab==='settings' }"
              x-data="settingsPanel()">
@@ -316,6 +406,21 @@
           <button class="btn" @click="discoverProclaim()">Auto-detect</button>
           <span class="discover-status" x-text="discoverStatus.proclaim"></span>
         </div>
+      </div>
+
+      <div class="settings-section">
+        <h2>PTZ Cameras</h2>
+        <template x-for="(cam, i) in cfg.ptz.cameras" :key="i">
+          <div class="settings-subsection">
+            <h3 x-text="'Camera ' + (i + 1)"></h3>
+            <label><input type="checkbox" x-model="cam.enabled"> Enabled</label>
+            <label>Name <input type="text" x-model="cam.name" placeholder="Camera"></label>
+            <label>IP Address <input type="text" x-model="cam.address" placeholder="192.168.1.101"></label>
+            <label>Port <input type="number" x-model.number="cam.port" placeholder="52381"></label>
+            <label>Camera ID <input type="number" x-model.number="cam.cameraId" placeholder="1" min="1" max="7"></label>
+            <label>Presets <input type="number" x-model.number="cam.numPresets" placeholder="9" min="0" max="255"></label>
+          </div>
+        </template>
       </div>
 
       <div class="settings-footer">

@@ -1083,3 +1083,97 @@ main {
 .log-output .log-info {
   color: var(--text-dim);
 }
+
+
+/* ===================== PTZ Camera Panel ===================== */
+.ptz-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 0;
+}
+
+.ptz-disconnected {
+  color: var(--red, #e05c5c);
+  font-size: 0.9em;
+  padding: 6px 12px;
+  border: 1px solid var(--red, #e05c5c);
+  border-radius: 6px;
+}
+
+.ptz-dpad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.ptz-middle-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ptz-btn {
+  min-width: 56px;
+  min-height: 56px;
+  font-size: 1.3em;
+  background: var(--bg-raised, #2a2a2a);
+  color: var(--text, #eee);
+  border: 1px solid var(--accent, #444);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.ptz-btn:active {
+  background: var(--accent, #444);
+}
+
+.ptz-home {
+  background: var(--bg, #1a1a1a);
+  font-size: 1.1em;
+}
+
+.ptz-zoom-row,
+.ptz-focus-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ptz-label {
+  min-width: 48px;
+  font-size: 0.85em;
+  color: var(--text-dim, #888);
+  text-align: right;
+}
+
+.ptz-zoom-out, .ptz-zoom-in {
+  font-size: 1em;
+  min-width: 64px;
+}
+
+.ptz-presets {
+  width: 100%;
+  max-width: 360px;
+}
+
+.ptz-preset-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ptz-preset-btn {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1em;
+}
