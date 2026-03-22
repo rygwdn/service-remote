@@ -17,8 +17,7 @@
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/stop.sh",
             "timeout": 120,
-            "statusMessage": "Running CI checks (typecheck, lint, tests)...",
-            "asyncRewake": true
+            "statusMessage": "Running CI checks (typecheck, lint, tests)..."
           }
         ]
       }

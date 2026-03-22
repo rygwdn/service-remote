@@ -3,7 +3,6 @@ set -euo pipefail
 
 # Escape hatch: set SKIP_CHECKS=1 to bypass all checks
 if [ "${SKIP_CHECKS:-}" = "1" ]; then
-  echo '{"suppressOutput": true}'
   exit 0
 fi
 
@@ -27,5 +26,4 @@ if ! bun test test/unit test/e2e 2>&1; then
   exit 2
 fi
 
-echo '{"suppressOutput": true}'
 exit 0
