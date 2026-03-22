@@ -27,13 +27,14 @@ document.addEventListener('alpine:init', () => {
     },
     isHiddenObs(name) { return this.hidden.obs.includes(name); },
     isHiddenX32(key) {
-      // Main channels are always shown.
+      // Main M/C (index 2) is always hidden — unused.
+      // Main L/R (index 1) is always shown.
       // All other channels are shown only when assigned to DCA group 8 (ch.spill === true).
       const ch = Alpine.store('state').x32.channels.find(
         (c) => c.type + '/' + c.index === key
       );
       if (!ch) return true;
-      if (ch.type === 'main') return false;
+      if (ch.type === 'main') return ch.index === 2;
       return !ch.spill;
     },
   });
@@ -231,6 +232,17 @@ function connectScreenshotWs() {
 }
 
 connectScreenshotWs();
+
+// Sort X32 channels for display: main L/R first, then bus, then ch, then mtx.
+const X32_TYPE_ORDER = { main: 0, bus: 1, ch: 2, mtx: 3 };
+function sortedX32Channels(channels) {
+  return [...channels].sort((a, b) => {
+    const ta = X32_TYPE_ORDER[a.type] ?? 99;
+    const tb = X32_TYPE_ORDER[b.type] ?? 99;
+    if (ta !== tb) return ta - tb;
+    return a.index - b.index;
+  });
+}
 
 // Convert a linear 0–1 amplitude multiplier (as sent by OBS and X32) to a
 // 0–100 display percentage using a dB scale mapped to [-60 dB, 0 dBFS].

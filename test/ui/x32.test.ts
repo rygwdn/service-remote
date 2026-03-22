@@ -20,9 +20,10 @@ test.describe('Sound (X32) panel', () => {
 
     const rows = panel(page).locator('.channel-row-h');
     await expect(rows).toHaveCount(3);
-    await expect(rows.nth(0).locator('.ch-label')).toHaveText('Vocals');
-    await expect(rows.nth(1).locator('.ch-label')).toHaveText('Guitar');
-    await expect(rows.nth(2).locator('.ch-label')).toHaveText('Main Bus');
+    // bus comes before ch channels in sorted order
+    await expect(rows.nth(0).locator('.ch-label')).toHaveText('Main Bus');
+    await expect(rows.nth(1).locator('.ch-label')).toHaveText('Vocals');
+    await expect(rows.nth(2).locator('.ch-label')).toHaveText('Guitar');
   });
 
   test('mute button shows MUTED when channel is muted', async ({ page, setState }) => {
@@ -183,6 +184,49 @@ test.describe('Sound (X32) panel', () => {
     // Lock again
     await lockBtn.click();
     await expect(muteBtn).toBeDisabled();
+  });
+
+  test('channels are sorted: main first, then bus, then ch', async ({ page, setState }) => {
+    const unorderedChannels = [
+      { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0.5, spill: true },
+      { index: 1, type: 'bus' as const, label: 'Bus 1', fader: 0.7, muted: false, level: 0.4, spill: true },
+      { index: 1, type: 'main' as const, label: 'Main L/R', fader: 0.9, muted: false, level: 0.6, spill: false },
+    ];
+
+    await setState({ x32: { connected: true, channels: unorderedChannels } });
+
+    const visibleRows = panel(page).locator('.channel-row-h:visible');
+    await expect(visibleRows).toHaveCount(3);
+    await expect(visibleRows.nth(0).locator('.ch-label')).toHaveText('Main L/R');
+    await expect(visibleRows.nth(1).locator('.ch-label')).toHaveText('Bus 1');
+    await expect(visibleRows.nth(2).locator('.ch-label')).toHaveText('Vocals');
+  });
+
+  test('main M/C channel (type=main, index=2) is always hidden', async ({ page, setState }) => {
+    const channelsWithMC = [
+      { index: 1, type: 'main' as const, label: 'Main L/R', fader: 0.9, muted: false, level: 0.6, spill: false },
+      { index: 2, type: 'main' as const, label: 'Main M/C', fader: 0.0, muted: false, level: 0.0, spill: false },
+    ];
+
+    await setState({ x32: { connected: true, channels: channelsWithMC } });
+
+    await expect(panel(page).locator('.channel-row-h').filter({ hasText: 'Main L/R' })).toBeVisible();
+    await expect(panel(page).locator('.channel-row-h').filter({ hasText: 'Main M/C' })).not.toBeVisible();
+  });
+
+  test('channel rows have CSS class for their type', async ({ page, setState }) => {
+    const typedChannels = [
+      { index: 1, type: 'main' as const, label: 'Main L/R', fader: 0.9, muted: false, level: 0.0, spill: false },
+      { index: 1, type: 'bus' as const, label: 'Bus 1', fader: 0.7, muted: false, level: 0.0, spill: true },
+      { index: 1, type: 'ch' as const, label: 'Vocals', fader: 0.8, muted: false, level: 0.0, spill: true },
+    ];
+
+    await setState({ x32: { connected: true, channels: typedChannels } });
+
+    const rows = panel(page).locator('.channel-row-h');
+    await expect(rows.nth(0)).toHaveClass(/channel-row-h--main/);
+    await expect(rows.nth(1)).toHaveClass(/channel-row-h--bus/);
+    await expect(rows.nth(2)).toHaveClass(/channel-row-h--ch/);
   });
 
   // Helper: simulate a levels update by directly invoking the same DOM logic as the WS handler
