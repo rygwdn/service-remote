@@ -6,10 +6,12 @@
   "scripts": {
     "start": "bun server.ts",
     "dev": "bun --watch server.ts",
+    "setup": "bun install && (bunx playwright install chromium || echo 'Warning: playwright browser install failed')",
     "test": "bun test test/unit test/e2e",
     "test:unit": "bun test test/unit",
     "test:e2e": "bun test test/e2e",
-    "test:ui": "playwright test",
+    "test:ui": "bunx playwright test",
+    "check": "bun run typecheck && bun run lint && bun run test && bun run test:ui",
     "build": "bun scripts/build.js",
     "typecheck": "tsc --noEmit",
     "lint": "bun scripts/check-no-console.ts"

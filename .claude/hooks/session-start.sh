@@ -7,4 +7,4 @@ fi
 
 cd "$CLAUDE_PROJECT_DIR"
 
-bun install
+bun run setup
