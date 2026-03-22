@@ -12,7 +12,7 @@ const userConfigPath = config.userConfigPath;
 
 const THUMB_POLL_TIMEOUT_MS = 5000;
 
-function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stateOverride?: typeof defaultState, configPathOverride?: string): void {
+function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections, stateOverride?: typeof defaultState, configPathOverride?: string): void {
   const state = stateOverride ?? defaultState;
   const cfgPath = configPathOverride ?? userConfigPath;
 
@@ -212,6 +212,58 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
     }
   });
 
+  // --- PTZ ---
+  app.post('/api/ptz/pan-tilt', (req: Request, res: Response) => {
+    try {
+      const { pan, tilt, panSpeed, tiltSpeed } = req.body as {
+        pan: -1 | 0 | 1; tilt: -1 | 0 | 1; panSpeed?: number; tiltSpeed?: number;
+      };
+      ptz.panTilt(pan, tilt, panSpeed, tiltSpeed);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/ptz/zoom', (req: Request, res: Response) => {
+    try {
+      const { direction, speed } = req.body as { direction: 'in' | 'out' | 'stop'; speed?: number };
+      ptz.zoom(direction, speed);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/ptz/focus', (req: Request, res: Response) => {
+    try {
+      const { mode } = req.body as { mode: 'auto' | 'manual' | 'near' | 'far' | 'stop' };
+      ptz.focus(mode);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/ptz/preset', (req: Request, res: Response) => {
+    try {
+      const { action, preset } = req.body as { action: 'recall' | 'save'; preset: number };
+      ptz.preset(action, preset);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/ptz/home', (req: Request, res: Response) => {
+    try {
+      ptz.home();
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   // --- OBS program preview screenshot ---
   app.get('/api/obs/screenshot', async (req: Request, res: Response) => {
     try {
@@ -240,7 +292,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
 
   // --- Config ---
   app.get('/api/config', (req: Request, res: Response) => {
-    res.json({ obs: config.obs, x32: config.x32, proclaim: config.proclaim });
+    res.json({ obs: config.obs, x32: config.x32, proclaim: config.proclaim, ptz: config.ptz });
   });
 
   app.post('/api/config', async (req: Request, res: Response) => {
@@ -248,6 +300,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
       obs?: { address?: string; password?: string; screenshotInterval?: number };
       x32?: { address?: string; port?: number };
       proclaim?: { host?: string; port?: number; password?: string; pollInterval?: number };
+      ptz?: { enabled?: boolean; protocol?: string; address?: string; port?: number; cameraId?: number; numPresets?: number };
     };
     if (!body.obs || !body.x32 || !body.proclaim) {
       res.status(400).json({ error: 'Request must include obs, x32, and proclaim keys' });
@@ -258,6 +311,12 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
     const obsChanged = body.obs.address !== config.obs.address || body.obs.password !== config.obs.password;
     const x32Changed = body.x32.address !== config.x32.address || body.x32.port !== config.x32.port;
     const proclaimChanged = body.proclaim.host !== config.proclaim.host || body.proclaim.port !== config.proclaim.port || body.proclaim.password !== config.proclaim.password || body.proclaim.pollInterval !== config.proclaim.pollInterval;
+    const ptzChanged = body.ptz && (
+      body.ptz.enabled !== config.ptz.enabled ||
+      body.ptz.address !== config.ptz.address ||
+      body.ptz.port !== config.ptz.port ||
+      body.ptz.cameraId !== config.ptz.cameraId
+    );
 
     try {
       // Merge new connection config with existing server config (server port not exposed in UI)
@@ -266,6 +325,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
         obs: body.obs,
         x32: body.x32,
         proclaim: body.proclaim,
+        ptz: body.ptz ?? config.ptz,
         ui: config.ui,
       };
       fs.writeFileSync(cfgPath, JSON.stringify(newConfig, null, 2), 'utf-8');
@@ -274,6 +334,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim }: Connections, stat
       if (obsChanged) { obs.disconnect(); await obs.connect(); }
       if (x32Changed) { x32.disconnect(); x32.connect(); }
       if (proclaimChanged) { proclaim.disconnect(); await proclaim.connect(); }
+      if (ptzChanged) { ptz.disconnect(); ptz.connect(); }
 
       res.json({ ok: true });
     } catch (err) {

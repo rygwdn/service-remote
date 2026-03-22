@@ -17,6 +17,7 @@ const { setupScreenshotWs } = require('./src/screenshot-ws');
 import obs = require('./src/connections/obs');
 import x32 = require('./src/connections/x32');
 import proclaim = require('./src/connections/proclaim');
+import ptz = require('./src/connections/ptz');
 
 // ── Crash / unexpected-shutdown logging ──────────────────────────────────────
 
@@ -39,6 +40,7 @@ function shutdown(signal: string): void {
   obs.disconnect();
   x32.disconnect();
   proclaim.disconnect();
+  ptz.disconnect();
   server.close(() => {
     logger.log('[Server] Shutdown complete');
     process.exit(0);
@@ -89,8 +91,8 @@ if (Object.keys(embeddedPublic).length > 0) {
   app.use(express.static(path.join(__dirname, 'public')));
 }
 
-setupRoutes(app, { obs, x32, proclaim });
-setupWebSocket(server, state, { obs, x32, proclaim });
+setupRoutes(app, { obs, x32, proclaim, ptz });
+setupWebSocket(server, state, { obs, x32, proclaim, ptz });
 setupLevelsWs(server);
 setupScreenshotWs(server);
 

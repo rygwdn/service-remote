@@ -56,10 +56,16 @@ export interface ProclaimState {
   slideRevisions: Record<string, Record<string, string>>;
 }
 
+export interface PtzState {
+  connected: boolean;
+  presets: number[]; // Available preset slot indices (e.g. [0,1,...,8])
+}
+
 export interface AppState {
   obs: ObsState;
   x32: X32State;
   proclaim: ProclaimState;
+  ptz: PtzState;
 }
 
 export interface Config {
@@ -81,6 +87,14 @@ export interface Config {
     port: number;
     password: string;
     pollInterval: number;
+  };
+  ptz: {
+    enabled: boolean;
+    protocol: 'visca-udp';
+    address: string;
+    port: number;
+    cameraId: number;
+    numPresets: number;
   };
   ui: {
     hiddenObs: string[];
@@ -121,10 +135,21 @@ export interface ProclaimConnection {
   getOnAirSessionId(): string | null;
 }
 
+export interface PtzConnection {
+  connect(): void;
+  disconnect(): void;
+  panTilt(pan: -1 | 0 | 1, tilt: -1 | 0 | 1, panSpeed?: number, tiltSpeed?: number): void;
+  zoom(direction: 'in' | 'out' | 'stop', speed?: number): void;
+  focus(mode: 'auto' | 'manual' | 'near' | 'far' | 'stop'): void;
+  preset(action: 'recall' | 'save', preset: number): void;
+  home(): void;
+}
+
 export interface Connections {
   obs: ObsConnection;
   x32: X32Connection;
   proclaim: ProclaimConnection;
+  ptz: PtzConnection;
 }
 
 export interface ChangeEvent {

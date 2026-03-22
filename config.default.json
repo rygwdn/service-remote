@@ -18,6 +18,14 @@
     "password": "proclaim",
     "pollInterval": 1000
   },
+  "ptz": {
+    "enabled": false,
+    "protocol": "visca-udp",
+    "address": "192.168.1.101",
+    "port": 52381,
+    "cameraId": 1,
+    "numPresets": 9
+  },
   "ui": {
     "hiddenObs": [],
     "hiddenX32": []

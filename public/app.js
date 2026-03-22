@@ -6,6 +6,7 @@ document.addEventListener('alpine:init', () => {
     obs: { connected: false, scenes: [], currentScene: '', streaming: false, recording: false, audioSources: [] },
     x32: { connected: false, channels: [] },
     proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [] },
+    ptz: { connected: false, presets: [] },
   });
 
   // UI state
@@ -68,6 +69,7 @@ document.addEventListener('alpine:init', () => {
       obs: { address: '', password: '', screenshotInterval: 1000 },
       x32: { address: '', port: 10023 },
       proclaim: { host: '', port: 52195, password: '', pollInterval: 1000 },
+      ptz: { enabled: false, address: '192.168.1.101', port: 52381, cameraId: 1, numPresets: 9 },
     },
     discoverStatus: { obs: '', x32: '', proclaim: '' },
     saveStatus: '',
@@ -100,6 +102,11 @@ document.addEventListener('alpine:init', () => {
       this.cfg.proclaim.port           = data.proclaim?.port ?? 52195;
       this.cfg.proclaim.password       = data.proclaim?.password ?? '';
       this.cfg.proclaim.pollInterval   = data.proclaim?.pollInterval ?? 1000;
+      this.cfg.ptz.enabled             = data.ptz?.enabled ?? false;
+      this.cfg.ptz.address             = data.ptz?.address ?? '192.168.1.101';
+      this.cfg.ptz.port                = data.ptz?.port ?? 52381;
+      this.cfg.ptz.cameraId            = data.ptz?.cameraId ?? 1;
+      this.cfg.ptz.numPresets          = data.ptz?.numPresets ?? 9;
     },
 
     async saveConfig() {
@@ -184,6 +191,7 @@ function connectWs() {
       store.obs = msg.data.obs;
       store.x32 = msg.data.x32;
       store.proclaim = msg.data.proclaim;
+      store.ptz = msg.data.ptz;
     }
   };
 
@@ -327,6 +335,13 @@ function toggleStream()                 { post('/api/obs/stream', {}); }
 function toggleRecord()                 { post('/api/obs/record', {}); }
 function setX32Fader(channel, type, value) { post('/api/x32/fader', { channel, type, value }); }
 function toggleX32Mute(channel, type)   { post('/api/x32/mute', { channel, type }); }
+
+// --- PTZ ---
+function ptzPanTilt(pan, tilt, panSpeed, tiltSpeed) { post('/api/ptz/pan-tilt', { pan, tilt, panSpeed, tiltSpeed }); }
+function ptzZoom(direction, speed)                  { post('/api/ptz/zoom', { direction, speed }); }
+function ptzFocus(mode)                             { post('/api/ptz/focus', { mode }); }
+function ptzPreset(action, preset)                  { post('/api/ptz/preset', { action, preset }); }
+function ptzHome()                                  { post('/api/ptz/home', {}); }
 
 // --- Fader visibility ---
 function toggleHiddenObs(name, show) {
