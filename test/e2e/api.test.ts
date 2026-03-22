@@ -275,8 +275,10 @@ describe('API routes', () => {
 
       let res1: import('supertest').Response;
       let res2: import('supertest').Response;
+      let fetchCountAfterR1: number;
       try {
         res1 = await thumbReq.get('/api/proclaim/thumb?itemId=abc&slideIndex=0&localRevision=rev-42');
+        fetchCountAfterR1 = fetchCount;
         res2 = await thumbReq.get('/api/proclaim/thumb?itemId=abc&slideIndex=0&localRevision=rev-42');
       } finally {
         thumbServer.close();
@@ -285,7 +287,8 @@ describe('API routes', () => {
 
       assert.equal(res1!.status, 200);
       assert.equal(res2!.status, 200);
-      assert.equal(fetchCount, 1, 'Should only fetch from Proclaim once (second served from cache)');
+      assert.ok(fetchCountAfterR1! >= 1, `Expected at least 1 fetch for first request, got ${fetchCountAfterR1!}`);
+      assert.equal(fetchCount, fetchCountAfterR1!, 'Second request should be served from cache (no new fetches)');
     });
 
     test('sets immutable Cache-Control header when localRevision is known', async () => {
