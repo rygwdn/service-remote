@@ -123,13 +123,15 @@ export interface Config {
     }>;
   };
   youtube: {
-    apiKey: string;
+    /** Legacy API key — only used as fallback if no OAuth token is available. */
+    apiKey?: string;
     broadcastId: string;
     pollInterval: number;
-    oauth: {
-      clientId: string;
-      clientSecret: string;
-      refreshToken: string;
+    /** Legacy OAuth credentials — only needed if OBS is not running. */
+    oauth?: {
+      clientId?: string;
+      clientSecret?: string;
+      refreshToken?: string;
     };
   };
   ui: {

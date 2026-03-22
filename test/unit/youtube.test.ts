@@ -1,5 +1,5 @@
-import { test, expect, describe, mock, beforeEach } from 'bun:test';
-import { parseApiResponse, parseIni, extractCredsFromIni, seedAccessToken, getAccessTokenForTesting } from '../../src/connections/youtube';
+import { test, expect, describe, mock, beforeEach, spyOn } from 'bun:test';
+import { parseApiResponse, parseIni, extractCredsFromIni, seedAccessToken, getAccessTokenForTesting, parseBroadcastsResponse } from '../../src/connections/youtube';
 
 describe('parseApiResponse', () => {
   test('returns nulls when items array is empty', () => {
@@ -158,5 +158,65 @@ describe('seedAccessToken', () => {
     const futureExpiry = Date.now() + 3600_000;
     seedAccessToken('seeded-token', futureExpiry);
     expect(getAccessTokenForTesting()).toEqual({ token: 'seeded-token', expiry: futureExpiry });
+  });
+});
+
+describe('parseBroadcastsResponse', () => {
+  test('returns empty array when items is missing', () => {
+    expect(parseBroadcastsResponse({})).toEqual([]);
+  });
+
+  test('returns empty array when items is empty', () => {
+    expect(parseBroadcastsResponse({ items: [] })).toEqual([]);
+  });
+
+  test('filters out completed and revoked broadcasts', () => {
+    const data = {
+      items: [
+        { id: 'a', snippet: { title: 'Live Now' }, status: { lifeCycleStatus: 'live' } },
+        { id: 'b', snippet: { title: 'Done' }, status: { lifeCycleStatus: 'complete' } },
+        { id: 'c', snippet: { title: 'Revoked' }, status: { lifeCycleStatus: 'revoked' } },
+        { id: 'd', snippet: { title: 'Upcoming', scheduledStartTime: '2026-03-22T10:00:00Z' }, status: { lifeCycleStatus: 'ready' } },
+      ],
+    };
+    const result = parseBroadcastsResponse(data);
+    expect(result).toHaveLength(2);
+    expect(result.map(b => b.id)).toEqual(['a', 'd']);
+  });
+
+  test('maps fields correctly', () => {
+    const data = {
+      items: [{
+        id: 'xyz',
+        snippet: { title: 'Sunday Service', scheduledStartTime: '2026-03-22T09:00:00Z' },
+        status: { lifeCycleStatus: 'ready' },
+      }],
+    };
+    const result = parseBroadcastsResponse(data);
+    expect(result[0]).toEqual({
+      id: 'xyz',
+      title: 'Sunday Service',
+      status: 'ready',
+      scheduledStartTime: '2026-03-22T09:00:00Z',
+    });
+  });
+
+  test('includes testing and liveStarting statuses', () => {
+    const data = {
+      items: [
+        { id: 't', snippet: { title: 'Testing' }, status: { lifeCycleStatus: 'testing' } },
+        { id: 'ls', snippet: { title: 'Going Live' }, status: { lifeCycleStatus: 'liveStarting' } },
+      ],
+    };
+    const result = parseBroadcastsResponse(data);
+    expect(result).toHaveLength(2);
+  });
+
+  test('omits scheduledStartTime when absent', () => {
+    const data = {
+      items: [{ id: 'a', snippet: { title: 'No Time' }, status: { lifeCycleStatus: 'live' } }],
+    };
+    const result = parseBroadcastsResponse(data);
+    expect(result[0].scheduledStartTime).toBeUndefined();
   });
 });

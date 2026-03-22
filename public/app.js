@@ -72,7 +72,7 @@ document.addEventListener('alpine:init', () => {
       x32: { address: '', port: 10023 },
       proclaim: { host: '', port: 52195, password: '', pollInterval: 1000 },
       ptz: { cameras: [] },
-      youtube: { apiKey: '', broadcastId: '', pollInterval: 30000, oauth: { clientId: '', clientSecret: '', refreshToken: '' } },
+      youtube: { broadcastId: '', pollInterval: 30000 },
     },
     discoverStatus: { obs: '', x32: '', proclaim: '' },
     saveStatus: '',
@@ -114,12 +114,8 @@ document.addEventListener('alpine:init', () => {
         cameraId: c.cameraId ?? 1,
         numPresets: c.numPresets ?? 9,
       }));
-      this.cfg.youtube.apiKey                    = data.youtube?.apiKey ?? '';
       this.cfg.youtube.broadcastId               = data.youtube?.broadcastId ?? '';
       this.cfg.youtube.pollInterval              = data.youtube?.pollInterval ?? 30000;
-      this.cfg.youtube.oauth.clientId            = data.youtube?.oauth?.clientId ?? '';
-      this.cfg.youtube.oauth.clientSecret        = data.youtube?.oauth?.clientSecret ?? '';
-      this.cfg.youtube.oauth.refreshToken        = data.youtube?.oauth?.refreshToken ?? '';
     },
 
     async saveConfig() {
@@ -172,23 +168,37 @@ document.addEventListener('alpine:init', () => {
       } catch (_) { this.discoverStatus.proclaim = 'Error'; }
     },
 
-    async importYouTubeCredsFromObs() {
-      this.importObsStatus = 'Importing…';
+    youtubeBroadcasts: [],
+    youtubeBroadcastsStatus: '',
+
+    async findYouTubeBroadcasts() {
+      this.youtubeBroadcastsStatus = 'Searching…';
+      this.youtubeBroadcasts = [];
       try {
-        const res = await fetch('/api/youtube/import-obs-creds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        const res = await fetch('/api/youtube/broadcasts');
         const data = await res.json();
-        if (data.found) {
-          if (data.clientId) this.cfg.youtube.oauth.clientId = data.clientId;
-          if (data.clientSecret) this.cfg.youtube.oauth.clientSecret = data.clientSecret;
-          if (data.refreshToken) this.cfg.youtube.oauth.refreshToken = data.refreshToken;
-          this.importObsStatus = 'Imported!';
+        if (!res.ok) {
+          this.youtubeBroadcastsStatus = 'Error: ' + (data.error || 'unknown');
+          return;
+        }
+        this.youtubeBroadcasts = data.broadcasts ?? [];
+        if (this.youtubeBroadcasts.length === 0) {
+          this.youtubeBroadcastsStatus = 'No active or scheduled broadcasts found';
+        } else if (this.youtubeBroadcasts.length === 1) {
+          this.selectYouTubeBroadcast(this.youtubeBroadcasts[0].id);
+          this.youtubeBroadcastsStatus = 'Auto-selected';
+          setTimeout(() => { this.youtubeBroadcastsStatus = ''; this.youtubeBroadcasts = []; }, 2000);
         } else {
-          this.importObsStatus = 'Not found in OBS config';
+          this.youtubeBroadcastsStatus = '';
         }
       } catch (err) {
-        this.importObsStatus = 'Error: ' + err.message;
+        this.youtubeBroadcastsStatus = 'Error: ' + err.message;
       }
-      setTimeout(() => { this.importObsStatus = ''; }, 3000);
+    },
+
+    selectYouTubeBroadcast(id) {
+      this.cfg.youtube.broadcastId = id;
+      this.youtubeBroadcasts = [];
     },
 
     async loadLogs() {

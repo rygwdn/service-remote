@@ -41,6 +41,39 @@ function parseApiResponse(data: unknown): ParsedVideoInfo {
   return { viewerCount, broadcastTitle, broadcastStatus };
 }
 
+// ── Broadcast list parsing ────────────────────────────────────────────────────
+
+interface BroadcastInfo {
+  id: string;
+  title: string;
+  status: string;
+  scheduledStartTime?: string;
+}
+
+const ACTIVE_STATUSES = new Set(['created', 'ready', 'testStarting', 'testing', 'liveStarting', 'live']);
+
+/** Parse a YouTube Data API v3 `liveBroadcasts.list` response into a filtered list. */
+function parseBroadcastsResponse(data: unknown): BroadcastInfo[] {
+  const items = (data as Record<string, unknown> | null)?.['items'];
+  if (!Array.isArray(items)) return [];
+  const result: BroadcastInfo[] = [];
+  for (const item of items) {
+    const i = item as Record<string, unknown>;
+    const id = typeof i['id'] === 'string' ? i['id'] : null;
+    const snippet = i['snippet'] as Record<string, unknown> | undefined;
+    const status = i['status'] as Record<string, unknown> | undefined;
+    const lifeCycleStatus = typeof status?.['lifeCycleStatus'] === 'string' ? status['lifeCycleStatus'] : null;
+    const title = typeof snippet?.['title'] === 'string' ? snippet['title'] : '';
+    const scheduledStartTime = typeof snippet?.['scheduledStartTime'] === 'string'
+      ? snippet['scheduledStartTime']
+      : undefined;
+    if (id && lifeCycleStatus && ACTIVE_STATUSES.has(lifeCycleStatus)) {
+      result.push({ id, title, status: lifeCycleStatus, scheduledStartTime });
+    }
+  }
+  return result;
+}
+
 // ── INI parsing (for OBS global.ini) ─────────────────────────────────────────
 
 /** Parse a simple INI file into sections. */
@@ -103,13 +136,11 @@ function defaultObsConfigDir(): string {
 
 /**
  * Try to read YouTube OAuth credentials from OBS's config files.
- * OBS stores the RefreshToken in the [YouTube] section of global.ini.
- * Note: OBS does not store client_id/client_secret on disk — those are
- * baked into the OBS binary at build time and must be entered manually.
+ * OBS stores the RefreshToken and Token in the [YouTube] section of global.ini.
+ * client_id/client_secret are baked into the OBS binary and are not on disk.
  */
 async function importObsCreds(obsConfigDir?: string): Promise<OAuthCreds | null> {
   const dir = obsConfigDir ?? defaultObsConfigDir();
-
   const iniPath = path.join(dir, 'global.ini');
   try {
     const raw = fs.readFileSync(iniPath, 'utf-8');
@@ -118,7 +149,6 @@ async function importObsCreds(obsConfigDir?: string): Promise<OAuthCreds | null>
   } catch {
     // Not found — fall through
   }
-
   return null;
 }
 
@@ -138,14 +168,32 @@ function getAccessTokenForTesting(): { token: string | null; expiry: number } {
   return { token: cachedAccessToken, expiry: tokenExpiry };
 }
 
-/** Get a valid access token, refreshing via the configured refresh_token if needed. */
+/**
+ * Get a valid access token.
+ *
+ * Strategy (in order):
+ * 1. Return cached token if still valid.
+ * 2. Re-read OBS global.ini — OBS manages its own token refresh, so if OBS is
+ *    running its saved token will be fresh.
+ * 3. Fall back to configured client_id + client_secret + refresh_token (legacy).
+ */
 async function getAccessToken(): Promise<string> {
   if (cachedAccessToken && Date.now() < tokenExpiry - 60_000) {
     return cachedAccessToken;
   }
-  const { clientId, clientSecret, refreshToken } = config.youtube.oauth;
+
+  // Re-read OBS global.ini (OBS refreshes its own token and writes it back)
+  const obsCreds = await importObsCreds();
+  if (obsCreds?.accessToken && obsCreds.tokenExpiry && obsCreds.tokenExpiry > Date.now() + 60_000) {
+    cachedAccessToken = obsCreds.accessToken;
+    tokenExpiry = obsCreds.tokenExpiry;
+    return cachedAccessToken;
+  }
+
+  // Legacy: use configured OAuth credentials to refresh
+  const { clientId, clientSecret, refreshToken } = config.youtube.oauth ?? {};
   if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('YouTube OAuth credentials not configured');
+    throw new Error('YouTube OAuth credentials not configured and no valid OBS token found');
   }
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -165,6 +213,20 @@ async function getAccessToken(): Promise<string> {
   cachedAccessToken = data.access_token;
   tokenExpiry = Date.now() + (data.expires_in ?? 3600) * 1000;
   return cachedAccessToken;
+}
+
+// ── Broadcast list ────────────────────────────────────────────────────────────
+
+/** Fetch all active/upcoming broadcasts for the authenticated account. */
+async function listBroadcasts(): Promise<BroadcastInfo[]> {
+  const token = await getAccessToken();
+  const url = 'https://www.googleapis.com/youtube/v3/liveBroadcasts?part=snippet,status&broadcastStatus=all&mine=true&maxResults=20';
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`YouTube API error: ${res.status} - ${body}`);
+  }
+  return parseBroadcastsResponse(await res.json());
 }
 
 // ── Broadcast control ─────────────────────────────────────────────────────────
@@ -204,15 +266,16 @@ async function stopBroadcast(): Promise<void> {
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 async function poll(): Promise<void> {
-  const { apiKey, broadcastId } = config.youtube;
-  if (!apiKey || !broadcastId) {
+  const { broadcastId } = config.youtube;
+  if (!broadcastId) {
     state.update('youtube', { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null, broadcastStatus: null });
     return;
   }
 
   try {
-    const url = `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails,snippet&id=${encodeURIComponent(broadcastId)}&key=${encodeURIComponent(apiKey)}`;
-    const res = await fetch(url);
+    const token = await getAccessToken();
+    const url = `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails,snippet&id=${encodeURIComponent(broadcastId)}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
@@ -220,6 +283,21 @@ async function poll(): Promise<void> {
     const { viewerCount, broadcastTitle, broadcastStatus } = parseApiResponse(data);
     state.update('youtube', { connected: true, viewerCount, broadcastTitle, broadcastStatus, broadcastId });
   } catch (err) {
+    // Fallback: try API key if configured (legacy)
+    const { apiKey } = config.youtube;
+    if (apiKey) {
+      try {
+        const url = `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails,snippet&id=${encodeURIComponent(broadcastId)}&key=${encodeURIComponent(apiKey)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json() as unknown;
+        const { viewerCount, broadcastTitle, broadcastStatus } = parseApiResponse(data);
+        state.update('youtube', { connected: true, viewerCount, broadcastTitle, broadcastStatus, broadcastId });
+        return;
+      } catch {
+        // fall through to error state
+      }
+    }
     logger.error('[YouTube] Poll failed:', (err as Error).message);
     state.update('youtube', { connected: false });
   }
@@ -227,6 +305,13 @@ async function poll(): Promise<void> {
 
 function connect(): void {
   if (pollTimer) clearInterval(pollTimer);
+  // Auto-seed token from OBS at startup
+  void importObsCreds().then((creds) => {
+    if (creds?.accessToken && creds.tokenExpiry && creds.tokenExpiry > Date.now() + 60_000) {
+      seedAccessToken(creds.accessToken, creds.tokenExpiry);
+      logger.log('[YouTube] Access token loaded from OBS');
+    }
+  });
   void poll();
   pollTimer = setInterval(() => { void poll(); }, config.youtube.pollInterval ?? 30000);
   logger.log('[YouTube] Polling started');
@@ -243,4 +328,4 @@ function disconnect(): void {
   logger.log('[YouTube] Polling stopped');
 }
 
-export = { connect, disconnect, parseApiResponse, parseIni, extractCredsFromIni, importObsCreds, startBroadcast, stopBroadcast, seedAccessToken, getAccessTokenForTesting };
+export = { connect, disconnect, parseApiResponse, parseBroadcastsResponse, parseIni, extractCredsFromIni, importObsCreds, listBroadcasts, startBroadcast, stopBroadcast, seedAccessToken, getAccessTokenForTesting };

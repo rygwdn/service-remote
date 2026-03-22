@@ -437,16 +437,19 @@
 
       <div class="settings-section">
         <h2>YouTube</h2>
-        <label>API Key <input type="password" x-model="cfg.youtube.apiKey" placeholder="(YouTube Data API v3 key)"></label>
         <label>Broadcast ID <input type="text" x-model="cfg.youtube.broadcastId" placeholder="(YouTube video/broadcast ID)"></label>
-        <label>Poll interval (ms) <input type="number" x-model.number="cfg.youtube.pollInterval" placeholder="30000" min="5000"></label>
-        <label>OAuth Client ID <input type="text" x-model="cfg.youtube.oauth.clientId" placeholder="(OAuth client ID)"></label>
-        <label>OAuth Client Secret <input type="password" x-model="cfg.youtube.oauth.clientSecret" placeholder="(OAuth client secret)"></label>
-        <label>OAuth Refresh Token <input type="password" x-model="cfg.youtube.oauth.refreshToken" placeholder="(OAuth refresh token)"></label>
         <div class="discover-row">
-          <button class="btn" @click="importYouTubeCredsFromObs()">Import from OBS</button>
-          <span class="discover-status" x-text="importObsStatus"></span>
+          <button class="btn youtube-find-broadcasts-btn" @click="findYouTubeBroadcasts()">Find Broadcasts</button>
+          <span class="discover-status" x-text="youtubeBroadcastsStatus"></span>
         </div>
+        <div class="youtube-broadcast-list" x-show="youtubeBroadcasts.length > 0">
+          <template x-for="b in youtubeBroadcasts" :key="b.id">
+            <div class="discover-row">
+              <button class="btn" @click="selectYouTubeBroadcast(b.id)" x-text="b.title + ' (' + b.status + ')'"></button>
+            </div>
+          </template>
+        </div>
+        <label>Poll interval (ms) <input type="number" x-model.number="cfg.youtube.pollInterval" placeholder="30000" min="5000"></label>
       </div>
 
       <div class="settings-footer">

@@ -355,8 +355,8 @@ describe('API routes', () => {
       assert.ok('youtube' in res.body);
       assert.ok('address' in res.body.obs);
       assert.ok('address' in res.body.x32);
-      assert.ok('apiKey' in res.body.youtube);
       assert.ok('broadcastId' in res.body.youtube);
+      assert.ok('pollInterval' in res.body.youtube);
     });
   });
 
@@ -412,6 +412,14 @@ describe('API routes', () => {
       const res = await request.post('/api/youtube/import-obs-creds').send({ obsConfigDir: '/nonexistent/path' });
       assert.equal(res.status, 200);
       assert.equal(res.body.found, false);
+    });
+  });
+
+  describe('GET /api/youtube/broadcasts', () => {
+    test('returns 500 with error when no OAuth token available', async () => {
+      const res = await request.get('/api/youtube/broadcasts');
+      assert.equal(res.status, 500);
+      assert.ok(res.body.error, 'Should return an error message');
     });
   });
 

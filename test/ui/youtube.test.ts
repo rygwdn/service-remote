@@ -92,10 +92,50 @@ test.describe('YouTube settings section', () => {
     await expect(page.locator('section.panel.active')).toBeVisible();
   });
 
-  test('YouTube settings section exists with API key and Broadcast ID fields', async ({ page }) => {
+  test('YouTube settings section has Broadcast ID field but no API Key or OAuth fields', async ({ page }) => {
     const ytSection = page.locator('.settings-section').filter({ hasText: 'YouTube' });
     await expect(ytSection).toBeVisible();
-    await expect(ytSection.locator('label').filter({ hasText: 'API Key' })).toBeVisible();
     await expect(ytSection.locator('label').filter({ hasText: 'Broadcast ID' })).toBeVisible();
+    await expect(ytSection.locator('label').filter({ hasText: 'API Key' })).not.toBeVisible();
+    await expect(ytSection.locator('label').filter({ hasText: 'OAuth' })).not.toBeVisible();
+  });
+
+  test('Find Broadcasts button is visible and shows list on click', async ({ page }) => {
+    const ytSection = page.locator('.settings-section').filter({ hasText: 'YouTube' });
+    await page.route('**/api/youtube/broadcasts', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          broadcasts: [
+            { id: 'b1', title: 'Sunday Service', status: 'ready', scheduledStartTime: '2026-03-22T10:00:00Z' },
+            { id: 'b2', title: 'Evening Service', status: 'live' },
+          ],
+        }),
+      });
+    });
+    await ytSection.locator('.youtube-find-broadcasts-btn').click();
+    await expect(ytSection.locator('.youtube-broadcast-list')).toBeVisible();
+    await expect(ytSection.locator('.youtube-broadcast-list')).toContainText('Sunday Service');
+    await expect(ytSection.locator('.youtube-broadcast-list')).toContainText('Evening Service');
+  });
+
+  test('selecting a broadcast from list updates Broadcast ID field', async ({ page }) => {
+    const ytSection = page.locator('.settings-section').filter({ hasText: 'YouTube' });
+    await page.route('**/api/youtube/broadcasts', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          broadcasts: [
+            { id: 'b1', title: 'Sunday Service', status: 'ready' },
+          ],
+        }),
+      });
+    });
+    await ytSection.locator('.youtube-find-broadcasts-btn').click();
+    await ytSection.locator('.youtube-broadcast-list button').first().click();
+    const input = ytSection.locator('input[placeholder*="Broadcast ID"]');
+    await expect(input).toHaveValue('b1');
   });
 });
