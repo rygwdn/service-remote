@@ -16,6 +16,7 @@ export interface Channel {
   source: number; // Physical input source (0 = unpatched); only meaningful for 'ch'
   linkedToNext: boolean; // True if this channel is linked with the next (odd/even pair)
   spill: boolean; // True if assigned to DCA group 8 (shown in the soundboard UI)
+  color: number; // X32 scribble strip color index 0–15 (0 = off/default)
 }
 
 export interface ServiceItem {

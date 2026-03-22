@@ -66,7 +66,7 @@
           <div class="ov-channel-list ov-channel-grid">
             <template x-for="ch in sortedX32Channels($store.state.x32.channels)" :key="ch.type+'/'+ch.index">
               <div class="ov-channel-row" x-show="!$store.ui.isHiddenX32(ch.type+'/'+ch.index)" :class="'ov-channel-row--'+ch.type">
-                <span class="ov-ch-label" :class="{ muted: ch.muted }" x-text="ch.label"></span>
+                <span class="ov-ch-label" :class="{ muted: ch.muted }" :style="ch.muted ? null : x32LabelStyle(ch)" x-text="ch.label"></span>
                 <div class="ov-bars">
                   <div class="ov-fader-bar"><div class="ov-fader-fill" :class="{ muted: ch.muted }" :style="'width:'+((ch.fader*100).toFixed(1))+'%'"></div></div>
                   <div class="ov-level-bar"><div class="ov-level-fill" :data-level-key="`${ch.type}-${ch.index}`" :style="'width:'+mulToDisplayPct(ch.level).toFixed(1)+'%'"></div></div>
@@ -238,6 +238,7 @@
         <template x-for="ch in sortedX32Channels($store.state.x32.channels)" :key="ch.type+'/'+ch.index">
           <div class="channel-row-h"
                :class="'channel-row-h--'+ch.type"
+               :style="x32ChStyle(ch)"
                x-show="$store.ui.editMode.x32 || !$store.ui.isHiddenX32(ch.type+'/'+ch.index)"
                x-data="x32Fader(ch)">
             <button class="ch-mute" :class="{ muted: ch.muted }"

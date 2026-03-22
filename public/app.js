@@ -233,6 +233,41 @@ function connectScreenshotWs() {
 
 connectScreenshotWs();
 
+// X32 scribble strip color index → { border, bg } tuned for the dark navy theme.
+// Indices 0 and 8 (Off) return null — the type-based CSS class acts as fallback.
+const X32_COLOR_STYLES = [
+  null,                                     //  0: Off
+  { border: '#c0392b', bg: '#1a0d0d' },     //  1: Red
+  { border: '#27ae60', bg: '#0d1a10' },     //  2: Green
+  { border: '#c89020', bg: '#1a160d' },     //  3: Yellow
+  { border: '#2471a3', bg: '#0d1220' },     //  4: Blue
+  { border: '#8e44ad', bg: '#160d1a' },     //  5: Magenta
+  { border: '#17a589', bg: '#0d1a18' },     //  6: Cyan
+  { border: '#6e7080', bg: null },          //  7: White
+  null,                                     //  8: Off (bright)
+  { border: '#e74c3c', bg: '#200e0e' },     //  9: Red bright
+  { border: '#2ecc71', bg: '#0e2014' },     // 10: Green bright
+  { border: '#f39c12', bg: '#201a0e' },     // 11: Yellow bright
+  { border: '#3498db', bg: '#0e1428' },     // 12: Blue bright
+  { border: '#9b59b6', bg: '#1c0e20' },     // 13: Magenta bright
+  { border: '#1abc9c', bg: '#0e201e' },     // 14: Cyan bright
+  { border: '#9090b0', bg: '#16161e' },     // 15: White bright
+];
+
+// Returns an inline style string for a channel strip based on its X32 color.
+// Returns '' when color is 0/8 so the type-based CSS class takes effect instead.
+function x32ChStyle(ch) {
+  const s = ch.color && X32_COLOR_STYLES[ch.color];
+  if (!s) return '';
+  return s.bg ? `border-color:${s.border};background:${s.bg};` : `border-color:${s.border};`;
+}
+
+// Returns an inline color style for an overview label. Empty when color is 0/8.
+function x32LabelStyle(ch) {
+  const s = ch.color && X32_COLOR_STYLES[ch.color];
+  return s ? `color:${s.border};` : '';
+}
+
 // Sort X32 channels for display: main L/R first, then bus, then ch, then mtx.
 const X32_TYPE_ORDER = { main: 0, bus: 1, ch: 2, mtx: 3 };
 function sortedX32Channels(channels) {
