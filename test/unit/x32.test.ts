@@ -154,6 +154,38 @@ describe('x32 parseOscMessage()', () => {
     });
   });
 
+  describe('color messages (/ch/XX/config/color, /bus/XX/config/color, etc.)', () => {
+    test('ch color returns color patch', () => {
+      const result = parseOscMessage('/ch/01/config/color', [{ value: 3 }]);
+      assert.deepEqual(result, { index: 1, type: 'ch', patch: { color: 3 } });
+    });
+
+    test('bus color returns color patch', () => {
+      const result = parseOscMessage('/bus/05/config/color', [{ value: 6 }]);
+      assert.deepEqual(result, { index: 5, type: 'bus', patch: { color: 6 } });
+    });
+
+    test('mtx color returns color patch', () => {
+      const result = parseOscMessage('/mtx/02/config/color', [{ value: 1 }]);
+      assert.deepEqual(result, { index: 2, type: 'mtx', patch: { color: 1 } });
+    });
+
+    test('main L/R color returns color patch', () => {
+      const result = parseOscMessage('/main/st/config/color', [{ value: 7 }]);
+      assert.deepEqual(result, { index: 1, type: 'main', patch: { color: 7 } });
+    });
+
+    test('color 0 (off) returns color patch with 0', () => {
+      const result = parseOscMessage('/ch/03/config/color', [{ value: 0 }]);
+      assert.deepEqual(result, { index: 3, type: 'ch', patch: { color: 0 } });
+    });
+
+    test('missing args defaults color to 0', () => {
+      const result = parseOscMessage('/ch/01/config/color', []);
+      assert.deepEqual(result, { index: 1, type: 'ch', patch: { color: 0 } });
+    });
+  });
+
   describe('unrecognised addresses', () => {
     test('returns null for unknown OSC address', () => {
       assert.equal(parseOscMessage('/xremote', []), null);

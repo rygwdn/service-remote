@@ -655,6 +655,17 @@ main {
   border-color: var(--red);
 }
 
+/* Channel type distinctions — Sound panel */
+.channel-row-h--main {
+  border-color: #e0a020;
+  background: #1a1a0e;
+}
+
+.channel-row-h--bus {
+  border-color: #1a5f7a;
+  background: #0e1a20;
+}
+
 /* ---- Overview panel ---- */
 .overview-grid {
   display: grid;
@@ -789,6 +800,15 @@ main {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* Channel type distinctions — overview panel */
+.ov-channel-row--main .ov-ch-label {
+  color: #c89020;
+}
+
+.ov-channel-row--bus .ov-ch-label {
+  color: #4a9aba;
 }
 
 .ov-ch-label {

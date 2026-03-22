@@ -89,16 +89,16 @@ function connect(): void {
   channels = [];
   dcaGroupsMap.clear();
   for (let i = 1; i <= CH_COUNT; i++) {
-    channels.push({ index: i, type: 'ch', label: `CH ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, spill: false});
+    channels.push({ index: i, type: 'ch', label: `CH ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, spill: false, color: 0 });
   }
   for (let i = 1; i <= BUS_COUNT; i++) {
-    channels.push({ index: i, type: 'bus', label: `Bus ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, spill: false});
+    channels.push({ index: i, type: 'bus', label: `Bus ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, spill: false, color: 0 });
   }
   for (let i = 1; i <= MTX_COUNT; i++) {
-    channels.push({ index: i, type: 'mtx', label: `Mtx ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, spill: false});
+    channels.push({ index: i, type: 'mtx', label: `Mtx ${String(i).padStart(2, '0')}`, fader: 0, muted: false, level: 0, source: 0, linkedToNext: false, spill: false, color: 0 });
   }
   for (const [idx, lbl] of Object.entries(MAIN_LABELS)) {
-    channels.push({ index: Number(idx), type: 'main', label: lbl, fader: 0, muted: false, level: 0, source: 1, linkedToNext: false, spill: false});
+    channels.push({ index: Number(idx), type: 'main', label: lbl, fader: 0, muted: false, level: 0, source: 1, linkedToNext: false, spill: false, color: 0 });
   }
 
   // Bind to 0.0.0.0 so the OS accepts inbound packets on any local network
@@ -328,6 +328,10 @@ function sourcePatch(args: OscArg[]): Partial<Channel> {
   return { source: (args?.[0]?.value as number) ?? 0 };
 }
 
+function colorPatch(args: OscArg[]): Partial<Channel> {
+  return { color: (args?.[0]?.value as number) ?? 0 };
+}
+
 // DCA group bitmask: bit 7 (value 128) = DCA group 8.
 // Returns { spill: true } when bit 7 is set, { spill: false } otherwise.
 function dcaPatch(args: OscArg[]): Partial<Channel> {
@@ -337,25 +341,29 @@ function dcaPatch(args: OscArg[]): Partial<Channel> {
 
 const OSC_PATTERNS: OscPattern[] = [
   // Input channels
-  { re: /^\/ch\/(\d+)\/mix\/fader$/,    type: 'ch',   indexGroup: 1, patch: faderPatch },
-  { re: /^\/ch\/(\d+)\/mix\/on$/,       type: 'ch',   indexGroup: 1, patch: mutePatch },
-  { re: /^\/ch\/(\d+)\/config\/name$/,  type: 'ch',   indexGroup: 1, patch: namePatch },
-  { re: /^\/ch\/(\d+)\/config\/source$/,type: 'ch',   indexGroup: 1, patch: sourcePatch },
-  { re: new RegExp(`^/ch/(\\d+)${DCA_GROUP_PATH}$`),  type: 'ch',   indexGroup: 1, patch: dcaPatch },
+  { re: /^\/ch\/(\d+)\/mix\/fader$/,      type: 'ch',   indexGroup: 1,    patch: faderPatch },
+  { re: /^\/ch\/(\d+)\/mix\/on$/,         type: 'ch',   indexGroup: 1,    patch: mutePatch },
+  { re: /^\/ch\/(\d+)\/config\/name$/,    type: 'ch',   indexGroup: 1,    patch: namePatch },
+  { re: /^\/ch\/(\d+)\/config\/source$/,  type: 'ch',   indexGroup: 1,    patch: sourcePatch },
+  { re: /^\/ch\/(\d+)\/config\/color$/,   type: 'ch',   indexGroup: 1,    patch: colorPatch },
+  { re: new RegExp(`^/ch/(\\d+)${DCA_GROUP_PATH}$`),    type: 'ch',   indexGroup: 1, patch: dcaPatch },
   // Mix buses
-  { re: /^\/bus\/(\d+)\/mix\/fader$/,   type: 'bus',  indexGroup: 1, patch: faderPatch },
-  { re: /^\/bus\/(\d+)\/mix\/on$/,      type: 'bus',  indexGroup: 1, patch: mutePatch },
-  { re: /^\/bus\/(\d+)\/config\/name$/, type: 'bus',  indexGroup: 1, patch: namePatch },
-  { re: new RegExp(`^/bus/(\\d+)${DCA_GROUP_PATH}$`), type: 'bus',  indexGroup: 1, patch: dcaPatch },
+  { re: /^\/bus\/(\d+)\/mix\/fader$/,     type: 'bus',  indexGroup: 1,    patch: faderPatch },
+  { re: /^\/bus\/(\d+)\/mix\/on$/,        type: 'bus',  indexGroup: 1,    patch: mutePatch },
+  { re: /^\/bus\/(\d+)\/config\/name$/,   type: 'bus',  indexGroup: 1,    patch: namePatch },
+  { re: /^\/bus\/(\d+)\/config\/color$/,  type: 'bus',  indexGroup: 1,    patch: colorPatch },
+  { re: new RegExp(`^/bus/(\\d+)${DCA_GROUP_PATH}$`),   type: 'bus',  indexGroup: 1, patch: dcaPatch },
   // Matrix
-  { re: /^\/mtx\/(\d+)\/mix\/fader$/,   type: 'mtx',  indexGroup: 1, patch: faderPatch },
-  { re: /^\/mtx\/(\d+)\/mix\/on$/,      type: 'mtx',  indexGroup: 1, patch: mutePatch },
-  { re: /^\/mtx\/(\d+)\/config\/name$/, type: 'mtx',  indexGroup: 1, patch: namePatch },
+  { re: /^\/mtx\/(\d+)\/mix\/fader$/,     type: 'mtx',  indexGroup: 1,    patch: faderPatch },
+  { re: /^\/mtx\/(\d+)\/mix\/on$/,        type: 'mtx',  indexGroup: 1,    patch: mutePatch },
+  { re: /^\/mtx\/(\d+)\/config\/name$/,   type: 'mtx',  indexGroup: 1,    patch: namePatch },
+  { re: /^\/mtx\/(\d+)\/config\/color$/,  type: 'mtx',  indexGroup: 1,    patch: colorPatch },
   // Main L/R (index 1) and Main M/C (index 2)
-  { re: /^\/main\/st\/mix\/fader$/,     type: 'main', indexGroup: null, fixedIndex: 1, patch: faderPatch },
-  { re: /^\/main\/st\/mix\/on$/,        type: 'main', indexGroup: null, fixedIndex: 1, patch: mutePatch },
-  { re: /^\/main\/m\/mix\/fader$/,      type: 'main', indexGroup: null, fixedIndex: 2, patch: faderPatch },
-  { re: /^\/main\/m\/mix\/on$/,         type: 'main', indexGroup: null, fixedIndex: 2, patch: mutePatch },
+  { re: /^\/main\/st\/mix\/fader$/,       type: 'main', indexGroup: null, fixedIndex: 1, patch: faderPatch },
+  { re: /^\/main\/st\/mix\/on$/,          type: 'main', indexGroup: null, fixedIndex: 1, patch: mutePatch },
+  { re: /^\/main\/st\/config\/color$/,    type: 'main', indexGroup: null, fixedIndex: 1, patch: colorPatch },
+  { re: /^\/main\/m\/mix\/fader$/,        type: 'main', indexGroup: null, fixedIndex: 2, patch: faderPatch },
+  { re: /^\/main\/m\/mix\/on$/,           type: 'main', indexGroup: null, fixedIndex: 2, patch: mutePatch },
 ];
 
 // Pure function: parse an OSC address + args into a channel state patch.
@@ -393,16 +401,20 @@ function handleMessage(address: string, args: OscArg[]): void {
     logger.log(`[X32] Requesting names/sources/links/dca for ${CH_COUNT} ch, ${BUS_COUNT} bus, ${MTX_COUNT} mtx, and main`);
     for (let i = 1; i <= CH_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'ch')}/config/name`);
+      sendOsc(`${channelPrefix(i, 'ch')}/config/color`);
       sendOsc(`${channelPrefix(i, 'ch')}/config/source`);
       sendOsc(`${channelPrefix(i, 'ch')}${DCA_GROUP_PATH}`);
     }
     for (let i = 1; i <= BUS_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'bus')}/config/name`);
+      sendOsc(`${channelPrefix(i, 'bus')}/config/color`);
       sendOsc(`${channelPrefix(i, 'bus')}${DCA_GROUP_PATH}`);
     }
     for (let i = 1; i <= MTX_COUNT; i++) {
       sendOsc(`${channelPrefix(i, 'mtx')}/config/name`);
+      sendOsc(`${channelPrefix(i, 'mtx')}/config/color`);
     }
+    sendOsc(`${channelPrefix(1, 'main')}/config/color`);
     // Link state: one request per odd/even pair
     for (let i = 1; i <= CH_COUNT; i += 2) {
       sendOsc(`/config/chlink/${i}-${i + 1}`);
@@ -532,6 +544,12 @@ function subscribeToChanges(): void {
       { value: `${prefix}/mix/on` },
       { value: 20 },
     ]);
+    if (ch.type !== 'main') {
+      sendOsc('/subscribe', [
+        { value: `${prefix}/config/color` },
+        { value: 20 },
+      ]);
+    }
     if (ch.type === 'ch' || ch.type === 'bus') {
       sendOsc('/subscribe', [
         { value: `${prefix}${DCA_GROUP_PATH}` },

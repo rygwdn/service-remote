@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
 
 const serviceItems = [
   { id: 'item1', title: 'Welcome', kind: 'Slide', slideCount: 1, index: 1, sectionIndex: 1, sectionCommand: 'StartPreService', section: 'Opening', group: null },
@@ -7,11 +8,11 @@ const serviceItems = [
 ];
 
 test.describe('Proclaim panel', () => {
-  const panel = (page: Parameters<typeof test>[1]['page']) =>
+  const panel = (page: Page) =>
     page.locator('section.panel.active');
 
   // Set state first so x-for renders correctly when the panel becomes visible
-  async function goToProclaim(page: Parameters<typeof test>[1]['page'], setState: (s: any) => Promise<void>, state?: any) {
+  async function goToProclaim(page: Page, setState: (s: any) => Promise<void>, state?: any) {
     if (state) await setState(state);
     await page.locator('.tab').filter({ hasText: 'Proclaim' }).click();
     await expect(page.locator('section.panel.active')).toBeVisible();
