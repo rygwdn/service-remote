@@ -185,7 +185,7 @@ describe('WebSocket level stripping', () => {
 
   test('initial state broadcast does not include level on x32 channels', async () => {
     state.update('x32', {
-      channels: [{ index: 1, type: 'ch', label: 'Vocals', fader: 0.8, muted: false, level: 0.5, source: 1, linkedToNext: false }],
+      channels: [{ index: 1, type: 'ch', label: 'Vocals', fader: 0.8, muted: false, level: 0.5, source: 1, linkedToNext: false, spill: false, color: 0 }],
     });
 
     const { ws, data } = await connectAndReceive(port);
@@ -216,7 +216,7 @@ describe('WebSocket level stripping', () => {
 
     const updatePromise = nextMessage(ws);
     state.update('x32', {
-      channels: [{ index: 2, type: 'ch', label: 'Guitar', fader: 0.6, muted: false, level: 0.3, source: 2, linkedToNext: false }],
+      channels: [{ index: 2, type: 'ch', label: 'Guitar', fader: 0.6, muted: false, level: 0.3, source: 2, linkedToNext: false, spill: false, color: 0 }],
     });
     const update = await updatePromise;
     ws.close();
