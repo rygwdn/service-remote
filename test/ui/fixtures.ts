@@ -46,7 +46,7 @@ const defaultState: Required<AppState> = {
 const alpinePath = path.resolve(__dirname, '../../node_modules/alpinejs/dist/cdn.js');
 const alpineJs = fs.readFileSync(alpinePath, 'utf8');
 
-export const test = base.extend<Fixtures & { page: Page }>({
+export const test = base.extend<{ setState: Fixtures['setState'] }, { serverUrl: Fixtures['serverUrl'] }>({
   serverUrl: [async ({}, use) => {
     const path = require('path');
     const express = require('express');

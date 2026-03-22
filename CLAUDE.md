@@ -131,17 +131,26 @@ bunx playwright test test/ui/foo.test.ts --headed  # UI — browser tests
 ```
 
 When adding new features:
-1. **Write tests first** — before touching any implementation files.
+1. **Write tests first** — before touching any implementation files. For each layer touched, write a test in the corresponding directory:
+   - Pure/stateless logic → `test/unit/`
+   - New or modified API routes → `test/e2e/api.test.ts`
+   - Visible UI behaviour → `test/ui/` (use `setState()` to drive state)
 2. Run the new tests and confirm they fail (red).
 3. Implement the feature until all tests pass (green).
-4. Unit-test pure/stateless logic in `test/unit/`.
-5. Add an API test in `test/e2e/api.test.ts` for new routes.
-6. Add a UI test in `test/ui/` for any visible behaviour (use `setState()` to drive state).
-7. Keep connection modules mockable — `routes.ts` accepts `{ obs, x32, proclaim }` as an argument so tests can inject stubs.
+4. Keep connection modules mockable — `routes.ts` accepts `{ obs, x32, proclaim }` as an argument so tests can inject stubs.
 
 ## Workflow
 
-After completing a task, always run the relevant tests and, once they pass, commit the changes. Tests must be committed alongside the implementation — never commit a feature without its tests.
+After completing a task, run **all** CI checks before committing:
+
+```bash
+bun test test/unit test/e2e   # all unit + e2e tests
+bun run test:ui               # all Playwright UI tests
+bun run typecheck             # TypeScript — must be error-free
+bun run lint                  # no stray console.* calls
+```
+
+All four must pass. Tests must be committed alongside the implementation — never commit a feature without its tests.
 
 ### Commit message format
 
