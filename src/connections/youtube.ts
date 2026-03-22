@@ -69,14 +69,14 @@ interface OAuthCreds {
   refreshToken: string;
 }
 
-/** Search a parsed INI object for a YouTube section with a refresh_token. */
+/** Search a parsed INI object for a YouTube section with a RefreshToken. */
 function extractCredsFromIni(ini: Record<string, Record<string, string>>): OAuthCreds | null {
   for (const [section, values] of Object.entries(ini)) {
-    if (section.toLowerCase().includes('youtube') && values['refresh_token']) {
+    if (section.toLowerCase().includes('youtube') && values['RefreshToken']) {
       return {
-        clientId: values['client_id'] ?? '',
-        clientSecret: values['client_secret'] ?? '',
-        refreshToken: values['refresh_token'],
+        clientId: '',
+        clientSecret: '',
+        refreshToken: values['RefreshToken'],
       };
     }
   }
@@ -95,47 +95,20 @@ function defaultObsConfigDir(): string {
 
 /**
  * Try to read YouTube OAuth credentials from OBS's config files.
- * Looks in common JSON auth files and falls back to parsing global.ini.
- * Returns credentials if found, null otherwise.
+ * OBS stores the RefreshToken in the [YouTube] section of global.ini.
+ * Note: OBS does not store client_id/client_secret on disk — those are
+ * baked into the OBS binary at build time and must be entered manually.
  */
 async function importObsCreds(obsConfigDir?: string): Promise<OAuthCreds | null> {
   const dir = obsConfigDir ?? defaultObsConfigDir();
 
-  // 1. Try JSON auth files (OBS 29+ stores tokens here in some builds)
-  const jsonPaths = [
-    path.join(dir, 'basic', 'auth', 'YouTube.json'),
-    path.join(dir, 'auth', 'YouTube.json'),
-    path.join(dir, 'basic', 'auth', 'youtube.json'),
-  ];
-  for (const p of jsonPaths) {
-    try {
-      const raw = fs.readFileSync(p, 'utf-8');
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      if (typeof parsed['refresh_token'] === 'string') {
-        return {
-          clientId: String(parsed['client_id'] ?? ''),
-          clientSecret: String(parsed['client_secret'] ?? ''),
-          refreshToken: parsed['refresh_token'],
-        };
-      }
-    } catch {
-      // Not found or malformed — try next
-    }
-  }
-
-  // 2. Try INI config files (older OBS versions and some builds store OAuth here)
-  const iniPaths = [
-    path.join(dir, 'global.ini'),
-    path.join(dir, 'basic', 'service.ini'),
-  ];
-  for (const iniPath of iniPaths) {
-    try {
-      const raw = fs.readFileSync(iniPath, 'utf-8');
-      const creds = extractCredsFromIni(parseIni(raw));
-      if (creds) return creds;
-    } catch {
-      // Not found — try next
-    }
+  const iniPath = path.join(dir, 'global.ini');
+  try {
+    const raw = fs.readFileSync(iniPath, 'utf-8');
+    const creds = extractCredsFromIni(parseIni(raw));
+    if (creds) return creds;
+  } catch {
+    // Not found — fall through
   }
 
   return null;

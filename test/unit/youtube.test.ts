@@ -111,16 +111,18 @@ key=val`;
 });
 
 describe('extractCredsFromIni', () => {
-  test('finds YouTube credentials in a section containing "YouTube"', () => {
+  test('finds RefreshToken from OBS [YouTube] section in global.ini', () => {
+    // OBS stores only RefreshToken — client_id/secret are baked into the binary
     const ini = {
-      'YouTube / YouTube Gaming': {
-        client_id: 'cid',
-        client_secret: 'csec',
-        refresh_token: 'rtoken',
+      'YouTube': {
+        RefreshToken: 'rtoken',
+        Token: 'atoken',
+        ExpireTime: '1234567890',
+        ScopeVer: '1',
       },
     };
     const result = extractCredsFromIni(ini);
-    expect(result).toEqual({ clientId: 'cid', clientSecret: 'csec', refreshToken: 'rtoken' });
+    expect(result).toEqual({ clientId: '', clientSecret: '', refreshToken: 'rtoken' });
   });
 
   test('returns null if no YouTube section found', () => {
@@ -128,8 +130,8 @@ describe('extractCredsFromIni', () => {
     expect(extractCredsFromIni(ini)).toBeNull();
   });
 
-  test('returns null if YouTube section has no refresh_token', () => {
-    const ini = { 'YouTube': { client_id: 'cid' } };
+  test('returns null if YouTube section has no RefreshToken', () => {
+    const ini = { 'YouTube': { Token: 'atoken' } };
     expect(extractCredsFromIni(ini)).toBeNull();
   });
 });
