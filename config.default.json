@@ -21,17 +21,17 @@
   "ptz": {
     "cameras": [
       {
-        "name": "Camera",
+        "name": "AV-CM20-NDI",
         "enabled": false,
         "address": "192.168.1.101",
         "port": 52381,
         "cameraId": 1,
         "numPresets": 9,
-        "panStep": 50,
-        "tiltStep": 35,
+        "panStep": 100,
+        "tiltStep": 70,
         "zoomStep": 1000,
-        "panRange": [-880, 880],
-        "tiltRange": [-300, 300],
+        "panRange": [-1700, 1700],
+        "tiltRange": [-300, 900],
         "zoomRange": [0, 16384]
       }
     ]
