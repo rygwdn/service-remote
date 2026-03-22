@@ -135,7 +135,7 @@ test.describe('YouTube settings section', () => {
     });
     await ytSection.locator('.youtube-find-broadcasts-btn').click();
     await ytSection.locator('.youtube-broadcast-list button').first().click();
-    const input = ytSection.locator('input[placeholder*="Broadcast ID"]');
+    const input = ytSection.locator('input[x-model="cfg.youtube.broadcastId"]');
     await expect(input).toHaveValue('b1');
   });
 });

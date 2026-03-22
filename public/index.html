@@ -445,7 +445,7 @@
         <div class="youtube-broadcast-list" x-show="youtubeBroadcasts.length > 0">
           <template x-for="b in youtubeBroadcasts" :key="b.id">
             <div class="discover-row">
-              <button class="btn" @click="selectYouTubeBroadcast(b.id)" x-text="b.title + ' (' + b.status + ')'"></button>
+              <button class="btn" @click="cfg.youtube.broadcastId = b.id; youtubeBroadcasts = []" x-text="b.title + ' (' + b.status + ')'"></button>
             </div>
           </template>
         </div>

@@ -184,10 +184,6 @@ document.addEventListener('alpine:init', () => {
         this.youtubeBroadcasts = data.broadcasts ?? [];
         if (this.youtubeBroadcasts.length === 0) {
           this.youtubeBroadcastsStatus = 'No active or scheduled broadcasts found';
-        } else if (this.youtubeBroadcasts.length === 1) {
-          this.selectYouTubeBroadcast(this.youtubeBroadcasts[0].id);
-          this.youtubeBroadcastsStatus = 'Auto-selected';
-          setTimeout(() => { this.youtubeBroadcastsStatus = ''; this.youtubeBroadcasts = []; }, 2000);
         } else {
           this.youtubeBroadcastsStatus = '';
         }
@@ -196,10 +192,6 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    selectYouTubeBroadcast(id) {
-      this.cfg.youtube.broadcastId = id;
-      this.youtubeBroadcasts = [];
-    },
 
     async loadLogs() {
       try {
