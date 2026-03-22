@@ -1,5 +1,5 @@
 import { test, expect, describe, mock, beforeEach } from 'bun:test';
-import { parseApiResponse, parseIni, extractCredsFromIni } from '../../src/connections/youtube';
+import { parseApiResponse, parseIni, extractCredsFromIni, seedAccessToken, getAccessTokenForTesting } from '../../src/connections/youtube';
 
 describe('parseApiResponse', () => {
   test('returns nulls when items array is empty', () => {
@@ -111,8 +111,9 @@ key=val`;
 });
 
 describe('extractCredsFromIni', () => {
-  test('finds RefreshToken from OBS [YouTube] section in global.ini', () => {
-    // OBS stores only RefreshToken — client_id/secret are baked into the binary
+  test('finds RefreshToken and AccessToken from OBS [YouTube] section in global.ini', () => {
+    // OBS stores RefreshToken, Token (access token), and ExpireTime (Unix seconds)
+    // client_id/secret are baked into the OBS binary and never written to disk
     const ini = {
       'YouTube': {
         RefreshToken: 'rtoken',
@@ -122,7 +123,23 @@ describe('extractCredsFromIni', () => {
       },
     };
     const result = extractCredsFromIni(ini);
-    expect(result).toEqual({ clientId: '', clientSecret: '', refreshToken: 'rtoken' });
+    expect(result).toEqual({
+      clientId: '',
+      clientSecret: '',
+      refreshToken: 'rtoken',
+      accessToken: 'atoken',
+      tokenExpiry: 1234567890 * 1000,
+    });
+  });
+
+  test('returns accessToken and tokenExpiry as undefined when Token is absent', () => {
+    const ini = {
+      'YouTube': {
+        RefreshToken: 'rtoken',
+      },
+    };
+    const result = extractCredsFromIni(ini);
+    expect(result).toEqual({ clientId: '', clientSecret: '', refreshToken: 'rtoken', accessToken: undefined, tokenExpiry: undefined });
   });
 
   test('returns null if no YouTube section found', () => {
@@ -133,5 +150,13 @@ describe('extractCredsFromIni', () => {
   test('returns null if YouTube section has no RefreshToken', () => {
     const ini = { 'YouTube': { Token: 'atoken' } };
     expect(extractCredsFromIni(ini)).toBeNull();
+  });
+});
+
+describe('seedAccessToken', () => {
+  test('pre-seeds the in-memory access token cache', () => {
+    const futureExpiry = Date.now() + 3600_000;
+    seedAccessToken('seeded-token', futureExpiry);
+    expect(getAccessTokenForTesting()).toEqual({ token: 'seeded-token', expiry: futureExpiry });
   });
 });

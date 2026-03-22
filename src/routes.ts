@@ -292,6 +292,11 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
       if (!creds) {
         res.json({ found: false });
       } else {
+        // If OBS has a non-expired access token, seed the in-memory cache immediately
+        // so broadcast controls work without needing a token refresh first.
+        if (creds.accessToken && creds.tokenExpiry && creds.tokenExpiry > Date.now() + 60_000) {
+          youtube.seedAccessToken(creds.accessToken, creds.tokenExpiry);
+        }
         res.json({ found: true, clientId: creds.clientId, clientSecret: creds.clientSecret, refreshToken: creds.refreshToken });
       }
     } catch (err) {

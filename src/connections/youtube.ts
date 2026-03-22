@@ -67,16 +67,24 @@ interface OAuthCreds {
   clientId: string;
   clientSecret: string;
   refreshToken: string;
+  /** Access token read directly from OBS global.ini (may be expired). */
+  accessToken?: string;
+  /** Expiry timestamp in ms (converted from OBS's Unix-second ExpireTime). */
+  tokenExpiry?: number;
 }
 
 /** Search a parsed INI object for a YouTube section with a RefreshToken. */
 function extractCredsFromIni(ini: Record<string, Record<string, string>>): OAuthCreds | null {
   for (const [section, values] of Object.entries(ini)) {
     if (section.toLowerCase().includes('youtube') && values['RefreshToken']) {
+      const rawExpire = values['ExpireTime'];
+      const tokenExpiry = rawExpire ? Number(rawExpire) * 1000 : undefined;
       return {
         clientId: '',
         clientSecret: '',
         refreshToken: values['RefreshToken'],
+        accessToken: values['Token'] || undefined,
+        tokenExpiry,
       };
     }
   }
@@ -118,6 +126,17 @@ async function importObsCreds(obsConfigDir?: string): Promise<OAuthCreds | null>
 
 let cachedAccessToken: string | null = null;
 let tokenExpiry = 0;
+
+/** Pre-seed the in-memory access token cache (e.g. from an imported OBS token). */
+function seedAccessToken(token: string, expiryMs: number): void {
+  cachedAccessToken = token;
+  tokenExpiry = expiryMs;
+}
+
+/** Return the current cached token state — for testing only. */
+function getAccessTokenForTesting(): { token: string | null; expiry: number } {
+  return { token: cachedAccessToken, expiry: tokenExpiry };
+}
 
 /** Get a valid access token, refreshing via the configured refresh_token if needed. */
 async function getAccessToken(): Promise<string> {
@@ -224,4 +243,4 @@ function disconnect(): void {
   logger.log('[YouTube] Polling stopped');
 }
 
-export = { connect, disconnect, parseApiResponse, parseIni, extractCredsFromIni, importObsCreds, startBroadcast, stopBroadcast };
+export = { connect, disconnect, parseApiResponse, parseIni, extractCredsFromIni, importObsCreds, startBroadcast, stopBroadcast, seedAccessToken, getAccessTokenForTesting };
