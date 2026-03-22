@@ -79,18 +79,18 @@ test.describe('OBS panel', () => {
 
   test('stream button text toggles based on state', async ({ page, setState }) => {
     await setState({ obs: { streaming: false } });
-    await expect(panel(page).locator('.btn').filter({ hasText: 'Stream' })).toBeVisible();
+    await expect(panel(page).locator('#obs-stream-btn')).toHaveText('Stream');
 
     await setState({ obs: { streaming: true } });
-    await expect(panel(page).locator('.btn').filter({ hasText: 'Streaming' })).toBeVisible();
+    await expect(panel(page).locator('#obs-stream-btn')).toHaveText('Streaming');
   });
 
   test('stream button has active class when streaming', async ({ page, setState }) => {
     await setState({ obs: { streaming: false } });
-    await expect(panel(page).locator('.btn').filter({ hasText: 'Stream' })).not.toHaveClass(/active/);
+    await expect(panel(page).locator('#obs-stream-btn')).not.toHaveClass(/active/);
 
     await setState({ obs: { streaming: true } });
-    await expect(panel(page).locator('.btn').filter({ hasText: 'Streaming' })).toHaveClass(/active/);
+    await expect(panel(page).locator('#obs-stream-btn')).toHaveClass(/active/);
   });
 
   test('record button text toggles based on state', async ({ page, setState }) => {
@@ -116,7 +116,7 @@ test.describe('OBS panel', () => {
     // Get all obs-section elements and check Output section comes first
     const sections = p.locator('.obs-section');
     const firstSection = sections.first();
-    await expect(firstSection.locator('.btn').filter({ hasText: /Stream|Streaming/ })).toBeVisible();
+    await expect(firstSection.locator('#obs-stream-btn')).toBeVisible();
     await expect(firstSection.locator('.btn').filter({ hasText: /^Record$|Recording/ })).toBeVisible();
   });
 
@@ -130,7 +130,7 @@ test.describe('OBS panel', () => {
     await setState({ obs: { streaming: false } });
 
     page.on('dialog', dialog => dialog.accept());
-    await panel(page).locator('.btn').filter({ hasText: 'Stream' }).click();
+    await panel(page).locator('#obs-stream-btn').click();
     await page.waitForTimeout(100);
     expect(streamCalled).toBe(true);
   });
@@ -145,7 +145,7 @@ test.describe('OBS panel', () => {
     await setState({ obs: { streaming: false } });
 
     page.on('dialog', dialog => dialog.dismiss());
-    await panel(page).locator('.btn').filter({ hasText: 'Stream' }).click();
+    await panel(page).locator('#obs-stream-btn').click();
     await page.waitForTimeout(100);
     expect(streamCalled).toBe(false);
   });

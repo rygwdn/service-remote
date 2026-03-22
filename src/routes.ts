@@ -7,6 +7,7 @@ import discovery = require('./discovery');
 import config = require('./config');
 import logger = require('./logger');
 import defaultState = require('./state');
+import youtube = require('./connections/youtube');
 
 const userConfigPath = config.userConfigPath;
 
@@ -266,6 +267,51 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
     }
   });
 
+  // --- YouTube ---
+  app.post('/api/youtube/start', async (req: Request, res: Response) => {
+    try {
+      await youtube.startBroadcast();
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/youtube/stop', async (req: Request, res: Response) => {
+    try {
+      await youtube.stopBroadcast();
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/youtube/import-obs-creds', async (req: Request, res: Response) => {
+    try {
+      const creds = await youtube.importObsCreds(req.body.obsConfigDir as string | undefined);
+      if (!creds) {
+        res.json({ found: false });
+      } else {
+        // Seed the in-memory token cache if OBS has a non-expired token
+        if (creds.accessToken && creds.tokenExpiry && creds.tokenExpiry > Date.now() + 60_000) {
+          youtube.seedAccessToken(creds.accessToken, creds.tokenExpiry);
+        }
+        res.json({ found: true });
+      }
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.get('/api/youtube/broadcasts', async (req: Request, res: Response) => {
+    try {
+      const broadcasts = await youtube.listBroadcasts();
+      res.json({ broadcasts });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   // --- OBS program preview screenshot ---
   app.get('/api/obs/screenshot', async (req: Request, res: Response) => {
     try {
@@ -294,7 +340,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
 
   // --- Config ---
   app.get('/api/config', (req: Request, res: Response) => {
-    res.json({ obs: config.obs, x32: config.x32, proclaim: config.proclaim, ptz: config.ptz });
+    res.json({ obs: config.obs, x32: config.x32, proclaim: config.proclaim, ptz: config.ptz, youtube: config.youtube });
   });
 
   app.post('/api/config', async (req: Request, res: Response) => {
@@ -303,6 +349,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
       x32?: { address?: string; port?: number };
       proclaim?: { host?: string; port?: number; password?: string; pollInterval?: number };
       ptz?: { cameras?: unknown[] };
+      youtube?: { apiKey?: string; broadcastId?: string; pollInterval?: number };
     };
     if (!body.obs || !body.x32 || !body.proclaim) {
       res.status(400).json({ error: 'Request must include obs, x32, and proclaim keys' });
@@ -321,6 +368,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
         x32: body.x32,
         proclaim: body.proclaim,
         ptz: body.ptz ?? config.ptz,
+        youtube: body.youtube ?? config.youtube,
         ui: config.ui,
       };
       fs.writeFileSync(cfgPath, JSON.stringify(newConfig, null, 2), 'utf-8');

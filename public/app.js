@@ -7,6 +7,7 @@ document.addEventListener('alpine:init', () => {
     x32: { connected: false, channels: [] },
     proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [] },
     ptz: { cameras: [] },
+    youtube: { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null, broadcastStatus: null },
   });
 
   // UI state
@@ -71,9 +72,11 @@ document.addEventListener('alpine:init', () => {
       x32: { address: '', port: 10023 },
       proclaim: { host: '', port: 52195, password: '', pollInterval: 1000 },
       ptz: { cameras: [] },
+      youtube: { broadcastId: '', pollInterval: 30000 },
     },
     discoverStatus: { obs: '', x32: '', proclaim: '' },
     saveStatus: '',
+    importObsStatus: '',
     logs: [],
     serverAddresses: [],
 
@@ -111,6 +114,8 @@ document.addEventListener('alpine:init', () => {
         cameraId: c.cameraId ?? 1,
         numPresets: c.numPresets ?? 9,
       }));
+      this.cfg.youtube.broadcastId               = data.youtube?.broadcastId ?? '';
+      this.cfg.youtube.pollInterval              = data.youtube?.pollInterval ?? 30000;
     },
 
     async saveConfig() {
@@ -163,6 +168,31 @@ document.addEventListener('alpine:init', () => {
       } catch (_) { this.discoverStatus.proclaim = 'Error'; }
     },
 
+    youtubeBroadcasts: [],
+    youtubeBroadcastsStatus: '',
+
+    async findYouTubeBroadcasts() {
+      this.youtubeBroadcastsStatus = 'Searching…';
+      this.youtubeBroadcasts = [];
+      try {
+        const res = await fetch('/api/youtube/broadcasts');
+        const data = await res.json();
+        if (!res.ok) {
+          this.youtubeBroadcastsStatus = 'Error: ' + (data.error || 'unknown');
+          return;
+        }
+        this.youtubeBroadcasts = data.broadcasts ?? [];
+        if (this.youtubeBroadcasts.length === 0) {
+          this.youtubeBroadcastsStatus = 'No active or scheduled broadcasts found';
+        } else {
+          this.youtubeBroadcastsStatus = '';
+        }
+      } catch (err) {
+        this.youtubeBroadcastsStatus = 'Error: ' + err.message;
+      }
+    },
+
+
     async loadLogs() {
       try {
         const res = await fetch('/api/logs');
@@ -196,6 +226,7 @@ function connectWs() {
       store.x32 = msg.data.x32;
       store.proclaim = msg.data.proclaim;
       if (msg.data.ptz) store.ptz = msg.data.ptz;
+      if (msg.data.youtube) store.youtube = msg.data.youtube;
     }
   };
 
@@ -378,6 +409,8 @@ function gotoItem(itemId) {
   post('/api/proclaim/goto-item', { itemId });
 }
 
+function startYouTubeBroadcast()        { post('/api/youtube/start', {}); }
+function stopYouTubeBroadcast()         { post('/api/youtube/stop', {}); }
 function setScene(scene)                { post('/api/obs/scene', { scene }); }
 function toggleObsMute(input)           { post('/api/obs/mute', { input }); }
 function setObsVolume(input, volumeDb)  { post('/api/obs/volume', { input, volumeDb }); }

@@ -35,6 +35,7 @@ describe('API routes', () => {
       assert.ok('x32' in res.body);
       assert.ok('proclaim' in res.body);
       assert.ok('ptz' in res.body);
+      assert.ok('youtube' in res.body);
     });
 
     test('reflects state updates', async () => {
@@ -345,14 +346,17 @@ describe('API routes', () => {
   });
 
   describe('GET /api/config', () => {
-    test('returns obs, x32, and proclaim config sections', async () => {
+    test('returns obs, x32, proclaim, and youtube config sections', async () => {
       const res = await request.get('/api/config');
       assert.equal(res.status, 200);
       assert.ok('obs' in res.body);
       assert.ok('x32' in res.body);
       assert.ok('proclaim' in res.body);
+      assert.ok('youtube' in res.body);
       assert.ok('address' in res.body.obs);
       assert.ok('address' in res.body.x32);
+      assert.ok('broadcastId' in res.body.youtube);
+      assert.ok('pollInterval' in res.body.youtube);
     });
   });
 
@@ -384,6 +388,38 @@ describe('API routes', () => {
       // X32 and proclaim were not changed, so they should not reconnect
       assert.equal(calls.x32.disconnect, 0);
       assert.equal(calls.proclaim.disconnect, 0);
+    });
+  });
+
+  describe('POST /api/youtube/start', () => {
+    test('returns 500 with error message when OAuth not configured', async () => {
+      const res = await request.post('/api/youtube/start').send({});
+      assert.equal(res.status, 500);
+      assert.ok(res.body.error, 'Should return an error message');
+    });
+  });
+
+  describe('POST /api/youtube/stop', () => {
+    test('returns 500 with error message when OAuth not configured', async () => {
+      const res = await request.post('/api/youtube/stop').send({});
+      assert.equal(res.status, 500);
+      assert.ok(res.body.error, 'Should return an error message');
+    });
+  });
+
+  describe('POST /api/youtube/import-obs-creds', () => {
+    test('returns found: false when OBS config not found at specified path', async () => {
+      const res = await request.post('/api/youtube/import-obs-creds').send({ obsConfigDir: '/nonexistent/path' });
+      assert.equal(res.status, 200);
+      assert.equal(res.body.found, false);
+    });
+  });
+
+  describe('GET /api/youtube/broadcasts', () => {
+    test('returns 500 with error when no OAuth token available', async () => {
+      const res = await request.get('/api/youtube/broadcasts');
+      assert.equal(res.status, 500);
+      assert.ok(res.body.error, 'Should return an error message');
     });
   });
 

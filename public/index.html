@@ -165,6 +165,18 @@
                   @click="window.confirm($store.state.obs.recording ? 'Stop recording?' : 'Start recording?') && toggleRecord()"
                   x-text="$store.state.obs.recording ? 'Recording' : 'Record'"></button>
         </div>
+        <div class="youtube-status" x-show="$store.state.youtube.broadcastTitle || $store.state.youtube.viewerCount !== null">
+          <span class="youtube-broadcast-title" x-show="$store.state.youtube.broadcastTitle" x-text="$store.state.youtube.broadcastTitle"></span>
+          <span class="youtube-viewers" x-show="$store.state.youtube.viewerCount !== null" x-text="'👁 ' + $store.state.youtube.viewerCount + ' watching'"></span>
+        </div>
+        <div class="youtube-controls" x-show="$store.state.youtube.broadcastId">
+          <button class="btn youtube-go-live-btn"
+                  x-show="$store.state.youtube.broadcastStatus !== 'live'"
+                  @click="window.confirm('Go live on YouTube?') && startYouTubeBroadcast()">Go Live</button>
+          <button class="btn youtube-end-stream-btn"
+                  x-show="$store.state.youtube.broadcastStatus === 'live'"
+                  @click="window.confirm('End the YouTube stream?') && stopYouTubeBroadcast()">End Stream</button>
+        </div>
       </div>
       <div class="obs-section">
         <div class="ov-obs-preview-wrap">
@@ -421,6 +433,23 @@
             <label>Presets <input type="number" x-model.number="cam.numPresets" placeholder="9" min="0" max="255"></label>
           </div>
         </template>
+      </div>
+
+      <div class="settings-section">
+        <h2>YouTube</h2>
+        <label>Broadcast ID <input type="text" x-model="cfg.youtube.broadcastId" placeholder="(YouTube video/broadcast ID)"></label>
+        <div class="discover-row">
+          <button class="btn youtube-find-broadcasts-btn" @click="findYouTubeBroadcasts()">Find Broadcasts</button>
+          <span class="discover-status" x-text="youtubeBroadcastsStatus"></span>
+        </div>
+        <div class="youtube-broadcast-list" x-show="youtubeBroadcasts.length > 0">
+          <template x-for="b in youtubeBroadcasts" :key="b.id">
+            <div class="discover-row">
+              <button class="btn" @click="cfg.youtube.broadcastId = b.id; youtubeBroadcasts = []" x-text="b.title + ' (' + b.status + ')'"></button>
+            </div>
+          </template>
+        </div>
+        <label>Poll interval (ms) <input type="number" x-model.number="cfg.youtube.pollInterval" placeholder="30000" min="5000"></label>
       </div>
 
       <div class="settings-footer">

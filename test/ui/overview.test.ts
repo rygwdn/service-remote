@@ -132,10 +132,14 @@ test.describe('Overview panel', () => {
   });
 
   test('disconnected overlay appears when WebSocket disconnects', async ({ page }) => {
+    // Wait for the WebSocket to connect first so onopen doesn't race with our store set
+    await page.waitForFunction(
+      () => (window as any).Alpine?.store('ui')?.serverConnected === true,
+      { timeout: 5000 }
+    );
     await page.evaluate(() => {
       (window as any).Alpine.store('ui').serverConnected = false;
     });
-    await page.waitForTimeout(50);
     await expect(page.locator('.disconnected-overlay')).toBeVisible();
     await expect(page.locator('.disconnected-message')).toContainText('reconnecting');
   });
