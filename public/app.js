@@ -7,6 +7,7 @@ document.addEventListener('alpine:init', () => {
     x32: { connected: false, channels: [] },
     proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [] },
     ptz: { cameras: [] },
+    youtube: { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null },
   });
 
   // UI state
@@ -71,6 +72,7 @@ document.addEventListener('alpine:init', () => {
       x32: { address: '', port: 10023 },
       proclaim: { host: '', port: 52195, password: '', pollInterval: 1000 },
       ptz: { cameras: [] },
+      youtube: { apiKey: '', broadcastId: '', pollInterval: 30000 },
     },
     discoverStatus: { obs: '', x32: '', proclaim: '' },
     saveStatus: '',
@@ -111,6 +113,9 @@ document.addEventListener('alpine:init', () => {
         cameraId: c.cameraId ?? 1,
         numPresets: c.numPresets ?? 9,
       }));
+      this.cfg.youtube.apiKey          = data.youtube?.apiKey ?? '';
+      this.cfg.youtube.broadcastId     = data.youtube?.broadcastId ?? '';
+      this.cfg.youtube.pollInterval    = data.youtube?.pollInterval ?? 30000;
     },
 
     async saveConfig() {
@@ -196,6 +201,7 @@ function connectWs() {
       store.x32 = msg.data.x32;
       store.proclaim = msg.data.proclaim;
       if (msg.data.ptz) store.ptz = msg.data.ptz;
+      if (msg.data.youtube) store.youtube = msg.data.youtube;
     }
   };
 

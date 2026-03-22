@@ -36,6 +36,11 @@
       }
     ]
   },
+  "youtube": {
+    "apiKey": "",
+    "broadcastId": "",
+    "pollInterval": 30000
+  },
   "ui": {
     "hiddenObs": [],
     "hiddenX32": []

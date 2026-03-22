@@ -165,6 +165,10 @@
                   @click="window.confirm($store.state.obs.recording ? 'Stop recording?' : 'Start recording?') && toggleRecord()"
                   x-text="$store.state.obs.recording ? 'Recording' : 'Record'"></button>
         </div>
+        <div class="youtube-status" x-show="$store.state.youtube.broadcastTitle || $store.state.youtube.viewerCount !== null">
+          <span class="youtube-broadcast-title" x-show="$store.state.youtube.broadcastTitle" x-text="$store.state.youtube.broadcastTitle"></span>
+          <span class="youtube-viewers" x-show="$store.state.youtube.viewerCount !== null" x-text="'👁 ' + $store.state.youtube.viewerCount + ' watching'"></span>
+        </div>
       </div>
       <div class="obs-section">
         <div class="ov-obs-preview-wrap">
@@ -421,6 +425,13 @@
             <label>Presets <input type="number" x-model.number="cam.numPresets" placeholder="9" min="0" max="255"></label>
           </div>
         </template>
+      </div>
+
+      <div class="settings-section">
+        <h2>YouTube</h2>
+        <label>API Key <input type="password" x-model="cfg.youtube.apiKey" placeholder="(YouTube Data API v3 key)"></label>
+        <label>Broadcast ID <input type="text" x-model="cfg.youtube.broadcastId" placeholder="(YouTube video/broadcast ID)"></label>
+        <label>Poll interval (ms) <input type="number" x-model.number="cfg.youtube.pollInterval" placeholder="30000" min="5000"></label>
       </div>
 
       <div class="settings-footer">

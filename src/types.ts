@@ -70,11 +70,19 @@ export interface PtzState {
   cameras: PtzCameraState[];
 }
 
+export interface YoutubeState {
+  connected: boolean;
+  viewerCount: number | null;
+  broadcastId: string | null;
+  broadcastTitle: string | null;
+}
+
 export interface AppState {
   obs: ObsState;
   x32: X32State;
   proclaim: ProclaimState;
   ptz: PtzState;
+  youtube: YoutubeState;
 }
 
 export interface Config {
@@ -112,6 +120,11 @@ export interface Config {
       tiltRange: [number, number];
       zoomRange: [number, number];
     }>;
+  };
+  youtube: {
+    apiKey: string;
+    broadcastId: string;
+    pollInterval: number;
   };
   ui: {
     hiddenObs: string[];
@@ -165,11 +178,17 @@ export interface PtzConnection {
   home(camera: number): void;
 }
 
+export interface YoutubeConnection {
+  connect(): void;
+  disconnect(): void;
+}
+
 export interface Connections {
   obs: ObsConnection;
   x32: X32Connection;
   proclaim: ProclaimConnection;
   ptz: PtzConnection;
+  youtube?: YoutubeConnection;
 }
 
 export interface ChangeEvent {

@@ -294,7 +294,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
 
   // --- Config ---
   app.get('/api/config', (req: Request, res: Response) => {
-    res.json({ obs: config.obs, x32: config.x32, proclaim: config.proclaim, ptz: config.ptz });
+    res.json({ obs: config.obs, x32: config.x32, proclaim: config.proclaim, ptz: config.ptz, youtube: config.youtube });
   });
 
   app.post('/api/config', async (req: Request, res: Response) => {
@@ -303,6 +303,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
       x32?: { address?: string; port?: number };
       proclaim?: { host?: string; port?: number; password?: string; pollInterval?: number };
       ptz?: { cameras?: unknown[] };
+      youtube?: { apiKey?: string; broadcastId?: string; pollInterval?: number };
     };
     if (!body.obs || !body.x32 || !body.proclaim) {
       res.status(400).json({ error: 'Request must include obs, x32, and proclaim keys' });
@@ -321,6 +322,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
         x32: body.x32,
         proclaim: body.proclaim,
         ptz: body.ptz ?? config.ptz,
+        youtube: body.youtube ?? config.youtube,
         ui: config.ui,
       };
       fs.writeFileSync(cfgPath, JSON.stringify(newConfig, null, 2), 'utf-8');

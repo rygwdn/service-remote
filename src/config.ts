@@ -49,6 +49,7 @@ function reload(): void {
   Object.assign(config.x32, merged.x32);
   Object.assign(config.proclaim, merged.proclaim);
   config.ptz.cameras = merged.ptz.cameras;
+  Object.assign(config.youtube, merged.youtube);
   Object.assign(config.ui, merged.ui);
 }
 

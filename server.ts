@@ -18,6 +18,7 @@ import obs = require('./src/connections/obs');
 import x32 = require('./src/connections/x32');
 import proclaim = require('./src/connections/proclaim');
 import ptz = require('./src/connections/ptz');
+import youtube = require('./src/connections/youtube');
 
 // ── Crash / unexpected-shutdown logging ──────────────────────────────────────
 
@@ -41,6 +42,7 @@ function shutdown(signal: string): void {
   x32.disconnect();
   proclaim.disconnect();
   ptz.disconnect();
+  youtube.disconnect();
   server.close(() => {
     logger.log('[Server] Shutdown complete');
     process.exit(0);
@@ -93,6 +95,7 @@ if (Object.keys(embeddedPublic).length > 0) {
 
 setupRoutes(app, { obs, x32, proclaim, ptz });
 setupWebSocket(server, state, { obs, x32, proclaim, ptz });
+youtube.connect();
 setupLevelsWs(server);
 setupScreenshotWs(server);
 

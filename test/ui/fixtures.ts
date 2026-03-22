@@ -35,6 +35,12 @@ type AppState = {
   ptz?: {
     cameras?: PtzCameraState[];
   };
+  youtube?: {
+    connected?: boolean;
+    viewerCount?: number | null;
+    broadcastTitle?: string | null;
+    broadcastId?: string | null;
+  };
 };
 
 type Fixtures = {
@@ -47,6 +53,7 @@ const defaultState: Required<AppState> = {
   x32: { connected: false, channels: [] },
   proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [] },
   ptz: { cameras: [] },
+  youtube: { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null },
 };
 
 const alpinePath = path.resolve(__dirname, '../../node_modules/alpinejs/dist/cdn.js');
@@ -76,6 +83,7 @@ export const test = base.extend<{ setState: Fixtures['setState'] }, { serverUrl:
         obs: { address: '', password: '', screenshotInterval: 1000 },
         x32: { address: '', port: 10023 },
         proclaim: { host: '', port: 52195, password: '', pollInterval: 1000 },
+        youtube: { apiKey: '', broadcastId: '', pollInterval: 30000 },
       }) })
     );
     await page.route('**/api/logs', (route) =>
@@ -112,6 +120,7 @@ export const test = base.extend<{ setState: Fixtures['setState'] }, { serverUrl:
         x32: { ...defaultState.x32, ...patch.x32 },
         proclaim: { ...defaultState.proclaim, ...patch.proclaim },
         ptz: { ...defaultState.ptz, ...patch.ptz },
+        youtube: { ...defaultState.youtube, ...patch.youtube },
       };
       await page.evaluate((state) => {
         const store = (window as any).Alpine.store('state');
@@ -119,6 +128,7 @@ export const test = base.extend<{ setState: Fixtures['setState'] }, { serverUrl:
         store.x32 = state.x32;
         store.proclaim = state.proclaim;
         store.ptz = state.ptz;
+        store.youtube = state.youtube;
       }, merged);
       // Allow Alpine to process reactive updates
       await page.waitForTimeout(50);

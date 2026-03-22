@@ -34,6 +34,12 @@ class State extends EventEmitter {
       ptz: {
         cameras: [],
       },
+      youtube: {
+        connected: false,
+        viewerCount: null,
+        broadcastId: null,
+        broadcastTitle: null,
+      },
     };
   }
 
