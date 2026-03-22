@@ -7,6 +7,7 @@ import discovery = require('./discovery');
 import config = require('./config');
 import logger = require('./logger');
 import defaultState = require('./state');
+import youtube = require('./connections/youtube');
 
 const userConfigPath = config.userConfigPath;
 
@@ -261,6 +262,38 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
       const { camera = 0 } = req.body as { camera?: number };
       ptz.home(camera);
       res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // --- YouTube ---
+  app.post('/api/youtube/start', async (req: Request, res: Response) => {
+    try {
+      await youtube.startBroadcast();
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/youtube/stop', async (req: Request, res: Response) => {
+    try {
+      await youtube.stopBroadcast();
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/youtube/import-obs-creds', async (req: Request, res: Response) => {
+    try {
+      const creds = await youtube.importObsCreds(req.body.obsConfigDir as string | undefined);
+      if (!creds) {
+        res.json({ found: false });
+      } else {
+        res.json({ found: true, clientId: creds.clientId, clientSecret: creds.clientSecret, refreshToken: creds.refreshToken });
+      }
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }

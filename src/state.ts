@@ -39,6 +39,7 @@ class State extends EventEmitter {
         viewerCount: null,
         broadcastId: null,
         broadcastTitle: null,
+        broadcastStatus: null,
       },
     };
   }

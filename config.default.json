@@ -39,7 +39,12 @@
   "youtube": {
     "apiKey": "",
     "broadcastId": "",
-    "pollInterval": 30000
+    "pollInterval": 30000,
+    "oauth": {
+      "clientId": "",
+      "clientSecret": "",
+      "refreshToken": ""
+    }
   },
   "ui": {
     "hiddenObs": [],

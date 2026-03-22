@@ -75,6 +75,7 @@ export interface YoutubeState {
   viewerCount: number | null;
   broadcastId: string | null;
   broadcastTitle: string | null;
+  broadcastStatus: 'ready' | 'testing' | 'live' | 'complete' | null;
 }
 
 export interface AppState {
@@ -125,6 +126,11 @@ export interface Config {
     apiKey: string;
     broadcastId: string;
     pollInterval: number;
+    oauth: {
+      clientId: string;
+      clientSecret: string;
+      refreshToken: string;
+    };
   };
   ui: {
     hiddenObs: string[];

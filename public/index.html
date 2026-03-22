@@ -169,6 +169,14 @@
           <span class="youtube-broadcast-title" x-show="$store.state.youtube.broadcastTitle" x-text="$store.state.youtube.broadcastTitle"></span>
           <span class="youtube-viewers" x-show="$store.state.youtube.viewerCount !== null" x-text="'👁 ' + $store.state.youtube.viewerCount + ' watching'"></span>
         </div>
+        <div class="youtube-controls" x-show="$store.state.youtube.broadcastId">
+          <button class="btn youtube-go-live-btn"
+                  x-show="$store.state.youtube.broadcastStatus !== 'live'"
+                  @click="window.confirm('Go live on YouTube?') && startYouTubeBroadcast()">Go Live</button>
+          <button class="btn youtube-end-stream-btn"
+                  x-show="$store.state.youtube.broadcastStatus === 'live'"
+                  @click="window.confirm('End the YouTube stream?') && stopYouTubeBroadcast()">End Stream</button>
+        </div>
       </div>
       <div class="obs-section">
         <div class="ov-obs-preview-wrap">
@@ -432,6 +440,13 @@
         <label>API Key <input type="password" x-model="cfg.youtube.apiKey" placeholder="(YouTube Data API v3 key)"></label>
         <label>Broadcast ID <input type="text" x-model="cfg.youtube.broadcastId" placeholder="(YouTube video/broadcast ID)"></label>
         <label>Poll interval (ms) <input type="number" x-model.number="cfg.youtube.pollInterval" placeholder="30000" min="5000"></label>
+        <label>OAuth Client ID <input type="text" x-model="cfg.youtube.oauth.clientId" placeholder="(OAuth client ID)"></label>
+        <label>OAuth Client Secret <input type="password" x-model="cfg.youtube.oauth.clientSecret" placeholder="(OAuth client secret)"></label>
+        <label>OAuth Refresh Token <input type="password" x-model="cfg.youtube.oauth.refreshToken" placeholder="(OAuth refresh token)"></label>
+        <div class="discover-row">
+          <button class="btn" @click="importYouTubeCredsFromObs()">Import from OBS</button>
+          <span class="discover-status" x-text="importObsStatus"></span>
+        </div>
       </div>
 
       <div class="settings-footer">

@@ -391,6 +391,30 @@ describe('API routes', () => {
     });
   });
 
+  describe('POST /api/youtube/start', () => {
+    test('returns 500 with error message when OAuth not configured', async () => {
+      const res = await request.post('/api/youtube/start').send({});
+      assert.equal(res.status, 500);
+      assert.ok(res.body.error, 'Should return an error message');
+    });
+  });
+
+  describe('POST /api/youtube/stop', () => {
+    test('returns 500 with error message when OAuth not configured', async () => {
+      const res = await request.post('/api/youtube/stop').send({});
+      assert.equal(res.status, 500);
+      assert.ok(res.body.error, 'Should return an error message');
+    });
+  });
+
+  describe('POST /api/youtube/import-obs-creds', () => {
+    test('returns found: false when OBS config not found at specified path', async () => {
+      const res = await request.post('/api/youtube/import-obs-creds').send({ obsConfigDir: '/nonexistent/path' });
+      assert.equal(res.status, 200);
+      assert.equal(res.body.found, false);
+    });
+  });
+
   describe('POST /api/discover/x32', () => {
     test('returns a result with found boolean', async () => {
       const res = await request.post('/api/discover/x32');

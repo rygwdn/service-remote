@@ -1,14 +1,25 @@
+import fs = require('fs');
+import os = require('os');
+import path = require('path');
 import config = require('../config');
 import state = require('../state');
 import logger = require('../logger');
 
-/** Parse a YouTube Data API v3 `videos.list` response into viewer count and title. */
-function parseApiResponse(data: unknown): { viewerCount: number | null; broadcastTitle: string | null } {
-  const item = (data as Record<string, unknown> | null)?.['items'];
-  if (!Array.isArray(item) || item.length === 0) {
-    return { viewerCount: null, broadcastTitle: null };
+// ── Response parsing ─────────────────────────────────────────────────────────
+
+interface ParsedVideoInfo {
+  viewerCount: number | null;
+  broadcastTitle: string | null;
+  broadcastStatus: 'ready' | 'testing' | 'live' | 'complete' | null;
+}
+
+/** Parse a YouTube Data API v3 `videos.list` response. */
+function parseApiResponse(data: unknown): ParsedVideoInfo {
+  const items = (data as Record<string, unknown> | null)?.['items'];
+  if (!Array.isArray(items) || items.length === 0) {
+    return { viewerCount: null, broadcastTitle: null, broadcastStatus: null };
   }
-  const first = item[0] as Record<string, unknown>;
+  const first = items[0] as Record<string, unknown>;
   const lsd = first['liveStreamingDetails'] as Record<string, unknown> | undefined;
   const snippet = first['snippet'] as Record<string, unknown> | undefined;
 
@@ -16,15 +27,194 @@ function parseApiResponse(data: unknown): { viewerCount: number | null; broadcas
   const viewerCount = raw != null ? parseInt(String(raw), 10) : null;
   const broadcastTitle = typeof snippet?.['title'] === 'string' ? snippet['title'] : null;
 
-  return { viewerCount, broadcastTitle };
+  let broadcastStatus: ParsedVideoInfo['broadcastStatus'] = null;
+  if (lsd) {
+    if (lsd['actualEndTime']) {
+      broadcastStatus = 'complete';
+    } else if (lsd['actualStartTime']) {
+      broadcastStatus = 'live';
+    } else {
+      broadcastStatus = 'ready';
+    }
+  }
+
+  return { viewerCount, broadcastTitle, broadcastStatus };
 }
+
+// ── INI parsing (for OBS global.ini) ─────────────────────────────────────────
+
+/** Parse a simple INI file into sections. */
+function parseIni(content: string): Record<string, Record<string, string>> {
+  const result: Record<string, Record<string, string>> = {};
+  let section = '';
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    const m = trimmed.match(/^\[(.+)\]$/);
+    if (m) {
+      section = m[1];
+      result[section] ??= {};
+      continue;
+    }
+    if (section && trimmed.includes('=')) {
+      const eq = trimmed.indexOf('=');
+      result[section][trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+    }
+  }
+  return result;
+}
+
+interface OAuthCreds {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+}
+
+/** Search a parsed INI object for a YouTube section with a refresh_token. */
+function extractCredsFromIni(ini: Record<string, Record<string, string>>): OAuthCreds | null {
+  for (const [section, values] of Object.entries(ini)) {
+    if (section.toLowerCase().includes('youtube') && values['refresh_token']) {
+      return {
+        clientId: values['client_id'] ?? '',
+        clientSecret: values['client_secret'] ?? '',
+        refreshToken: values['refresh_token'],
+      };
+    }
+  }
+  return null;
+}
+
+/** Return the default OBS config directory for the current OS. */
+function defaultObsConfigDir(): string {
+  const home = os.homedir();
+  switch (process.platform) {
+    case 'win32': return path.join(process.env['APPDATA'] ?? home, 'obs-studio');
+    case 'darwin': return path.join(home, 'Library', 'Application Support', 'obs-studio');
+    default: return path.join(home, '.config', 'obs-studio');
+  }
+}
+
+/**
+ * Try to read YouTube OAuth credentials from OBS's config files.
+ * Looks in common JSON auth files and falls back to parsing global.ini.
+ * Returns credentials if found, null otherwise.
+ */
+async function importObsCreds(obsConfigDir?: string): Promise<OAuthCreds | null> {
+  const dir = obsConfigDir ?? defaultObsConfigDir();
+
+  // 1. Try JSON auth files (OBS 29+ stores tokens here in some builds)
+  const jsonPaths = [
+    path.join(dir, 'basic', 'auth', 'YouTube.json'),
+    path.join(dir, 'auth', 'YouTube.json'),
+    path.join(dir, 'basic', 'auth', 'youtube.json'),
+  ];
+  for (const p of jsonPaths) {
+    try {
+      const raw = fs.readFileSync(p, 'utf-8');
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof parsed['refresh_token'] === 'string') {
+        return {
+          clientId: String(parsed['client_id'] ?? ''),
+          clientSecret: String(parsed['client_secret'] ?? ''),
+          refreshToken: parsed['refresh_token'],
+        };
+      }
+    } catch {
+      // Not found or malformed — try next
+    }
+  }
+
+  // 2. Try INI config files (older OBS versions and some builds store OAuth here)
+  const iniPaths = [
+    path.join(dir, 'global.ini'),
+    path.join(dir, 'basic', 'service.ini'),
+  ];
+  for (const iniPath of iniPaths) {
+    try {
+      const raw = fs.readFileSync(iniPath, 'utf-8');
+      const creds = extractCredsFromIni(parseIni(raw));
+      if (creds) return creds;
+    } catch {
+      // Not found — try next
+    }
+  }
+
+  return null;
+}
+
+// ── OAuth token management ────────────────────────────────────────────────────
+
+let cachedAccessToken: string | null = null;
+let tokenExpiry = 0;
+
+/** Get a valid access token, refreshing via the configured refresh_token if needed. */
+async function getAccessToken(): Promise<string> {
+  if (cachedAccessToken && Date.now() < tokenExpiry - 60_000) {
+    return cachedAccessToken;
+  }
+  const { clientId, clientSecret, refreshToken } = config.youtube.oauth;
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('YouTube OAuth credentials not configured');
+  }
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }).toString(),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Token refresh failed: ${res.status} - ${body}`);
+  }
+  const data = await res.json() as { access_token: string; expires_in?: number };
+  cachedAccessToken = data.access_token;
+  tokenExpiry = Date.now() + (data.expires_in ?? 3600) * 1000;
+  return cachedAccessToken;
+}
+
+// ── Broadcast control ─────────────────────────────────────────────────────────
+
+/** Transition the configured YouTube broadcast to 'live' (go live). */
+async function startBroadcast(): Promise<void> {
+  const broadcastId = config.youtube.broadcastId;
+  if (!broadcastId) throw new Error('YouTube broadcastId not configured');
+  const token = await getAccessToken();
+  const url = `https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=live&id=${encodeURIComponent(broadcastId)}&part=status`;
+  const res = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`YouTube API error: ${res.status} - ${body}`);
+  }
+  state.update('youtube', { broadcastStatus: 'live' });
+  logger.log('[YouTube] Broadcast started (live)');
+}
+
+/** Transition the configured YouTube broadcast to 'complete' (end stream). */
+async function stopBroadcast(): Promise<void> {
+  const broadcastId = config.youtube.broadcastId;
+  if (!broadcastId) throw new Error('YouTube broadcastId not configured');
+  const token = await getAccessToken();
+  const url = `https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=complete&id=${encodeURIComponent(broadcastId)}&part=status`;
+  const res = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`YouTube API error: ${res.status} - ${body}`);
+  }
+  state.update('youtube', { broadcastStatus: 'complete' });
+  logger.log('[YouTube] Broadcast stopped (complete)');
+}
+
+// ── Polling ───────────────────────────────────────────────────────────────────
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 async function poll(): Promise<void> {
   const { apiKey, broadcastId } = config.youtube;
   if (!apiKey || !broadcastId) {
-    state.update('youtube', { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null });
+    state.update('youtube', { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null, broadcastStatus: null });
     return;
   }
 
@@ -35,8 +225,8 @@ async function poll(): Promise<void> {
       throw new Error(`HTTP ${res.status}`);
     }
     const data = await res.json() as unknown;
-    const { viewerCount, broadcastTitle } = parseApiResponse(data);
-    state.update('youtube', { connected: true, viewerCount, broadcastTitle, broadcastId });
+    const { viewerCount, broadcastTitle, broadcastStatus } = parseApiResponse(data);
+    state.update('youtube', { connected: true, viewerCount, broadcastTitle, broadcastStatus, broadcastId });
   } catch (err) {
     logger.error('[YouTube] Poll failed:', (err as Error).message);
     state.update('youtube', { connected: false });
@@ -55,8 +245,10 @@ function disconnect(): void {
     clearInterval(pollTimer);
     pollTimer = null;
   }
+  cachedAccessToken = null;
+  tokenExpiry = 0;
   state.update('youtube', { connected: false });
   logger.log('[YouTube] Polling stopped');
 }
 
-export = { connect, disconnect, parseApiResponse };
+export = { connect, disconnect, parseApiResponse, parseIni, extractCredsFromIni, importObsCreds, startBroadcast, stopBroadcast };

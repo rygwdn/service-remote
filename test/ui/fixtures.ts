@@ -40,6 +40,7 @@ type AppState = {
     viewerCount?: number | null;
     broadcastTitle?: string | null;
     broadcastId?: string | null;
+    broadcastStatus?: 'ready' | 'testing' | 'live' | 'complete' | null;
   };
 };
 
@@ -53,7 +54,7 @@ const defaultState: Required<AppState> = {
   x32: { connected: false, channels: [] },
   proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [] },
   ptz: { cameras: [] },
-  youtube: { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null },
+  youtube: { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null, broadcastStatus: null },
 };
 
 const alpinePath = path.resolve(__dirname, '../../node_modules/alpinejs/dist/cdn.js');

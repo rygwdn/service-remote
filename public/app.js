@@ -7,7 +7,7 @@ document.addEventListener('alpine:init', () => {
     x32: { connected: false, channels: [] },
     proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [] },
     ptz: { cameras: [] },
-    youtube: { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null },
+    youtube: { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null, broadcastStatus: null },
   });
 
   // UI state
@@ -72,10 +72,11 @@ document.addEventListener('alpine:init', () => {
       x32: { address: '', port: 10023 },
       proclaim: { host: '', port: 52195, password: '', pollInterval: 1000 },
       ptz: { cameras: [] },
-      youtube: { apiKey: '', broadcastId: '', pollInterval: 30000 },
+      youtube: { apiKey: '', broadcastId: '', pollInterval: 30000, oauth: { clientId: '', clientSecret: '', refreshToken: '' } },
     },
     discoverStatus: { obs: '', x32: '', proclaim: '' },
     saveStatus: '',
+    importObsStatus: '',
     logs: [],
     serverAddresses: [],
 
@@ -113,9 +114,12 @@ document.addEventListener('alpine:init', () => {
         cameraId: c.cameraId ?? 1,
         numPresets: c.numPresets ?? 9,
       }));
-      this.cfg.youtube.apiKey          = data.youtube?.apiKey ?? '';
-      this.cfg.youtube.broadcastId     = data.youtube?.broadcastId ?? '';
-      this.cfg.youtube.pollInterval    = data.youtube?.pollInterval ?? 30000;
+      this.cfg.youtube.apiKey                    = data.youtube?.apiKey ?? '';
+      this.cfg.youtube.broadcastId               = data.youtube?.broadcastId ?? '';
+      this.cfg.youtube.pollInterval              = data.youtube?.pollInterval ?? 30000;
+      this.cfg.youtube.oauth.clientId            = data.youtube?.oauth?.clientId ?? '';
+      this.cfg.youtube.oauth.clientSecret        = data.youtube?.oauth?.clientSecret ?? '';
+      this.cfg.youtube.oauth.refreshToken        = data.youtube?.oauth?.refreshToken ?? '';
     },
 
     async saveConfig() {
@@ -166,6 +170,25 @@ document.addEventListener('alpine:init', () => {
           this.discoverStatus.proclaim = 'Found';
         } else { this.discoverStatus.proclaim = 'Not found'; }
       } catch (_) { this.discoverStatus.proclaim = 'Error'; }
+    },
+
+    async importYouTubeCredsFromObs() {
+      this.importObsStatus = 'Importing…';
+      try {
+        const res = await fetch('/api/youtube/import-obs-creds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        const data = await res.json();
+        if (data.found) {
+          if (data.clientId) this.cfg.youtube.oauth.clientId = data.clientId;
+          if (data.clientSecret) this.cfg.youtube.oauth.clientSecret = data.clientSecret;
+          if (data.refreshToken) this.cfg.youtube.oauth.refreshToken = data.refreshToken;
+          this.importObsStatus = 'Imported!';
+        } else {
+          this.importObsStatus = 'Not found in OBS config';
+        }
+      } catch (err) {
+        this.importObsStatus = 'Error: ' + err.message;
+      }
+      setTimeout(() => { this.importObsStatus = ''; }, 3000);
     },
 
     async loadLogs() {
@@ -384,6 +407,8 @@ function gotoItem(itemId) {
   post('/api/proclaim/goto-item', { itemId });
 }
 
+function startYouTubeBroadcast()        { post('/api/youtube/start', {}); }
+function stopYouTubeBroadcast()         { post('/api/youtube/stop', {}); }
 function setScene(scene)                { post('/api/obs/scene', { scene }); }
 function toggleObsMute(input)           { post('/api/obs/mute', { input }); }
 function setObsVolume(input, volumeDb)  { post('/api/obs/volume', { input, volumeDb }); }
