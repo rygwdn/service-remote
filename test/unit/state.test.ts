@@ -7,7 +7,7 @@ describe('State', () => {
   test('get() returns the initial shape', () => {
     const s = new State();
     const data = s.get();
-    assert.deepEqual(Object.keys(data).sort(), ['obs', 'proclaim', 'x32']);
+    assert.deepEqual(Object.keys(data).sort(), ['obs', 'proclaim', 'ptz', 'x32']);
     assert.equal(data.obs.connected, false);
     assert.deepEqual(data.obs.scenes, []);
     assert.equal(data.x32.connected, false);
@@ -19,6 +19,7 @@ describe('State', () => {
     assert.equal(data.proclaim.currentItemType, null);
     assert.equal(data.proclaim.slideIndex, null);
     assert.deepEqual(data.proclaim.serviceItems, []);
+    assert.deepEqual(data.ptz.cameras, []);
   });
 
   test('update() merges a patch into the named section', () => {

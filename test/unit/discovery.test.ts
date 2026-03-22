@@ -22,9 +22,7 @@ describe('getBroadcastAddresses', () => {
 
 describe('discoverProclaim', () => {
   test('returns found: false for a closed port', async () => {
-    // discoverProclaim always checks 127.0.0.1:52195 — we can't easily override
-    // the port from outside, so instead we test the exported function's behaviour
-    // when nothing is listening on port 52195. If Proclaim IS running on this
+    // discoverProclaim always checks 127.0.0.1:52195. If Proclaim IS running on this
     // machine the test would return found:true, so we only assert the shape.
     const result = await discoverProclaim(500) as { found: boolean; address?: string; port?: number };
     assert.ok(typeof result.found === 'boolean');

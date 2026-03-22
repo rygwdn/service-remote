@@ -16,6 +16,7 @@ export interface Channel {
   source: number; // Physical input source (0 = unpatched); only meaningful for 'ch'
   linkedToNext: boolean; // True if this channel is linked with the next (odd/even pair)
   spill: boolean; // True if assigned to DCA group 8 (shown in the soundboard UI)
+  color: number; // X32 scribble strip color index 0–15 (0 = off/default)
 }
 
 export interface ServiceItem {
@@ -56,10 +57,24 @@ export interface ProclaimState {
   slideRevisions: Record<string, Record<string, string>>;
 }
 
+export interface PtzCameraState {
+  name: string;
+  connected: boolean;
+  pan: number | null;  // VISCA units, null until queried
+  tilt: number | null;
+  zoom: number | null;
+  presets: number[];   // Available preset slot indices
+}
+
+export interface PtzState {
+  cameras: PtzCameraState[];
+}
+
 export interface AppState {
   obs: ObsState;
   x32: X32State;
   proclaim: ProclaimState;
+  ptz: PtzState;
 }
 
 export interface Config {
@@ -81,6 +96,22 @@ export interface Config {
     port: number;
     password: string;
     pollInterval: number;
+  };
+  ptz: {
+    cameras: Array<{
+      name: string;
+      enabled: boolean;
+      address: string;
+      port: number;
+      cameraId: number;
+      numPresets: number;
+      panStep: number;
+      tiltStep: number;
+      zoomStep: number;
+      panRange: [number, number];
+      tiltRange: [number, number];
+      zoomRange: [number, number];
+    }>;
   };
   ui: {
     hiddenObs: string[];
@@ -121,10 +152,24 @@ export interface ProclaimConnection {
   getOnAirSessionId(): string | null;
 }
 
+export interface PtzConnection {
+  connect(): void;
+  disconnect(): void;
+  /** Step camera by one increment in the given direction (go-to style). */
+  panTilt(camera: number, panDir: -1 | 0 | 1, tiltDir: -1 | 0 | 1, panSpeed?: number, tiltSpeed?: number): void;
+  /** Step zoom in or out by one increment (go-to style, no stop needed). */
+  zoom(camera: number, direction: 'in' | 'out'): void;
+  /** Focus mode switch or drive; server auto-stops near/far after 500 ms. */
+  focus(camera: number, mode: 'auto' | 'manual' | 'near' | 'far'): void;
+  preset(camera: number, action: 'recall' | 'save', preset: number): void;
+  home(camera: number): void;
+}
+
 export interface Connections {
   obs: ObsConnection;
   x32: X32Connection;
   proclaim: ProclaimConnection;
+  ptz: PtzConnection;
 }
 
 export interface ChangeEvent {

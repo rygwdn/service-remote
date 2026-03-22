@@ -59,6 +59,7 @@ function setupWebSocket(server: http.Server, state: StateHandle, connections?: C
       connections.x32.connect();
       connections.x32.startMeterUpdates();
       connections.proclaim.connect();
+      connections.ptz.connect();
     }
 
     socket.on('close', () => {
@@ -74,6 +75,7 @@ function setupWebSocket(server: http.Server, state: StateHandle, connections?: C
         connections.obs.disconnect();
         connections.x32.disconnect();
         connections.proclaim.disconnect();
+        connections.ptz.disconnect();
       }, disconnectDelay);
     });
   });

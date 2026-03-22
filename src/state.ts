@@ -31,6 +31,9 @@ class State extends EventEmitter {
         serviceItems: [],
         slideRevisions: {},
       },
+      ptz: {
+        cameras: [],
+      },
     };
   }
 
