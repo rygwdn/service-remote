@@ -19,12 +19,22 @@
     "pollInterval": 1000
   },
   "ptz": {
-    "enabled": false,
-    "protocol": "visca-udp",
-    "address": "192.168.1.101",
-    "port": 52381,
-    "cameraId": 1,
-    "numPresets": 9
+    "cameras": [
+      {
+        "name": "Camera",
+        "enabled": false,
+        "address": "192.168.1.101",
+        "port": 52381,
+        "cameraId": 1,
+        "numPresets": 9,
+        "panStep": 50,
+        "tiltStep": 35,
+        "zoomStep": 1000,
+        "panRange": [-880, 880],
+        "tiltRange": [-300, 300],
+        "zoomRange": [0, 16384]
+      }
+    ]
   },
   "ui": {
     "hiddenObs": [],

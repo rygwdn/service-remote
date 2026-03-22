@@ -56,9 +56,17 @@ export interface ProclaimState {
   slideRevisions: Record<string, Record<string, string>>;
 }
 
-export interface PtzState {
+export interface PtzCameraState {
+  name: string;
   connected: boolean;
-  presets: number[]; // Available preset slot indices (e.g. [0,1,...,8])
+  pan: number | null;  // VISCA units, null until queried
+  tilt: number | null;
+  zoom: number | null;
+  presets: number[];   // Available preset slot indices
+}
+
+export interface PtzState {
+  cameras: PtzCameraState[];
 }
 
 export interface AppState {
@@ -89,12 +97,20 @@ export interface Config {
     pollInterval: number;
   };
   ptz: {
-    enabled: boolean;
-    protocol: 'visca-udp';
-    address: string;
-    port: number;
-    cameraId: number;
-    numPresets: number;
+    cameras: Array<{
+      name: string;
+      enabled: boolean;
+      address: string;
+      port: number;
+      cameraId: number;
+      numPresets: number;
+      panStep: number;
+      tiltStep: number;
+      zoomStep: number;
+      panRange: [number, number];
+      tiltRange: [number, number];
+      zoomRange: [number, number];
+    }>;
   };
   ui: {
     hiddenObs: string[];
@@ -138,11 +154,14 @@ export interface ProclaimConnection {
 export interface PtzConnection {
   connect(): void;
   disconnect(): void;
-  panTilt(pan: -1 | 0 | 1, tilt: -1 | 0 | 1, panSpeed?: number, tiltSpeed?: number): void;
-  zoom(direction: 'in' | 'out' | 'stop', speed?: number): void;
-  focus(mode: 'auto' | 'manual' | 'near' | 'far' | 'stop'): void;
-  preset(action: 'recall' | 'save', preset: number): void;
-  home(): void;
+  /** Step camera by one increment in the given direction (go-to style). */
+  panTilt(camera: number, panDir: -1 | 0 | 1, tiltDir: -1 | 0 | 1, panSpeed?: number, tiltSpeed?: number): void;
+  /** Step zoom in or out by one increment (go-to style, no stop needed). */
+  zoom(camera: number, direction: 'in' | 'out'): void;
+  /** Focus mode switch or drive; server auto-stops near/far after 500 ms. */
+  focus(camera: number, mode: 'auto' | 'manual' | 'near' | 'far'): void;
+  preset(camera: number, action: 'recall' | 'save', preset: number): void;
+  home(camera: number): void;
 }
 
 export interface Connections {

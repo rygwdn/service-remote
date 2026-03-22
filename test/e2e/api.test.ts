@@ -455,25 +455,32 @@ describe('API routes', () => {
   });
 
   describe('POST /api/ptz/pan-tilt', () => {
-    test('calls ptz.panTilt and returns ok', async () => {
+    test('calls ptz.panTilt with camera index and returns ok', async () => {
       resetCalls();
-      const res = await request.post('/api/ptz/pan-tilt').send({ pan: 1, tilt: 0, panSpeed: 8 });
+      const res = await request.post('/api/ptz/pan-tilt').send({ panDir: 1, tiltDir: 0, panSpeed: 8 });
       assert.equal(res.status, 200);
       assert.deepEqual(res.body, { ok: true });
-      assert.equal(calls.ptz.panTilt?.pan, 1);
-      assert.equal(calls.ptz.panTilt?.tilt, 0);
+      assert.equal(calls.ptz.panTilt?.camera, 0); // defaults to camera 0
+      assert.equal(calls.ptz.panTilt?.panDir, 1);
+      assert.equal(calls.ptz.panTilt?.tiltDir, 0);
       assert.equal(calls.ptz.panTilt?.panSpeed, 8);
+    });
+
+    test('passes explicit camera index', async () => {
+      resetCalls();
+      await request.post('/api/ptz/pan-tilt').send({ camera: 1, panDir: -1, tiltDir: 1 });
+      assert.equal(calls.ptz.panTilt?.camera, 1);
     });
   });
 
   describe('POST /api/ptz/zoom', () => {
     test('calls ptz.zoom and returns ok', async () => {
       resetCalls();
-      const res = await request.post('/api/ptz/zoom').send({ direction: 'in', speed: 4 });
+      const res = await request.post('/api/ptz/zoom').send({ direction: 'in' });
       assert.equal(res.status, 200);
       assert.deepEqual(res.body, { ok: true });
+      assert.equal(calls.ptz.zoom?.camera, 0);
       assert.equal(calls.ptz.zoom?.direction, 'in');
-      assert.equal(calls.ptz.zoom?.speed, 4);
     });
   });
 
@@ -483,7 +490,8 @@ describe('API routes', () => {
       const res = await request.post('/api/ptz/focus').send({ mode: 'auto' });
       assert.equal(res.status, 200);
       assert.deepEqual(res.body, { ok: true });
-      assert.equal(calls.ptz.focus, 'auto');
+      assert.equal(calls.ptz.focus?.camera, 0);
+      assert.equal(calls.ptz.focus?.mode, 'auto');
     });
   });
 
@@ -493,17 +501,18 @@ describe('API routes', () => {
       const res = await request.post('/api/ptz/preset').send({ action: 'recall', preset: 3 });
       assert.equal(res.status, 200);
       assert.deepEqual(res.body, { ok: true });
-      assert.deepEqual(calls.ptz.preset, { action: 'recall', preset: 3 });
+      assert.equal(calls.ptz.preset?.camera, 0);
+      assert.deepEqual(calls.ptz.preset, { camera: 0, action: 'recall', preset: 3 });
     });
   });
 
   describe('POST /api/ptz/home', () => {
-    test('calls ptz.home and returns ok', async () => {
+    test('calls ptz.home with camera index and returns ok', async () => {
       resetCalls();
       const res = await request.post('/api/ptz/home').send({});
       assert.equal(res.status, 200);
       assert.deepEqual(res.body, { ok: true });
-      assert.equal(calls.ptz.home, true);
+      assert.equal(calls.ptz.home, 0); // camera 0
     });
   });
 

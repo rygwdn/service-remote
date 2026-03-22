@@ -215,10 +215,11 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
   // --- PTZ ---
   app.post('/api/ptz/pan-tilt', (req: Request, res: Response) => {
     try {
-      const { pan, tilt, panSpeed, tiltSpeed } = req.body as {
-        pan: -1 | 0 | 1; tilt: -1 | 0 | 1; panSpeed?: number; tiltSpeed?: number;
+      const { camera = 0, panDir, tiltDir, panSpeed, tiltSpeed } = req.body as {
+        camera?: number; panDir: -1 | 0 | 1; tiltDir: -1 | 0 | 1;
+        panSpeed?: number; tiltSpeed?: number;
       };
-      ptz.panTilt(pan, tilt, panSpeed, tiltSpeed);
+      ptz.panTilt(camera, panDir, tiltDir, panSpeed, tiltSpeed);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -227,8 +228,8 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
 
   app.post('/api/ptz/zoom', (req: Request, res: Response) => {
     try {
-      const { direction, speed } = req.body as { direction: 'in' | 'out' | 'stop'; speed?: number };
-      ptz.zoom(direction, speed);
+      const { camera = 0, direction } = req.body as { camera?: number; direction: 'in' | 'out' };
+      ptz.zoom(camera, direction);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -237,8 +238,8 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
 
   app.post('/api/ptz/focus', (req: Request, res: Response) => {
     try {
-      const { mode } = req.body as { mode: 'auto' | 'manual' | 'near' | 'far' | 'stop' };
-      ptz.focus(mode);
+      const { camera = 0, mode } = req.body as { camera?: number; mode: 'auto' | 'manual' | 'near' | 'far' };
+      ptz.focus(camera, mode);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -247,8 +248,8 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
 
   app.post('/api/ptz/preset', (req: Request, res: Response) => {
     try {
-      const { action, preset } = req.body as { action: 'recall' | 'save'; preset: number };
-      ptz.preset(action, preset);
+      const { camera = 0, action, preset } = req.body as { camera?: number; action: 'recall' | 'save'; preset: number };
+      ptz.preset(camera, action, preset);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -257,7 +258,8 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
 
   app.post('/api/ptz/home', (req: Request, res: Response) => {
     try {
-      ptz.home();
+      const { camera = 0 } = req.body as { camera?: number };
+      ptz.home(camera);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -300,26 +302,19 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
       obs?: { address?: string; password?: string; screenshotInterval?: number };
       x32?: { address?: string; port?: number };
       proclaim?: { host?: string; port?: number; password?: string; pollInterval?: number };
-      ptz?: { enabled?: boolean; protocol?: string; address?: string; port?: number; cameraId?: number; numPresets?: number };
+      ptz?: { cameras?: unknown[] };
     };
     if (!body.obs || !body.x32 || !body.proclaim) {
       res.status(400).json({ error: 'Request must include obs, x32, and proclaim keys' });
       return;
     }
 
-    // Detect changes against current config before applying
     const obsChanged = body.obs.address !== config.obs.address || body.obs.password !== config.obs.password;
     const x32Changed = body.x32.address !== config.x32.address || body.x32.port !== config.x32.port;
     const proclaimChanged = body.proclaim.host !== config.proclaim.host || body.proclaim.port !== config.proclaim.port || body.proclaim.password !== config.proclaim.password || body.proclaim.pollInterval !== config.proclaim.pollInterval;
-    const ptzChanged = body.ptz && (
-      body.ptz.enabled !== config.ptz.enabled ||
-      body.ptz.address !== config.ptz.address ||
-      body.ptz.port !== config.ptz.port ||
-      body.ptz.cameraId !== config.ptz.cameraId
-    );
+    const ptzChanged = body.ptz != null && JSON.stringify(body.ptz) !== JSON.stringify(config.ptz);
 
     try {
-      // Merge new connection config with existing server config (server port not exposed in UI)
       const newConfig = {
         server: config.server,
         obs: body.obs,

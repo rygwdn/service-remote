@@ -19,8 +19,7 @@ describe('State', () => {
     assert.equal(data.proclaim.currentItemType, null);
     assert.equal(data.proclaim.slideIndex, null);
     assert.deepEqual(data.proclaim.serviceItems, []);
-    assert.equal(data.ptz.connected, false);
-    assert.deepEqual(data.ptz.presets, []);
+    assert.deepEqual(data.ptz.cameras, []);
   });
 
   test('update() merges a patch into the named section', () => {

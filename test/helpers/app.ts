@@ -26,11 +26,11 @@ interface TestCalls {
   };
   ptz: {
     connect: number; disconnect: number;
-    panTilt?: { pan: number; tilt: number; panSpeed?: number; tiltSpeed?: number };
-    zoom?: { direction: string; speed?: number };
-    focus?: string;
-    preset?: { action: string; preset: number };
-    home?: true;
+    panTilt?: { camera: number; panDir: number; tiltDir: number; panSpeed?: number; tiltSpeed?: number };
+    zoom?: { camera: number; direction: string };
+    focus?: { camera: number; mode: string };
+    preset?: { camera: number; action: string; preset: number };
+    home?: number;
   };
 }
 
@@ -98,13 +98,13 @@ function createTestApp(): TestApp {
     ptz: {
       connect: () => { calls.ptz.connect++; },
       disconnect: () => { calls.ptz.disconnect++; },
-      panTilt: (pan: number, tilt: number, panSpeed?: number, tiltSpeed?: number) => {
-        calls.ptz.panTilt = { pan, tilt, panSpeed, tiltSpeed };
+      panTilt: (camera: number, panDir: number, tiltDir: number, panSpeed?: number, tiltSpeed?: number) => {
+        calls.ptz.panTilt = { camera, panDir, tiltDir, panSpeed, tiltSpeed };
       },
-      zoom: (direction: string, speed?: number) => { calls.ptz.zoom = { direction, speed }; },
-      focus: (mode: string) => { calls.ptz.focus = mode; },
-      preset: (action: string, preset: number) => { calls.ptz.preset = { action, preset }; },
-      home: () => { calls.ptz.home = true; },
+      zoom: (camera: number, direction: string) => { calls.ptz.zoom = { camera, direction }; },
+      focus: (camera: number, mode: string) => { calls.ptz.focus = { camera, mode }; },
+      preset: (camera: number, action: string, preset: number) => { calls.ptz.preset = { camera, action, preset }; },
+      home: (camera: number) => { calls.ptz.home = camera; },
     },
   };
 

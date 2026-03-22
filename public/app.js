@@ -6,7 +6,7 @@ document.addEventListener('alpine:init', () => {
     obs: { connected: false, scenes: [], currentScene: '', streaming: false, recording: false, audioSources: [] },
     x32: { connected: false, channels: [] },
     proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [] },
-    ptz: { connected: false, presets: [] },
+    ptz: { cameras: [] },
   });
 
   // UI state
@@ -69,7 +69,7 @@ document.addEventListener('alpine:init', () => {
       obs: { address: '', password: '', screenshotInterval: 1000 },
       x32: { address: '', port: 10023 },
       proclaim: { host: '', port: 52195, password: '', pollInterval: 1000 },
-      ptz: { enabled: false, address: '192.168.1.101', port: 52381, cameraId: 1, numPresets: 9 },
+      ptz: { cameras: [] },
     },
     discoverStatus: { obs: '', x32: '', proclaim: '' },
     saveStatus: '',
@@ -102,11 +102,14 @@ document.addEventListener('alpine:init', () => {
       this.cfg.proclaim.port           = data.proclaim?.port ?? 52195;
       this.cfg.proclaim.password       = data.proclaim?.password ?? '';
       this.cfg.proclaim.pollInterval   = data.proclaim?.pollInterval ?? 1000;
-      this.cfg.ptz.enabled             = data.ptz?.enabled ?? false;
-      this.cfg.ptz.address             = data.ptz?.address ?? '192.168.1.101';
-      this.cfg.ptz.port                = data.ptz?.port ?? 52381;
-      this.cfg.ptz.cameraId            = data.ptz?.cameraId ?? 1;
-      this.cfg.ptz.numPresets          = data.ptz?.numPresets ?? 9;
+      this.cfg.ptz.cameras = (data.ptz?.cameras ?? []).map(c => ({
+        name: c.name ?? 'Camera',
+        enabled: c.enabled ?? false,
+        address: c.address ?? '192.168.1.101',
+        port: c.port ?? 52381,
+        cameraId: c.cameraId ?? 1,
+        numPresets: c.numPresets ?? 9,
+      }));
     },
 
     async saveConfig() {
@@ -191,7 +194,7 @@ function connectWs() {
       store.obs = msg.data.obs;
       store.x32 = msg.data.x32;
       store.proclaim = msg.data.proclaim;
-      store.ptz = msg.data.ptz;
+      if (msg.data.ptz) store.ptz = msg.data.ptz;
     }
   };
 
@@ -337,11 +340,32 @@ function setX32Fader(channel, type, value) { post('/api/x32/fader', { channel, t
 function toggleX32Mute(channel, type)   { post('/api/x32/mute', { channel, type }); }
 
 // --- PTZ ---
-function ptzPanTilt(pan, tilt, panSpeed, tiltSpeed) { post('/api/ptz/pan-tilt', { pan, tilt, panSpeed, tiltSpeed }); }
-function ptzZoom(direction, speed)                  { post('/api/ptz/zoom', { direction, speed }); }
-function ptzFocus(mode)                             { post('/api/ptz/focus', { mode }); }
-function ptzPreset(action, preset)                  { post('/api/ptz/preset', { action, preset }); }
-function ptzHome()                                  { post('/api/ptz/home', {}); }
+// Button repeat: fires immediately on press, then repeats after 350 ms delay at 200 ms intervals.
+let _ptzRepeatTimer = null;
+let _ptzRepeatInterval = null;
+
+function ptzStartRepeat(action) {
+  ptzStopRepeat();
+  action();
+  _ptzRepeatTimer = setTimeout(() => {
+    _ptzRepeatInterval = setInterval(action, 200);
+  }, 350);
+}
+
+function ptzStopRepeat() {
+  clearTimeout(_ptzRepeatTimer);
+  clearInterval(_ptzRepeatInterval);
+  _ptzRepeatTimer = null;
+  _ptzRepeatInterval = null;
+}
+
+function ptzPanTilt(camera, panDir, tiltDir, panSpeed, tiltSpeed) {
+  post('/api/ptz/pan-tilt', { camera, panDir, tiltDir, panSpeed, tiltSpeed });
+}
+function ptzZoom(camera, direction)  { post('/api/ptz/zoom',    { camera, direction }); }
+function ptzFocus(camera, mode)      { post('/api/ptz/focus',   { camera, mode }); }
+function ptzPreset(camera, action, preset) { post('/api/ptz/preset', { camera, action, preset }); }
+function ptzHome(camera)             { post('/api/ptz/home',    { camera }); }
 
 // --- Fader visibility ---
 function toggleHiddenObs(name, show) {

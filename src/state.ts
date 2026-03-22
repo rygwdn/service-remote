@@ -32,8 +32,7 @@ class State extends EventEmitter {
         slideRevisions: {},
       },
       ptz: {
-        connected: false,
-        presets: [],
+        cameras: [],
       },
     };
   }
