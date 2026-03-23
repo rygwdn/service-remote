@@ -1,17 +1,7 @@
-import assert = require('node:assert/strict');
+import { strict as assert } from 'node:assert';
 import { describe, test } from 'bun:test';
-import {
-  buildViscaPacket,
-  encodePos,
-  decodePos,
-  absPanTiltCommand,
-  absZoomCommand,
-  panTiltInquiry,
-  zoomInquiry,
-  focusCommand,
-  presetCommand,
-  homeCommand,
-} from '../../src/connections/ptz';
+import ptz = require('../../src/connections/ptz');
+const { buildViscaPacket, encodePos, decodePos, absPanTiltCommand, absZoomCommand, panTiltInquiry, zoomInquiry, focusCommand, presetCommand, homeCommand } = ptz;
 
 describe('VISCA command building', () => {
   describe('buildViscaPacket', () => {

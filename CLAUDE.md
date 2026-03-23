@@ -152,6 +152,16 @@ bun run lint                  # no stray console.* calls
 
 All four must pass. Tests must be committed alongside the implementation — never commit a feature without its tests.
 
+### Stop hook
+
+A Claude Code Stop hook (`.claude/hooks/stop.sh`) automatically runs typecheck, lint, and unit/e2e tests before each session ends. If any check fails, the hook returns exit code 2 to re-engage Claude with an error message.
+
+**Escape hatch:** Set `SKIP_CHECKS=1` in the environment to bypass all checks (e.g. when the environment cannot run tests, or during initial scaffolding before tests exist):
+
+```bash
+SKIP_CHECKS=1 claude  # skip stop-hook checks for this session
+```
+
 ### Commit message format
 
 Use Conventional Commits: `<type>(<scope>): <short description>`

@@ -290,13 +290,8 @@ function connect(): void {
   if (currentCams.length !== cfgs.length) {
     state.update('ptz', {
       cameras: cfgs.map((cfg, i) => ({
+        ...(currentCams[i] ?? { connected: false, pan: null, tilt: null, zoom: null, presets: [] }),
         name: cfg.name,
-        connected: false,
-        pan: null,
-        tilt: null,
-        zoom: null,
-        presets: [],
-        ...(currentCams[i] ?? {}),
       })),
     });
   }

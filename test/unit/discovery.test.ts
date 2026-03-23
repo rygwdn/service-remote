@@ -1,5 +1,4 @@
 import assert = require('node:assert/strict');
-import net = require('net');
 const { getBroadcastAddresses, discoverProclaim } = require('../../src/discovery');
 
 describe('getBroadcastAddresses', () => {

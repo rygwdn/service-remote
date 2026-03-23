@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
 
 const CAM: { name: string; connected: boolean; pan: number | null; tilt: number | null; zoom: number | null; presets: number[] } = {
   name: 'Main Cam',
@@ -15,7 +16,7 @@ test.describe('PTZ Camera panel', () => {
     await expect(page.locator('section.panel.active')).toBeVisible();
   });
 
-  const panel = (page: Parameters<typeof test>[1]['page']) =>
+  const panel = (page: Page) =>
     page.locator('section.panel.active');
 
   test('shows "No cameras configured" when cameras array is empty', async ({ page, setState }) => {
