@@ -1,7 +1,7 @@
-import assert = require('node:assert/strict');
-import ws = require('ws');
-const { createTestApp, startServer } = require('../helpers/app');
-const screenshotWs = require('../../src/screenshot-ws');
+import assert from 'node:assert/strict';
+import { WebSocket } from 'ws';
+import { createTestApp, startServer } from '../helpers/app';
+import { broadcast } from '../../src/screenshot-ws';
 
 describe('/ws/screenshot WebSocket endpoint', () => {
   let server: import('http').Server;
@@ -15,7 +15,7 @@ describe('/ws/screenshot WebSocket endpoint', () => {
   afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
   test('accepts WebSocket connections on /ws/screenshot path', (done) => {
-    const client = new ws.WebSocket(`ws://localhost:${port}/ws/screenshot`);
+    const client = new WebSocket(`ws://localhost:${port}/ws/screenshot`);
     client.on('open', () => {
       client.close();
       done();
@@ -26,9 +26,9 @@ describe('/ws/screenshot WebSocket endpoint', () => {
   test('sends binary JPEG data when broadcast is called', (done) => {
     const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]); // JPEG magic bytes
 
-    const client = new ws.WebSocket(`ws://localhost:${port}/ws/screenshot`);
+    const client = new WebSocket(`ws://localhost:${port}/ws/screenshot`);
     client.on('open', () => {
-      screenshotWs.broadcast(fakeJpeg);
+      broadcast(fakeJpeg);
     });
     client.on('message', (data: Buffer, isBinary: boolean) => {
       assert.ok(isBinary, 'message should be binary');
@@ -44,13 +44,13 @@ describe('/ws/screenshot WebSocket endpoint', () => {
     const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
     let messageReceived = false;
 
-    const client = new ws.WebSocket(`ws://localhost:${port}/ws/screenshot`);
+    const client = new WebSocket(`ws://localhost:${port}/ws/screenshot`);
     client.on('open', () => {
       client.close();
     });
     client.on('close', () => {
       // After close, broadcast — should not error or deliver to closed client
-      screenshotWs.broadcast(fakeJpeg);
+      broadcast(fakeJpeg);
       setTimeout(() => {
         assert.equal(messageReceived, false);
         done();

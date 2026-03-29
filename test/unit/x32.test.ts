@@ -1,7 +1,5 @@
-import assert = require('node:assert/strict');
-import x32 = require('../../src/connections/x32');
-
-const { parseOscMessage, parseMeterBlob, buildMeterRequests } = x32;
+import assert from 'node:assert/strict';
+import { parseOscMessage, parseMeterBlob, buildMeterRequests } from '../../src/connections/x32';
 
 describe('x32 parseOscMessage()', () => {
   describe('fader messages (/ch/XX/mix/fader)', () => {

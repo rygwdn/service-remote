@@ -1,7 +1,5 @@
-import assert = require('node:assert/strict');
-import stateModule = require('../../src/state');
-
-const { State } = stateModule;
+import assert from 'node:assert/strict';
+import { State } from '../../src/state';
 
 describe('State', () => {
   test('get() returns the initial shape', () => {

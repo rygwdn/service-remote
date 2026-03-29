@@ -1,8 +1,6 @@
-'use strict';
-
-import childProcess = require('child_process');
-import os = require('os');
-import logger = require('./logger');
+import { spawn, exec } from 'child_process';
+import os from 'os';
+import * as logger from './logger';
 import type { ChangeEvent } from './types';
 
 function getFirstLanAddress(port: number): string | null {
@@ -17,8 +15,6 @@ function getFirstLanAddress(port: number): string | null {
   }
   return null;
 }
-
-const { spawn, exec } = childProcess;
 
 // PS1 script embedded at compile time — no external file needed at runtime.
 // PowerShell reads it via -EncodedCommand (UTF-16LE base64), leaving stdin
@@ -256,4 +252,4 @@ function startTray(
   });
 }
 
-export = { startTray };
+export { startTray };

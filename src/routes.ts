@@ -1,20 +1,20 @@
 import type { Application, Request, Response } from 'express';
-import fs = require('fs');
-import os = require('os');
+import fs from 'fs';
+import os from 'os';
 import qrcode = require('qrcode');
 import type { Connections } from './types';
-import discovery = require('./discovery');
-import config = require('./config');
-import logger = require('./logger');
-import defaultState = require('./state');
-import youtube = require('./connections/youtube');
+import * as discovery from './discovery';
+import config from './config';
+import * as logger from './logger';
+import state from './state';
+import * as youtube from './connections/youtube';
 
 const userConfigPath = config.userConfigPath;
 
 const THUMB_POLL_TIMEOUT_MS = 5000;
 
-function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections, stateOverride?: typeof defaultState, configPathOverride?: string): void {
-  const state = stateOverride ?? defaultState;
+function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections, stateOverride?: typeof state, configPathOverride?: string): void {
+  const activeState = stateOverride ?? state;
   const cfgPath = configPathOverride ?? userConfigPath;
 
   // Concurrency limiter for Proclaim thumbnail fetches (instance-local so tests don't share state)
@@ -315,7 +315,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
   // --- OBS program preview screenshot ---
   app.get('/api/obs/screenshot', async (req: Request, res: Response) => {
     try {
-      const currentState = state.get();
+      const currentState = activeState.get();
       const sceneName = currentState.obs.currentScene;
       if (!sceneName) return res.status(503).end();
       const buf = await obs.getSceneScreenshot(sceneName);
@@ -330,7 +330,7 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
 
   // --- State (for initial page load) ---
   app.get('/api/state', (req: Request, res: Response) => {
-    res.json(state.get());
+    res.json(activeState.get());
   });
 
   // --- Logs ---
@@ -473,4 +473,4 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
   });
 }
 
-export = { setupRoutes };
+export { setupRoutes };

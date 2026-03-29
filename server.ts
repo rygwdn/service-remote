@@ -1,24 +1,21 @@
-import http = require('http');
-import express = require('express');
-import path = require('path');
-import childProcess = require('child_process');
-import config = require('./src/config');
-import logger = require('./src/logger');
-import versionModule = require('./src/version');
-const { version } = versionModule;
-
-const { exec } = childProcess;
-import state = require('./src/state');
-const { startTray } = require('./src/tray');
-const { setupWebSocket } = require('./src/ws');
-const { setupRoutes } = require('./src/routes');
-const { setupLevelsWs } = require('./src/levels-ws');
-const { setupScreenshotWs } = require('./src/screenshot-ws');
-import obs = require('./src/connections/obs');
-import x32 = require('./src/connections/x32');
-import proclaim = require('./src/connections/proclaim');
-import ptz = require('./src/connections/ptz');
-import youtube = require('./src/connections/youtube');
+import http from 'http';
+import express from 'express';
+import path from 'path';
+import { exec } from 'child_process';
+import config from './src/config';
+import * as logger from './src/logger';
+import { version } from './src/version';
+import state from './src/state';
+import { startTray } from './src/tray';
+import { setupWebSocket } from './src/ws';
+import { setupRoutes } from './src/routes';
+import { setupLevelsWs } from './src/levels-ws';
+import { setupScreenshotWs } from './src/screenshot-ws';
+import obs from './src/connections/obs';
+import * as x32 from './src/connections/x32';
+import * as proclaim from './src/connections/proclaim';
+import * as ptz from './src/connections/ptz';
+import * as youtube from './src/connections/youtube';
 
 // ── Crash / unexpected-shutdown logging ──────────────────────────────────────
 
@@ -76,10 +73,10 @@ const server = http.createServer(app);
 
 app.use(express.json());
 
-// In compiled mode the public/ files are baked in via scripts/embed-public.js;
+// In compiled mode the public/ files are baked in via scripts/embed-public.ts;
 // fall back to serving from the filesystem during development.
 let embeddedPublic: Record<string, { mimeType: string; content: Buffer }> = {};
-try { embeddedPublic = require('./src/embedded-public'); } catch (_) {}
+try { embeddedPublic = (await import('./src/embedded-public')).default; } catch (_) {}
 
 if (Object.keys(embeddedPublic).length > 0) {
   app.use((req, res, next) => {

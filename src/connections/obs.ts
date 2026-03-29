@@ -1,11 +1,9 @@
-import obsWebSocketJs = require('obs-websocket-js');
-import config = require('../config');
-import state = require('../state');
-import logger = require('../logger');
-import screenshotWs = require('../screenshot-ws');
-import levelsWs = require('../levels-ws');
-
-const OBSWebSocket = obsWebSocketJs.default;
+import OBSWebSocket from 'obs-websocket-js';
+import config from '../config';
+import state from '../state';
+import * as logger from '../logger';
+import * as screenshotWs from '../screenshot-ws';
+import * as levelsWs from '../levels-ws';
 
 const obs = new OBSWebSocket();
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -267,7 +265,7 @@ function disconnect(): void {
   obs.disconnect();
 }
 
-export = {
+const obsConnection = {
   connect,
   disconnect,
 
@@ -307,3 +305,5 @@ export = {
     return Buffer.from(b64, 'base64');
   },
 };
+
+export default obsConnection;

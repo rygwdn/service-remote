@@ -1,9 +1,8 @@
-import assert = require('node:assert/strict');
-import wsModule = require('ws');
-const { createTestApp, startServer } = require('../helpers/app');
+import assert from 'node:assert/strict';
+import { WebSocket } from 'ws';
+import { createTestApp, startServer } from '../helpers/app';
 
-const { WebSocket } = wsModule;
-type WsClient = InstanceType<typeof wsModule.WebSocket>;
+type WsClient = InstanceType<typeof WebSocket>;
 
 // Helper: open a WebSocket and wait for the first message.
 function connectAndReceive(port: number): Promise<{ ws: WsClient; data: { type: string; data: Record<string, unknown> } }> {
@@ -91,9 +90,9 @@ describe('WebSocket', () => {
 describe('WebSocket meter subscription lifecycle', () => {
   // Each test in this suite gets its own isolated server so call counts are fresh.
 
-  function waitForClose(socket: InstanceType<typeof wsModule.WebSocket>): Promise<void> {
+  function waitForClose(socket: InstanceType<typeof WebSocket>): Promise<void> {
     return new Promise((resolve) => {
-      if (socket.readyState === wsModule.WebSocket.CLOSED) { resolve(); return; }
+      if (socket.readyState === WebSocket.CLOSED) { resolve(); return; }
       socket.once('close', resolve);
       socket.close();
     });
@@ -228,9 +227,9 @@ describe('WebSocket level stripping', () => {
 });
 
 describe('WebSocket connection lifecycle', () => {
-  function waitForClose(socket: InstanceType<typeof wsModule.WebSocket>): Promise<void> {
+  function waitForClose(socket: InstanceType<typeof WebSocket>): Promise<void> {
     return new Promise((resolve) => {
-      if (socket.readyState === wsModule.WebSocket.CLOSED) { resolve(); return; }
+      if (socket.readyState === WebSocket.CLOSED) { resolve(); return; }
       socket.once('close', resolve);
       socket.close();
     });

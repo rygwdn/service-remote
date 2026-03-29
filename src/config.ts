@@ -1,8 +1,9 @@
-import fs = require('fs');
-import path = require('path');
+import fs from 'fs';
+import path from 'path';
 import type { Config } from './types';
+import defaultConfigJson from '../config.default.json';
 
-const defaultConfig = require('../config.default.json') as Config;
+const defaultConfig = defaultConfigJson as unknown as Config;
 
 // When compiled to a single executable (`bun build --compile`), __dirname points
 // into the embedded bundle, not the real filesystem.  In that case store config
@@ -57,4 +58,5 @@ const config: Config & { merge: typeof merge; reload: typeof reload; userConfigP
   merge(defaultConfig as unknown as Record<string, unknown>, userConfig) as unknown as Config,
   { merge, reload, userConfigPath }
 );
-export = config;
+export default config;
+export { merge };

@@ -1,7 +1,5 @@
-import events = require('events');
+import { EventEmitter } from 'events';
 import type { AppState, ChangeEvent } from './types';
-
-const { EventEmitter } = events;
 
 class State extends EventEmitter {
   data: AppState;
@@ -71,4 +69,5 @@ class State extends EventEmitter {
 }
 
 const defaultState = new State();
-export = Object.assign(defaultState, { State });
+export default defaultState;
+export { State };

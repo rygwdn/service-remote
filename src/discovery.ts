@@ -1,6 +1,6 @@
-import dgram = require('dgram');
-import os = require('os');
-import net = require('net');
+import dgram from 'dgram';
+import os from 'os';
+import net from 'net';
 
 export interface DiscoveryResult {
   found: boolean;

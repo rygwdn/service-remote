@@ -1,4 +1,4 @@
-import assert = require('node:assert/strict');
+import assert from 'node:assert/strict';
 
 // Unit tests for the OBS screenshot push logic.
 // These test the pure helper functions that will be extracted/used by obs.ts.

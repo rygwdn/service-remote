@@ -1,9 +1,9 @@
-import fs = require('fs');
-import os = require('os');
-import path = require('path');
-import config = require('../config');
-import state = require('../state');
-import logger = require('../logger');
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import config from '../config';
+import state from '../state';
+import * as logger from '../logger';
 
 // ── Response parsing ─────────────────────────────────────────────────────────
 
@@ -328,4 +328,4 @@ function disconnect(): void {
   logger.log('[YouTube] Polling stopped');
 }
 
-export = { connect, disconnect, parseApiResponse, parseBroadcastsResponse, parseIni, extractCredsFromIni, importObsCreds, listBroadcasts, startBroadcast, stopBroadcast, seedAccessToken, getAccessTokenForTesting };
+export { connect, disconnect, parseApiResponse, parseBroadcastsResponse, parseIni, extractCredsFromIni, importObsCreds, listBroadcasts, startBroadcast, stopBroadcast, seedAccessToken, getAccessTokenForTesting };

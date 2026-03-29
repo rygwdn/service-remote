@@ -1,6 +1,6 @@
-import config = require('../config');
-import state = require('../state');
-import logger = require('../logger');
+import config from '../config';
+import state from '../state';
+import * as logger from '../logger';
 import type { ServiceItem } from '../types';
 
 // --- App Command API (official) ---
@@ -456,7 +456,7 @@ async function goToItem(itemId: string): Promise<boolean> {
   return sendAction(item.sectionCommand);
 }
 
-export = {
+export {
   connect,
   disconnect,
   sendAction,
@@ -465,8 +465,8 @@ export = {
   getSlideLocalRevision,
   getToken,
   getOnAirSessionId,
-  _authenticateAppCommand: authenticateAppCommand,
-  _authenticateRemote: authenticateRemote,
-  _pollStatus: pollStatus,
-  _fetchDetailedStatus: fetchDetailedStatus,
+  authenticateAppCommand as _authenticateAppCommand,
+  authenticateRemote as _authenticateRemote,
+  pollStatus as _pollStatus,
+  fetchDetailedStatus as _fetchDetailedStatus,
 };

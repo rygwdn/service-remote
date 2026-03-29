@@ -1,4 +1,4 @@
-import fs = require('fs');
+import fs from 'fs';
 
 interface LogEntry {
   ts: string;
@@ -81,4 +81,4 @@ function getLogs(): LogEntry[] {
   return [...entries];
 }
 
-export = { log, warn, error, debug, getLogs, setLogFile };
+export { log, warn, error, debug, getLogs, setLogFile };

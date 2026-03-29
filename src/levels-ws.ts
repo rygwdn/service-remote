@@ -1,8 +1,6 @@
-import ws = require('ws');
-import http = require('http');
-import logger = require('./logger');
-
-const { WebSocketServer } = ws;
+import { WebSocketServer, WebSocket } from 'ws';
+import http from 'http';
+import * as logger from './logger';
 
 interface LevelsPayload {
   x32: Record<string, number>;
@@ -51,7 +49,7 @@ function setupLevelsWs(server: http.Server): (levels: LevelsPayload) => void {
   function broadcastToServer(levels: LevelsPayload): void {
     const msg = JSON.stringify(levels);
     for (const client of wss.clients) {
-      if (client.readyState === ws.WebSocket.OPEN) {
+      if (client.readyState === WebSocket.OPEN) {
         try {
           client.send(msg);
         } catch {
@@ -67,4 +65,4 @@ function setupLevelsWs(server: http.Server): (levels: LevelsPayload) => void {
   return broadcastToServer;
 }
 
-export = { setupLevelsWs, broadcast };
+export { setupLevelsWs, broadcast };

@@ -1,8 +1,6 @@
-import ws = require('ws');
-import http = require('http');
+import { WebSocketServer, WebSocket } from 'ws';
+import http from 'http';
 import type { Connections, AppState, ChangeEvent } from './types';
-
-const { WebSocketServer } = ws;
 
 function stripLevels(state: AppState): AppState {
   return {
@@ -40,7 +38,7 @@ function setupWebSocket(server: http.Server, state: StateHandle, connections?: C
   function openClientCount(): number {
     let count = 0;
     for (const client of wss.clients) {
-      if (client.readyState === ws.WebSocket.OPEN) count++;
+      if (client.readyState === WebSocket.OPEN) count++;
     }
     return count;
   }
@@ -90,7 +88,7 @@ function setupWebSocket(server: http.Server, state: StateHandle, connections?: C
     if (latestState === null) return;
     const msg = JSON.stringify({ type: 'state', data: stripLevels(latestState as AppState) });
     for (const client of wss.clients) {
-      if (client.readyState === ws.WebSocket.OPEN) {
+      if (client.readyState === WebSocket.OPEN) {
         try {
           client.send(msg);
         } catch {
@@ -118,4 +116,4 @@ function setupWebSocket(server: http.Server, state: StateHandle, connections?: C
   });
 }
 
-export = { setupWebSocket };
+export { setupWebSocket };

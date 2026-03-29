@@ -1,5 +1,5 @@
-import assert = require('node:assert/strict');
-const { getBroadcastAddresses, discoverProclaim } = require('../../src/discovery');
+import assert from 'node:assert/strict';
+import { getBroadcastAddresses, discoverProclaim } from '../../src/discovery';
 
 describe('getBroadcastAddresses', () => {
   test('returns an array of strings in dotted-quad format', () => {

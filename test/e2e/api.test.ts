@@ -1,6 +1,6 @@
-import assert = require('node:assert/strict');
-import supertest = require('supertest');
-const { createTestApp, startServer } = require('../helpers/app');
+import assert from 'node:assert/strict';
+import supertest from 'supertest';
+import { createTestApp, startServer } from '../helpers/app';
 
 describe('API routes', () => {
   let server: import('http').Server;

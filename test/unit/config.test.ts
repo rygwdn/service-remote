@@ -1,7 +1,6 @@
-import assert = require('node:assert/strict');
-import config = require('../../src/config');
-
-const { merge } = config;
+import assert from 'node:assert/strict';
+import config, { merge } from '../../src/config';
+import defaultCfg from '../../config.default.json';
 
 describe('config merge()', () => {
   test('returns base fields when override is empty', () => {
@@ -54,12 +53,10 @@ describe('config merge()', () => {
 
 describe('config defaults', () => {
   test('server.openBrowser defaults to true', () => {
-    const defaultCfg = require('../../config.default.json');
     assert.equal(defaultCfg.server.openBrowser, true);
   });
 
   test('server.openBrowser can be disabled via user config merge', () => {
-    const defaultCfg = require('../../config.default.json');
     const result = merge(defaultCfg, { server: { openBrowser: false } });
     assert.equal(result.server.openBrowser, false);
   });

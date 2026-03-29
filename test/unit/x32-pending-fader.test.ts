@@ -15,10 +15,8 @@
  *   - If the pending entry is >= 2000ms old, clear it and apply the update normally.
  * - Non-fader fields (muted, label) are always applied regardless of pending state.
  */
-import assert = require('node:assert/strict');
-import x32 = require('../../src/connections/x32');
-
-const { parseOscMessage, setPendingFader, applyOscPatchWithPending } = x32;
+import assert from 'node:assert/strict';
+import { parseOscMessage, setPendingFader, applyOscPatchWithPending } from '../../src/connections/x32';
 
 // applyOscPatchWithPending is the pure testable function that applies an OSC-parsed
 // patch to a channel object, respecting the pending fader map.

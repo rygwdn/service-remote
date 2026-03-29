@@ -1,8 +1,5 @@
-'use strict';
-
-import childProcess = require('child_process');
-
-const { execSync } = childProcess;
+import { execSync } from 'child_process';
+import pkg from '../package.json';
 
 // GIT_SHA may be injected at build time via an environment variable.
 // If not set, we try to read it at runtime from git (dev mode).
@@ -16,10 +13,7 @@ function resolveGitSha(): string {
   }
 }
 
-// Read version from package.json
-const pkg = require('../package.json') as { version: string };
-
 const gitSha = resolveGitSha();
-const version = `${pkg.version}+${gitSha}`;
+const version = `${(pkg as { version: string }).version}+${gitSha}`;
 
-export = { version, gitSha };
+export { version, gitSha };

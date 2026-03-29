@@ -12,7 +12,7 @@
     "test:e2e": "bun test test/e2e",
     "test:ui": "bunx playwright test",
     "check": "bun run typecheck && bun run lint && bun run test && bun run test:ui",
-    "build": "bun scripts/build.js",
+    "build": "bun scripts/build.ts",
     "typecheck": "tsc --noEmit",
     "lint": "bun scripts/check-no-console.ts"
   },

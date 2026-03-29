@@ -1,8 +1,6 @@
-import ws = require('ws');
-import http = require('http');
-import logger = require('./logger');
-
-const { WebSocketServer } = ws;
+import { WebSocketServer, WebSocket } from 'ws';
+import http from 'http';
+import * as logger from './logger';
 
 // The module-level broadcaster is updated each time setupScreenshotWs is called.
 // obs.ts calls broadcast() which always forwards to the most recently set up instance.
@@ -45,7 +43,7 @@ function setupScreenshotWs(server: http.Server): (frame: Buffer) => void {
 
   function broadcastToServer(frame: Buffer): void {
     for (const client of wss.clients) {
-      if (client.readyState === ws.WebSocket.OPEN) {
+      if (client.readyState === WebSocket.OPEN) {
         try {
           client.send(frame);
         } catch {
@@ -61,4 +59,4 @@ function setupScreenshotWs(server: http.Server): (frame: Buffer) => void {
   return broadcastToServer;
 }
 
-export = { setupScreenshotWs, broadcast };
+export { setupScreenshotWs, broadcast };

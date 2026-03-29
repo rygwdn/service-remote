@@ -1,4 +1,4 @@
-import assert = require('node:assert/strict');
+import assert from 'node:assert/strict';
 
 // Test the refreshLiveStatus logic: live flag and level reset when sources go offline.
 

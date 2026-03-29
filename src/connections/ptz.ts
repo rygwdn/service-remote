@@ -1,7 +1,7 @@
-import dgram = require('dgram');
-import config = require('../config');
-import state = require('../state');
-import logger = require('../logger');
+import dgram from 'dgram';
+import config from '../config';
+import state from '../state';
+import * as logger from '../logger';
 import type { PtzCameraState } from '../types';
 
 // ── VISCA/IP helpers (exported for unit tests) ────────────────────────────────
@@ -409,7 +409,7 @@ function home(camera: number): void {
   cam.tilt = 0;
 }
 
-export = {
+export {
   connect,
   disconnect,
   panTilt,

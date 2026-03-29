@@ -1,9 +1,9 @@
-import dgram = require('dgram');
+import dgram from 'dgram';
 import nodeOsc = require('node-osc');
-import config = require('../config');
-import state = require('../state');
-import logger = require('../logger');
-import levelsWs = require('../levels-ws');
+import config from '../config';
+import state from '../state';
+import * as logger from '../logger';
+import * as levelsWs from '../levels-ws';
 import type { Channel } from '../types';
 
 const { Message: OscMessage, encode: oscEncode, decode: oscDecode } = nodeOsc;
@@ -574,79 +574,85 @@ function disconnect(): void {
   logger.log('[X32] Disconnected');
 }
 
-export = {
+/**
+ * Record a pending fader value for the given channel.  Call this immediately
+ * after sending a fader command so that stale OSC echoes are suppressed until
+ * the X32 confirms the new value (or 2 s elapse).
+ */
+function setPendingFader(type: 'ch' | 'bus' | 'main' | 'mtx', index: number, value: number): void {
+  const key = `${type}-${index}`;
+  pendingFaders.set(key, { value, sentAt: Date.now() });
+}
+
+function startMeterUpdates(): void {
+  logger.log('[X32] startMeterUpdates (connected=' + connected + ')');
+  metersActive = true;
+  if (!connected) return;
+  requestMeterUpdates();
+  if (meterInterval) clearInterval(meterInterval);
+  meterInterval = setInterval(requestMeterUpdates, 1500);
+}
+
+function stopMeterUpdates(): void {
+  logger.log('[X32] stopMeterUpdates');
+  metersActive = false;
+  if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
+}
+
+function setFader(channelIndex: number, value: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {
+  const clamped = Math.max(0, Math.min(1, value));
+  logger.log(`[X32] setFader ${type} ${channelIndex} = ${clamped}`);
+  // Record the pending fader before sending so that OSC echoes arriving during
+  // or immediately after the drag are suppressed until the X32 confirms.
+  const key = `${type}-${channelIndex}`;
+  pendingFaders.set(key, { value: clamped, sentAt: Date.now() });
+  sendOsc(`${channelPrefix(channelIndex, type)}/mix/fader`, [
+    { value: clamped },
+  ]);
+  // Apply the update optimistically in local state (bypassing pending check
+  // so our own setFader always writes through).
+  const ch = channels.find((c) => c.index === channelIndex && c.type === type);
+  if (ch) {
+    ch.fader = clamped;
+    state.update('x32', { connected: true, channels: [...channels] });
+  }
+}
+
+function setSpill(channelIndex: number, type: 'ch' | 'bus', assigned: boolean): void {
+  const key = `${type}-${channelIndex}`;
+  const currentBitmask = dcaGroupsMap.get(key) ?? 0;
+  const newBitmask = assigned ? (currentBitmask | 128) : (currentBitmask & ~128);
+  dcaGroupsMap.set(key, newBitmask);
+  logger.log(`[X32] setSpill ${type} ${channelIndex} = ${assigned} (bitmask ${newBitmask})`);
+  sendOsc(`${channelPrefix(channelIndex, type)}${DCA_GROUP_PATH}`, [{ value: newBitmask }]);
+  updateChannel(channelIndex, type, { spill: assigned });
+}
+
+function toggleMute(channelIndex: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {
+  const ch = channels.find((c) => c.index === channelIndex && c.type === type);
+  if (!ch) {
+    logger.warn(`[X32] toggleMute: ${type} ${channelIndex} not found`);
+    return;
+  }
+  const newState = ch.muted ? 1 : 0; // 1 = on (unmuted), 0 = off (muted)
+  logger.log(`[X32] toggleMute ${type} ${channelIndex}: muted=${ch.muted} → ${!ch.muted}`);
+  sendOsc(`${channelPrefix(channelIndex, type)}/mix/on`, [
+    { value: newState },
+  ]);
+  updateChannel(channelIndex, type, { muted: !ch.muted });
+}
+
+export {
   parseOscMessage,
   parseMeterBlob,
   buildMeterRequests,
   applyOscPatchWithPending,
   connect,
   disconnect,
-
-  /**
-   * Record a pending fader value for the given channel.  Call this immediately
-   * after sending a fader command so that stale OSC echoes are suppressed until
-   * the X32 confirms the new value (or 2 s elapse).
-   */
-  setPendingFader(type: 'ch' | 'bus' | 'main' | 'mtx', index: number, value: number): void {
-    const key = `${type}-${index}`;
-    pendingFaders.set(key, { value, sentAt: Date.now() });
-  },
-
-  startMeterUpdates(): void {
-    logger.log('[X32] startMeterUpdates (connected=' + connected + ')');
-    metersActive = true;
-    if (!connected) return;
-    requestMeterUpdates();
-    if (meterInterval) clearInterval(meterInterval);
-    meterInterval = setInterval(requestMeterUpdates, 1500);
-  },
-
-  stopMeterUpdates(): void {
-    logger.log('[X32] stopMeterUpdates');
-    metersActive = false;
-    if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
-  },
-
-  setFader(channelIndex: number, value: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {
-    const clamped = Math.max(0, Math.min(1, value));
-    logger.log(`[X32] setFader ${type} ${channelIndex} = ${clamped}`);
-    // Record the pending fader before sending so that OSC echoes arriving during
-    // or immediately after the drag are suppressed until the X32 confirms.
-    const key = `${type}-${channelIndex}`;
-    pendingFaders.set(key, { value: clamped, sentAt: Date.now() });
-    sendOsc(`${channelPrefix(channelIndex, type)}/mix/fader`, [
-      { value: clamped },
-    ]);
-    // Apply the update optimistically in local state (bypassing pending check
-    // so our own setFader always writes through).
-    const ch = channels.find((c) => c.index === channelIndex && c.type === type);
-    if (ch) {
-      ch.fader = clamped;
-      state.update('x32', { connected: true, channels: [...channels] });
-    }
-  },
-
-  setSpill(channelIndex: number, type: 'ch' | 'bus', assigned: boolean): void {
-    const key = `${type}-${channelIndex}`;
-    const currentBitmask = dcaGroupsMap.get(key) ?? 0;
-    const newBitmask = assigned ? (currentBitmask | 128) : (currentBitmask & ~128);
-    dcaGroupsMap.set(key, newBitmask);
-    logger.log(`[X32] setSpill ${type} ${channelIndex} = ${assigned} (bitmask ${newBitmask})`);
-    sendOsc(`${channelPrefix(channelIndex, type)}${DCA_GROUP_PATH}`, [{ value: newBitmask }]);
-    updateChannel(channelIndex, type, { spill: assigned });
-  },
-
-  toggleMute(channelIndex: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {
-    const ch = channels.find((c) => c.index === channelIndex && c.type === type);
-    if (!ch) {
-      logger.warn(`[X32] toggleMute: ${type} ${channelIndex} not found`);
-      return;
-    }
-    const newState = ch.muted ? 1 : 0; // 1 = on (unmuted), 0 = off (muted)
-    logger.log(`[X32] toggleMute ${type} ${channelIndex}: muted=${ch.muted} → ${!ch.muted}`);
-    sendOsc(`${channelPrefix(channelIndex, type)}/mix/on`, [
-      { value: newState },
-    ]);
-    updateChannel(channelIndex, type, { muted: !ch.muted });
-  },
+  setPendingFader,
+  startMeterUpdates,
+  stopMeterUpdates,
+  setFader,
+  setSpill,
+  toggleMute,
 };

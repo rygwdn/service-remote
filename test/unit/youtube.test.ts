@@ -1,6 +1,5 @@
 import { test, expect, describe, mock, beforeEach, spyOn } from 'bun:test';
-import youtube = require('../../src/connections/youtube');
-const { parseApiResponse, parseIni, extractCredsFromIni, seedAccessToken, getAccessTokenForTesting, parseBroadcastsResponse } = youtube;
+import { parseApiResponse, parseIni, extractCredsFromIni, seedAccessToken, getAccessTokenForTesting, parseBroadcastsResponse } from '../../src/connections/youtube';
 
 describe('parseApiResponse', () => {
   test('returns nulls when items array is empty', () => {

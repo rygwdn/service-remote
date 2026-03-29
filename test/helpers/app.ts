@@ -1,12 +1,13 @@
-import http = require('http');
-import path = require('path');
-import express = require('express');
-import stateModule = require('../../src/state');
-const { setupRoutes } = require('../../src/routes');
-const { setupWebSocket } = require('../../src/ws');
+import http from 'http';
+import path from 'path';
+import os from 'os';
+import express from 'express';
+import { State } from '../../src/state';
+import { setupRoutes } from '../../src/routes';
+import { setupWebSocket } from '../../src/ws';
 import type { Connections } from '../../src/types';
-import screenshotWsModule = require('../../src/screenshot-ws');
-import levelsWsModule = require('../../src/levels-ws');
+import { setupScreenshotWs } from '../../src/screenshot-ws';
+import { setupLevelsWs } from '../../src/levels-ws';
 
 
 interface TestCalls {
@@ -37,7 +38,7 @@ interface TestCalls {
 interface TestApp {
   app: ReturnType<typeof express>;
   server: http.Server;
-  state: InstanceType<typeof stateModule.State>;
+  state: InstanceType<typeof State>;
   stubs: Connections;
   calls: TestCalls;
 }
@@ -48,7 +49,7 @@ interface TestApp {
  * Call server.close() in afterEach/after to clean up.
  */
 function createTestApp(): TestApp {
-  const state = new stateModule.State();
+  const state = new State();
 
   // Record every call made through the stubs so tests can assert on them.
   const calls: TestCalls = {
@@ -109,7 +110,7 @@ function createTestApp(): TestApp {
   };
 
   // Use a temp path for config writes during tests to avoid touching real config.json
-  const testConfigPath = path.join(require('os').tmpdir(), `test-config-${Date.now()}.json`);
+  const testConfigPath = path.join(os.tmpdir(), `test-config-${Date.now()}.json`);
 
   const app = express();
   app.use(express.json());
@@ -117,8 +118,8 @@ function createTestApp(): TestApp {
 
   const server = http.createServer(app);
   setupWebSocket(server, state, stubs, { disconnectDelay: 0 });
-  screenshotWsModule.setupScreenshotWs(server);
-  levelsWsModule.setupLevelsWs(server);
+  setupScreenshotWs(server);
+  setupLevelsWs(server);
 
   return { app, server, state, stubs, calls };
 }
@@ -132,4 +133,4 @@ function startServer(server: http.Server): Promise<number> {
   });
 }
 
-export = { createTestApp, startServer };
+export { createTestApp, startServer };
