@@ -261,11 +261,13 @@ function connectScreenshotWs() {
   screenshotWs.onmessage = (e) => {
     if (!(e.data instanceof Blob)) return;
     const newUrl = URL.createObjectURL(e.data);
-    // Update both preview elements
+    // Update all preview elements
     const p1 = document.getElementById('obs-preview');
     const p2 = document.getElementById('ov-obs-preview');
+    const p3 = document.getElementById('ptz-obs-preview');
     if (p1) p1.src = newUrl;
     if (p2) p2.src = newUrl;
+    if (p3) p3.src = newUrl;
     // Revoke the previous object URL to avoid memory leaks
     if (currentScreenshotUrl) URL.revokeObjectURL(currentScreenshotUrl);
     currentScreenshotUrl = newUrl;

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { State } from '../../src/state';
+import * as logger from '../../src/logger';
 
 // Test the goToItem logic
 describe('proclaim.goToItem', () => {
@@ -367,6 +368,39 @@ describe('proclaim statusChanged initial poll', () => {
     const url = statusChangedUrl as string;
     assert.ok(url.includes('localrevision=-9223372036854775808'), `Expected Int64 min, got: ${url}`);
     assert.ok(url.includes('step=-2147483648'), `Expected Int32 min, got: ${url}`);
+  });
+});
+
+describe('proclaim 404 logging', () => {
+  afterEach(() => {
+    delete (globalThis as any).fetch;
+    for (const key of Object.keys(require.cache)) {
+      if (key.includes('connections/proclaim') || key.includes('src/state')) {
+        delete require.cache[key];
+      }
+    }
+  });
+
+  test('404 from presentations/onair and statusChanged does not emit info-level log entries', async () => {
+    // Simulate active session (onAirSessionId present) but 404 from status endpoints
+    (globalThis as any).fetch = async (url: string) => {
+      if (url.includes('authenticate')) return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok' }), text: async () => '' };
+      if (url.includes('onair/session')) return { ok: true, status: 200, json: async () => 'sess1', text: async () => 'sess1' };
+      if (url.includes('auth/control')) return { ok: true, status: 200, json: async () => ({ connectionId: 'conn1' }), text: async () => JSON.stringify({ connectionId: 'conn1' }) };
+      // Both presentation and statusChanged return 404
+      return { ok: false, status: 404, json: async () => null, text: async () => '' };
+    };
+
+    const logsBefore = logger.getLogs().length;
+    const proclaim = freshProclaim();
+    await proclaim.connect();
+    await new Promise((r) => setTimeout(r, 100));
+
+    const newInfoLogs = logger.getLogs()
+      .slice(logsBefore)
+      .filter((e: { level: string; msg: string }) => e.level === 'info' && e.msg.includes('404'));
+
+    assert.equal(newInfoLogs.length, 0, `Expected no info-level 404 logs, got: ${JSON.stringify(newInfoLogs)}`);
   });
 });
 

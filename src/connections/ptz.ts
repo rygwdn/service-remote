@@ -285,16 +285,14 @@ function connect(): void {
   // Ensure we have the right number of camera connection objects
   while (cameras.length < cfgs.length) cameras.push(makeCameraConn(cameras.length));
 
-  // Initialise state array if needed
+  // Always sync state names/count to current config
   const currentCams = state.get().ptz.cameras;
-  if (currentCams.length !== cfgs.length) {
-    state.update('ptz', {
-      cameras: cfgs.map((cfg, i) => ({
-        ...(currentCams[i] ?? { connected: false, pan: null, tilt: null, zoom: null, presets: [] }),
-        name: cfg.name,
-      })),
-    });
-  }
+  state.update('ptz', {
+    cameras: cfgs.map((cfg, i) => ({
+      ...(currentCams[i] ?? { connected: false, pan: null, tilt: null, zoom: null, presets: [] }),
+      name: cfg.name,
+    })),
+  });
 
   cameras.forEach((cam, i) => {
     cam.wantConnected = true;
@@ -309,6 +307,7 @@ function disconnect(): void {
     if (cam.reconnectTimer) { clearTimeout(cam.reconnectTimer); cam.reconnectTimer = null; }
     cleanupCamera(cam);
   });
+  cameras = [];
 }
 
 /**

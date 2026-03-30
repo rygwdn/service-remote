@@ -275,7 +275,7 @@ async function fetchDetailedStatus(): Promise<void> {
         presentationCache = parseProclaimJson(await presRes.text());
         logger.log('[Proclaim] presentations/onair loaded, items:', presentationCache?.serviceItems?.length ?? 0);
       } else {
-        logger.log('[Proclaim] presentations/onair failed:', presRes.status);
+        logger.debug('[Proclaim] presentations/onair failed:', presRes.status);
       }
     } catch (err) {
       logger.log('[Proclaim] presentations/onair error:', (err as Error).message);
@@ -289,7 +289,7 @@ async function fetchDetailedStatus(): Promise<void> {
     const res = await fetch(`${baseUrl()}/onair/statusChanged?localrevision=${presentationLocalRevision}&step=${statusRevision}`, { headers });
 
     if (!res.ok) {
-      logger.log('[Proclaim] statusChanged error:', res.status);
+      logger.debug('[Proclaim] statusChanged error:', res.status);
       return;
     }
 
@@ -398,7 +398,7 @@ async function fetchDetailedStatus(): Promise<void> {
       slideRevisions,
     });
   } catch (err) {
-    logger.log('[Proclaim] statusChanged error:', (err as Error).toString());
+    logger.debug('[Proclaim] statusChanged error:', (err as Error).toString());
   }
 }
 

@@ -389,6 +389,31 @@ describe('API routes', () => {
       assert.equal(calls.x32.disconnect, 0);
       assert.equal(calls.proclaim.disconnect, 0);
     });
+
+    test('reconnects PTZ when camera config changes', async () => {
+      resetCalls();
+      calls.obs.disconnect = 0; calls.obs.connect = 0;
+      calls.x32.disconnect = 0; calls.x32.connect = 0;
+      calls.proclaim.disconnect = 0; calls.proclaim.connect = 0;
+      calls.ptz.disconnect = 0; calls.ptz.connect = 0;
+
+      const cfgRes = await request.get('/api/config');
+      const cfg = cfgRes.body as { ptz: { cameras: unknown[] } };
+
+      // Change PTZ camera address to trigger reconnect
+      const newCameras = [{ ...(cfg.ptz.cameras[0] as object), address: '192.168.99.99' }];
+      const newCfg = { ...cfg, ptz: { cameras: newCameras } };
+      const res = await request.post('/api/config').send(newCfg);
+      assert.equal(res.status, 200);
+
+      // PTZ should have been disconnected and reconnected
+      assert.ok(calls.ptz.disconnect >= 1, 'ptz.disconnect should have been called');
+      assert.ok(calls.ptz.connect >= 1, 'ptz.connect should have been called');
+      // Other connections were not changed
+      assert.equal(calls.obs.disconnect, 0);
+      assert.equal(calls.x32.disconnect, 0);
+      assert.equal(calls.proclaim.disconnect, 0);
+    });
   });
 
   describe('POST /api/youtube/start', () => {

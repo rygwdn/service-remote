@@ -1102,6 +1102,13 @@ main {
   border-radius: 6px;
 }
 
+.ptz-obs-preview {
+  width: 100%;
+  max-width: 480px;
+  border-radius: 6px;
+  display: block;
+}
+
 .ptz-dpad {
   display: flex;
   flex-direction: column;

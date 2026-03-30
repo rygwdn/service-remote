@@ -255,4 +255,14 @@ test.describe('PTZ Camera panel', () => {
     await setState({ ptz: { cameras: [] } });
     await expect(page.locator('.dot[title="PTZ Camera"]')).not.toBeVisible();
   });
+
+  test('OBS preview image is visible when OBS is connected', async ({ page, setState }) => {
+    await setState({ ptz: { cameras: [CAM] }, obs: { connected: true } });
+    await expect(panel(page).locator('#ptz-obs-preview')).toBeVisible();
+  });
+
+  test('OBS preview image is hidden when OBS is disconnected', async ({ page, setState }) => {
+    await setState({ ptz: { cameras: [CAM] }, obs: { connected: false } });
+    await expect(panel(page).locator('#ptz-obs-preview')).not.toBeVisible();
+  });
 });

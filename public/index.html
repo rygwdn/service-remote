@@ -304,6 +304,10 @@
         <div class="ptz-panel" x-show="activeCam === camIdx">
           <div class="ptz-disconnected" x-show="!cam.connected" x-text="cam.name + ': disconnected'"></div>
 
+          <!-- OBS preview — shown when OBS is connected -->
+          <img id="ptz-obs-preview" class="ptz-obs-preview" alt="Camera preview"
+               x-show="$store.state.obs.connected" />
+
           <!-- D-pad: Pan / Tilt — each press is a discrete go-to step; held = repeat -->
           <div class="ptz-dpad">
             <button class="ptz-btn ptz-up"
