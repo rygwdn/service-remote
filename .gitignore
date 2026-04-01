@@ -9,3 +9,4 @@ src/embedded-natives.js
 TODO.md
 test-results
 settings.local.json
+.DS_Store
