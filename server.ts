@@ -11,6 +11,7 @@ import { setupWebSocket } from './src/ws';
 import { setupRoutes } from './src/routes';
 import { setupLevelsWs } from './src/levels-ws';
 import { setupScreenshotWs } from './src/screenshot-ws';
+import { setupBusWs } from './src/bus-ws';
 import obs from './src/connections/obs';
 import * as x32 from './src/connections/x32';
 import * as proclaim from './src/connections/proclaim';
@@ -95,6 +96,7 @@ setupWebSocket(server, state, { obs, x32, proclaim, ptz });
 youtube.connect();
 setupLevelsWs(server);
 setupScreenshotWs(server);
+setupBusWs(server, state, x32);
 
 // Set up file logging next to config.json
 const logFile = path.join(path.dirname(config.userConfigPath), 'service-remote.log');

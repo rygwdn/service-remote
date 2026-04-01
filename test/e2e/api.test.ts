@@ -147,6 +147,28 @@ describe('API routes', () => {
     });
   });
 
+  describe('POST /api/x32/bus-send', () => {
+    test('calls x32.setBusSend with channel, busIndex, and value', async () => {
+      resetCalls();
+      const res = await request.post('/api/x32/bus-send').send({ channel: 3, busIndex: 8, value: 0.7 });
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body, { ok: true });
+      assert.deepEqual(calls.x32.setBusSend, { channel: 3, busIndex: 8, value: 0.7 });
+    });
+
+    test('returns 400 when busIndex is missing', async () => {
+      resetCalls();
+      const res = await request.post('/api/x32/bus-send').send({ channel: 1, value: 0.5 });
+      assert.equal(res.status, 400);
+    });
+
+    test('returns 400 when value is missing', async () => {
+      resetCalls();
+      const res = await request.post('/api/x32/bus-send').send({ channel: 1, busIndex: 8 });
+      assert.equal(res.status, 400);
+    });
+  });
+
   describe('POST /api/proclaim/action', () => {
     test('calls proclaim.sendAction with command name and returns ok', async () => {
       resetCalls();

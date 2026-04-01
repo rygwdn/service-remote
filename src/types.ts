@@ -6,6 +6,12 @@ export interface AudioSource {
   level: number; // Linear peak level 0.0–1.0 from InputVolumeMeters
 }
 
+export interface BusSend {
+  busIndex: number; // 1–16
+  level: number;    // channel's send level to this bus, 0–1
+  on: boolean;      // whether this channel's send to the bus is enabled
+}
+
 export interface Channel {
   index: number;
   type: 'ch' | 'bus' | 'main' | 'mtx';
@@ -17,6 +23,7 @@ export interface Channel {
   linkedToNext: boolean; // True if this channel is linked with the next (odd/even pair)
   spill: boolean; // True if assigned to DCA group 8 (shown in the soundboard UI)
   color: number; // X32 scribble strip color index 0–15 (0 = off/default)
+  busSends?: BusSend[]; // per-bus send data; populated when a bus WS client is connected
 }
 
 export interface ServiceItem {
@@ -160,6 +167,9 @@ export interface X32Connection {
   startMeterUpdates(): void;
   stopMeterUpdates(): void;
   setSpill(channelIndex: number, type: 'ch' | 'bus', assigned: boolean): void;
+  startBusSendTracking(busIndex: number): void;
+  stopBusSendTracking(busIndex: number): void;
+  setBusSend(channelIndex: number, busIndex: number, value: number): void;
 }
 
 export interface ProclaimConnection {

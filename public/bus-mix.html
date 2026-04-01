@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="color-scheme" content="dark">
+  <title>Bus Mix</title>
+  <link rel="stylesheet" href="/style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data>
+
+  <header>
+    <h1 x-text="$store.bus.busChannel ? $store.bus.busChannel.label : ('Bus ' + $store.bus.busIndex)">Bus Mix</h1>
+    <div class="status-dots">
+      <span class="dot" :class="{ connected: $store.bus.connected }" title="X32"></span>
+      <span class="dot-label">X32</span>
+    </div>
+  </header>
+
+  <main style="overflow-y:auto;height:calc(100vh - 49px);padding:8px;">
+
+    <!-- Bus master row -->
+    <div class="channel-row-h channel-row-h--bus bus-master-row"
+         x-show="$store.bus.busChannel"
+         :style="x32ChStyle($store.bus.busChannel || {})"
+         x-data="x32FaderComponent()">
+      <button class="ch-mute" :class="{ muted: $store.bus.busChannel && $store.bus.busChannel.muted }"
+              @click="$store.bus.busChannel && toggleX32Mute($store.bus.busChannel.index, 'bus')"
+              x-text="$store.bus.busChannel && $store.bus.busChannel.muted ? 'MUTED' : 'ON'"></button>
+      <span class="ch-label" x-text="$store.bus.busChannel ? $store.bus.busChannel.label : ''"></span>
+      <div class="fader-wrap-h">
+        <input type="range" min="0" max="1" step="0.005"
+               :value="touched ? undefined : ($store.bus.busChannel ? $store.bus.busChannel.fader : 0)"
+               @input="$store.bus.busChannel && onFaderInput($store.bus.busChannel, $event.target)"
+               @mousedown="touched=true" @touchstart.passive="touched=true"
+               @mouseup="releaseSoon()" @touchend="releaseSoon()">
+        <div class="ch-meter-h">
+          <div class="ch-meter-fill-h"
+               :data-level-key="$store.bus.busChannel ? 'bus-' + $store.bus.busChannel.index : ''"
+               :style="'width:'+mulToDisplayPct($store.bus.busChannel ? $store.bus.busChannel.level : 0).toFixed(1)+'%'"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div style="height:1px;background:var(--accent);margin:8px 0;" x-show="$store.bus.channels.length > 0"></div>
+
+    <!-- Channel send rows: only channels with send enabled to this bus -->
+    <template x-for="ch in $store.bus.channels" :key="ch.index">
+      <div class="channel-row-h channel-row-h--ch channel-send-row"
+           :style="x32ChStyle(ch)"
+           x-data="busSendFaderComponent($store.bus.busIndex)">
+        <span class="ch-mute" :class="{ muted: ch.muted }"
+              style="flex:0 0 54px;padding:8px 4px;font-size:10px;font-weight:700;text-align:center;border:1px solid var(--surface-light);border-radius:4px;"
+              x-text="ch.muted ? 'MUTED' : 'ON'"></span>
+        <span class="ch-label" x-text="ch.label"></span>
+        <div class="fader-wrap-h">
+          <input type="range" min="0" max="1" step="0.005"
+                 :value="touched ? undefined : getBusSendLevel(ch)"
+                 @input="onFaderInput(ch, $event.target)"
+                 @mousedown="touched=true" @touchstart.passive="touched=true"
+                 @mouseup="releaseSoon()" @touchend="releaseSoon()">
+          <div class="ch-meter-h">
+            <div class="ch-meter-fill-h"
+                 :data-level-key="`ch-${ch.index}`"
+                 :style="'width:'+mulToDisplayPct(ch.level).toFixed(1)+'%'"></div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Empty state -->
+    <div x-show="$store.bus.connected && $store.bus.channels.length === 0 && $store.bus.busChannel"
+         style="padding:24px;text-align:center;color:var(--text-dim);">
+      No channels sent to this bus
+    </div>
+
+    <!-- Disconnected overlay -->
+    <div class="disconnected-overlay" x-show="!$store.bus.connected">
+      <div class="disconnected-message">Disconnected — reconnecting&hellip;</div>
+    </div>
+
+  </main>
+
+  <script src="/shared.js"></script>
+  <script>
+    // Parse bus index from URL query string
+    const _busIndex = parseInt(new URLSearchParams(location.search).get('bus') || '0', 10);
+
+    document.addEventListener('alpine:init', () => {
+      Alpine.store('bus', {
+        busIndex: _busIndex,
+        connected: false,
+        busChannel: null,
+        channels: [],
+      });
+
+      Alpine.data('x32FaderComponent', x32FaderComponent);
+      Alpine.data('busSendFaderComponent', busSendFaderComponent);
+
+      connectBusWs(_busIndex);
+    });
+
+    // --- Bus WebSocket ---
+    let busWs;
+    let busReconnectDelay = 1000;
+
+    function connectBusWs(busIndex) {
+      if (busWs && busWs.readyState < WebSocket.CLOSING) return;
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      busWs = new WebSocket(`${proto}://${location.host}/ws/bus?bus=${busIndex}`);
+
+      busWs.onopen = () => { busReconnectDelay = 1000; };
+
+      busWs.onmessage = (e) => {
+        if (!window.Alpine) return;
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'bus-state') {
+          const store = Alpine.store('bus');
+          store.connected = true;
+          store.busChannel = msg.busChannel;
+          store.channels = msg.channels;
+        }
+      };
+
+      busWs.onclose = () => {
+        if (window.Alpine) Alpine.store('bus').connected = false;
+        if (document.hidden) return;
+        setTimeout(() => connectBusWs(busIndex), busReconnectDelay);
+        busReconnectDelay = Math.min(busReconnectDelay * 2, 10000);
+      };
+    }
+
+    registerManagedWs({
+      getWs: () => busWs,
+      reconnect: () => connectBusWs(_busIndex),
+      resetDelay: () => { busReconnectDelay = 1000; },
+    });
+
+    connectLevelsWs();
+  </script>
+</body>
+</html>

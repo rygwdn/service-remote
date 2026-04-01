@@ -390,6 +390,25 @@
         </template>
       </div>
 
+      <div class="settings-section" x-show="serverAddresses.length > 0 && $store.state.x32.channels.some(c => c.type === 'bus')">
+        <h2>Bus Mixes</h2>
+        <p style="color:var(--fg-dim,#888);font-size:0.85em;margin-bottom:8px">Share these links with band members for their monitor mix.</p>
+        <template x-for="base in serverAddresses" :key="base">
+          <template x-for="ch in $store.state.x32.channels.filter(c => c.type === 'bus')" :key="ch.index">
+            <div class="server-address-row">
+              <a :href="base+'/bus-mix.html?bus='+ch.index" target="_blank"
+                 x-text="base+'/bus-mix.html?bus='+ch.index"
+                 class="server-address-link"></a>
+              <span style="font-size:11px;color:var(--text-dim);margin-right:4px;" x-text="ch.label"></span>
+              <div class="qr-anchor">
+                <span class="qr-icon">&#x1F4F1;</span>
+                <img class="qr-popup" :src="'/api/server/qr?url='+encodeURIComponent(base+'/bus-mix.html?bus='+ch.index)" :alt="'QR for bus '+ch.index">
+              </div>
+            </div>
+          </template>
+        </template>
+      </div>
+
       <div class="settings-section">
         <h2>OBS</h2>
         <label>Address <input type="text" x-model="cfg.obs.address" placeholder="ws://localhost:4455"></label>
@@ -482,6 +501,7 @@
 
   </main>
 
+  <script src="/shared.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { parseOscMessage, parseMeterBlob, buildMeterRequests } from '../../src/connections/x32';
+import { parseOscMessage, parseMeterBlob, buildMeterRequests, parseBusSendMessage } from '../../src/connections/x32';
 
 describe('x32 parseOscMessage()', () => {
   describe('fader messages (/ch/XX/mix/fader)', () => {
@@ -231,6 +231,70 @@ describe('x32 parseOscMessage()', () => {
     test('two-digit channel', () => {
       const result = parseOscMessage('/ch/32/grp/dca', [{ value: 128 }]);
       assert.deepEqual(result, { index: 32, type: 'ch', patch: { spill: true } });
+    });
+  });
+});
+
+describe('x32 parseBusSendMessage()', () => {
+  describe('send level messages (/ch/NN/mix/BB/level)', () => {
+    test('parses channel 1 send level to bus 8', () => {
+      const result = parseBusSendMessage('/ch/01/mix/08/level', [{ value: 0.75 }]);
+      assert.deepEqual(result, { channelIndex: 1, busIndex: 8, patch: { level: 0.75 } });
+    });
+
+    test('parses channel 16 send level to bus 1', () => {
+      const result = parseBusSendMessage('/ch/16/mix/01/level', [{ value: 0.5 }]);
+      assert.deepEqual(result, { channelIndex: 16, busIndex: 1, patch: { level: 0.5 } });
+    });
+
+    test('level at zero', () => {
+      const result = parseBusSendMessage('/ch/02/mix/03/level', [{ value: 0 }]);
+      assert.deepEqual(result, { channelIndex: 2, busIndex: 3, patch: { level: 0 } });
+    });
+
+    test('missing args defaults level to 0', () => {
+      const result = parseBusSendMessage('/ch/05/mix/08/level', []);
+      assert.deepEqual(result, { channelIndex: 5, busIndex: 8, patch: { level: 0 } });
+    });
+
+    test('two-digit channel and bus', () => {
+      const result = parseBusSendMessage('/ch/32/mix/16/level', [{ value: 1.0 }]);
+      assert.deepEqual(result, { channelIndex: 32, busIndex: 16, patch: { level: 1.0 } });
+    });
+  });
+
+  describe('send on/off messages (/ch/NN/mix/BB/on)', () => {
+    test('value 1 means send is on', () => {
+      const result = parseBusSendMessage('/ch/01/mix/08/on', [{ value: 1 }]);
+      assert.deepEqual(result, { channelIndex: 1, busIndex: 8, patch: { on: true } });
+    });
+
+    test('value 0 means send is off', () => {
+      const result = parseBusSendMessage('/ch/01/mix/08/on', [{ value: 0 }]);
+      assert.deepEqual(result, { channelIndex: 1, busIndex: 8, patch: { on: false } });
+    });
+
+    test('missing args defaults to on: false', () => {
+      const result = parseBusSendMessage('/ch/03/mix/04/on', []);
+      assert.deepEqual(result, { channelIndex: 3, busIndex: 4, patch: { on: false } });
+    });
+  });
+
+  describe('unrecognised addresses', () => {
+    test('returns null for channel master fader (not a bus send)', () => {
+      assert.equal(parseBusSendMessage('/ch/01/mix/fader', [{ value: 0.5 }]), null);
+    });
+
+    test('returns null for bus master fader', () => {
+      assert.equal(parseBusSendMessage('/bus/08/mix/fader', [{ value: 0.5 }]), null);
+    });
+
+    test('returns null for channel master mute', () => {
+      assert.equal(parseBusSendMessage('/ch/01/mix/on', [{ value: 1 }]), null);
+    });
+
+    test('returns null for unrelated address', () => {
+      assert.equal(parseBusSendMessage('/xremote', []), null);
     });
   });
 });

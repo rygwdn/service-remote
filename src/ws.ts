@@ -28,6 +28,7 @@ function setupWebSocket(server: http.Server, state: StateHandle, connections?: C
   server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws/screenshot') return; // handled by screenshot-ws.ts
     if (req.url === '/ws/levels') return;     // handled by levels-ws.ts
+    if (req.url?.startsWith('/ws/bus')) return; // handled by bus-ws.ts
     wss.handleUpgrade(req, socket as import('stream').Duplex, head, (client) => {
       wss.emit('connection', client, req);
     });

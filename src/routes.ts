@@ -116,6 +116,20 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
     }
   });
 
+  app.post('/api/x32/bus-send', (req: Request, res: Response) => {
+    const { channel, busIndex, value } = req.body;
+    if (busIndex == null || value == null) {
+      res.status(400).json({ error: 'channel, busIndex, and value are required' });
+      return;
+    }
+    try {
+      x32.setBusSend(channel, busIndex, value);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   // --- Proclaim ---
   app.post('/api/proclaim/action', async (req: Request, res: Response) => {
     try {

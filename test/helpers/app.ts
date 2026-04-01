@@ -8,6 +8,7 @@ import { setupWebSocket } from '../../src/ws';
 import type { Connections } from '../../src/types';
 import { setupScreenshotWs } from '../../src/screenshot-ws';
 import { setupLevelsWs } from '../../src/levels-ws';
+import { setupBusWs } from '../../src/bus-ws';
 
 
 interface TestCalls {
@@ -18,8 +19,10 @@ interface TestCalls {
   };
   x32: {
     connect: number; disconnect: number; startMeterUpdates: number; stopMeterUpdates: number;
+    startBusSendTracking: number; stopBusSendTracking: number;
     setFader?: { channel: number; value: number }; toggleMute?: number;
     setSpill?: { channel: number; type: string; assigned: boolean };
+    setBusSend?: { channel: number; busIndex: number; value: number };
   };
   proclaim: {
     connect: number; disconnect: number; startMeterUpdates: number; stopMeterUpdates: number;
@@ -54,7 +57,7 @@ function createTestApp(): TestApp {
   // Record every call made through the stubs so tests can assert on them.
   const calls: TestCalls = {
     obs:     { connect: 0, disconnect: 0, startMeterUpdates: 0, stopMeterUpdates: 0 },
-    x32:     { connect: 0, disconnect: 0, startMeterUpdates: 0, stopMeterUpdates: 0 },
+    x32:     { connect: 0, disconnect: 0, startMeterUpdates: 0, stopMeterUpdates: 0, startBusSendTracking: 0, stopBusSendTracking: 0 },
     proclaim:{ connect: 0, disconnect: 0, startMeterUpdates: 0, stopMeterUpdates: 0 },
     ptz:     { connect: 0, disconnect: 0 },
   };
@@ -79,6 +82,9 @@ function createTestApp(): TestApp {
       startMeterUpdates: () => { calls.x32.startMeterUpdates++; },
       stopMeterUpdates: () => { calls.x32.stopMeterUpdates++; },
       setSpill: (channel: number, type: 'ch' | 'bus', assigned: boolean) => { calls.x32.setSpill = { channel, type, assigned }; },
+      startBusSendTracking: (_busIndex: number) => { calls.x32.startBusSendTracking++; },
+      stopBusSendTracking: (_busIndex: number) => { calls.x32.stopBusSendTracking++; },
+      setBusSend: (channel: number, busIndex: number, value: number) => { calls.x32.setBusSend = { channel, busIndex, value }; },
     },
     proclaim: {
       connect: async () => { calls.proclaim.connect++; },
@@ -120,6 +126,7 @@ function createTestApp(): TestApp {
   setupWebSocket(server, state, stubs, { disconnectDelay: 0 });
   setupScreenshotWs(server);
   setupLevelsWs(server);
+  setupBusWs(server, state, stubs.x32, { disconnectDelay: 0 });
 
   return { app, server, state, stubs, calls };
 }

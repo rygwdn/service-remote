@@ -4,7 +4,7 @@ import config from '../config';
 import state from '../state';
 import * as logger from '../logger';
 import * as levelsWs from '../levels-ws';
-import type { Channel } from '../types';
+import type { Channel, BusSend } from '../types';
 
 const { Message: OscMessage, encode: oscEncode, decode: oscDecode } = nodeOsc;
 
@@ -21,6 +21,10 @@ let subscribeInterval: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let meterInterval: ReturnType<typeof setInterval> | null = null;
 let metersActive = false;
+// Reference counts for per-bus send tracking: busIndex → number of active subscribers
+const busSendRefCounts = new Map<number, number>();
+// Renewal intervals per bus: busIndex → interval handle
+const busSendIntervals = new Map<number, ReturnType<typeof setInterval>>();
 let loggedNoResponse = false;
 let lastMeterSubscribeLogTime = 0;
 let lastMeterReceiveLogTime = 0;
@@ -366,6 +370,35 @@ const OSC_PATTERNS: OscPattern[] = [
   { re: /^\/main\/m\/mix\/on$/,           type: 'main', indexGroup: null, fixedIndex: 2, patch: mutePatch },
 ];
 
+interface BusSendResult {
+  channelIndex: number;
+  busIndex: number;
+  patch: Partial<BusSend>;
+}
+
+// Pure function: parse an OSC address + args for channel-to-bus send messages.
+// Handles /ch/NN/mix/BB/level and /ch/NN/mix/BB/on.
+// Returns { channelIndex, busIndex, patch } or null if not a bus send message.
+function parseBusSendMessage(address: string, args: OscArg[]): BusSendResult | null {
+  const levelMatch = address.match(/^\/ch\/(\d+)\/mix\/(\d+)\/level$/);
+  if (levelMatch) {
+    return {
+      channelIndex: parseInt(levelMatch[1], 10),
+      busIndex: parseInt(levelMatch[2], 10),
+      patch: { level: (args?.[0]?.value as number) ?? 0 },
+    };
+  }
+  const onMatch = address.match(/^\/ch\/(\d+)\/mix\/(\d+)\/on$/);
+  if (onMatch) {
+    return {
+      channelIndex: parseInt(onMatch[1], 10),
+      busIndex: parseInt(onMatch[2], 10),
+      patch: { on: ((args?.[0]?.value as number) ?? 0) === 1 },
+    };
+  }
+  return null;
+}
+
 // Pure function: parse an OSC address + args into a channel state patch.
 // Returns { index, type, patch } or null if the message isn't a recognised channel message.
 function parseOscMessage(address: string, args: OscArg[]): OscResult | null {
@@ -437,6 +470,10 @@ function handleMessage(address: string, args: OscArg[]): void {
       requestMeterUpdates();
       meterInterval = setInterval(requestMeterUpdates, 1500);
     }
+    for (const [busIndex] of busSendRefCounts) {
+      logger.log(`[X32] Restarting bus send tracking for bus ${busIndex} after reconnect`);
+      requestBusSendUpdates(busIndex);
+    }
     return;
   }
 
@@ -467,6 +504,13 @@ function handleMessage(address: string, args: OscArg[]): void {
     const index = parseInt(dcaMatch[2], 10);
     const value = (args?.[0]?.value as number) ?? 0;
     dcaGroupsMap.set(`${type}-${index}`, value);
+  }
+
+  // Bus send messages: /ch/NN/mix/BB/level and /ch/NN/mix/BB/on
+  const busSendResult = parseBusSendMessage(address, args);
+  if (busSendResult) {
+    updateBusSend(busSendResult.channelIndex, busSendResult.busIndex, busSendResult.patch);
+    return;
   }
 
   const result = parseOscMessage(address, args);
@@ -628,6 +672,71 @@ function setSpill(channelIndex: number, type: 'ch' | 'bus', assigned: boolean): 
   updateChannel(channelIndex, type, { spill: assigned });
 }
 
+function updateBusSend(channelIndex: number, busIndex: number, patch: Partial<BusSend>): void {
+  const ch = channels.find((c) => c.index === channelIndex && c.type === 'ch');
+  if (!ch) return;
+  if (!ch.busSends) ch.busSends = [];
+  const existing = ch.busSends.find((s) => s.busIndex === busIndex);
+  if (existing) {
+    Object.assign(existing, patch);
+  } else {
+    ch.busSends.push({ busIndex, level: 0, on: false, ...patch });
+  }
+  state.update('x32', { connected: true, channels: [...channels] });
+}
+
+function requestBusSendUpdates(busIndex: number): void {
+  logger.debug(`[X32] Requesting bus send data for bus ${busIndex}`);
+  const padded = String(busIndex).padStart(2, '0');
+  for (let i = 1; i <= CH_COUNT; i++) {
+    const ch = String(i).padStart(2, '0');
+    sendOsc(`/ch/${ch}/mix/${padded}/level`);
+    sendOsc(`/ch/${ch}/mix/${padded}/on`);
+  }
+}
+
+function startBusSendTracking(busIndex: number): void {
+  const current = busSendRefCounts.get(busIndex) ?? 0;
+  busSendRefCounts.set(busIndex, current + 1);
+  if (current > 0) return; // already tracking
+
+  logger.log(`[X32] startBusSendTracking bus ${busIndex}`);
+  if (connected) requestBusSendUpdates(busIndex);
+  const interval = setInterval(() => {
+    if (connected) requestBusSendUpdates(busIndex);
+  }, 8000);
+  busSendIntervals.set(busIndex, interval);
+}
+
+function stopBusSendTracking(busIndex: number): void {
+  const current = busSendRefCounts.get(busIndex) ?? 0;
+  if (current <= 1) {
+    busSendRefCounts.delete(busIndex);
+    const interval = busSendIntervals.get(busIndex);
+    if (interval) { clearInterval(interval); busSendIntervals.delete(busIndex); }
+    // Clear busSends for this bus from all channels
+    for (const ch of channels) {
+      if (ch.busSends) {
+        ch.busSends = ch.busSends.filter((s) => s.busIndex !== busIndex);
+        if (ch.busSends.length === 0) delete ch.busSends;
+      }
+    }
+    logger.log(`[X32] stopBusSendTracking bus ${busIndex}`);
+    state.update('x32', { connected: true, channels: [...channels] });
+  } else {
+    busSendRefCounts.set(busIndex, current - 1);
+  }
+}
+
+function setBusSend(channelIndex: number, busIndex: number, value: number): void {
+  const clamped = Math.max(0, Math.min(1, value));
+  logger.log(`[X32] setBusSend ch ${channelIndex} → bus ${busIndex} = ${clamped}`);
+  const ch = String(channelIndex).padStart(2, '0');
+  const bus = String(busIndex).padStart(2, '0');
+  sendOsc(`/ch/${ch}/mix/${bus}/level`, [{ value: clamped }]);
+  updateBusSend(channelIndex, busIndex, { level: clamped });
+}
+
 function toggleMute(channelIndex: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {
   const ch = channels.find((c) => c.index === channelIndex && c.type === type);
   if (!ch) {
@@ -644,6 +753,7 @@ function toggleMute(channelIndex: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 
 
 export {
   parseOscMessage,
+  parseBusSendMessage,
   parseMeterBlob,
   buildMeterRequests,
   applyOscPatchWithPending,
@@ -655,4 +765,7 @@ export {
   setFader,
   setSpill,
   toggleMute,
+  startBusSendTracking,
+  stopBusSendTracking,
+  setBusSend,
 };
