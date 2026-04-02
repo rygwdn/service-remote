@@ -21,7 +21,7 @@ interface StateHandle {
   on(event: 'change', listener: (ev: ChangeEvent) => void): void;
 }
 
-function setupWebSocket(server: http.Server, state: StateHandle, connections?: Connections, { disconnectDelay = 5000 }: { disconnectDelay?: number } = {}): void {
+function setupWebSocket(server: http.Server, state: StateHandle, connections?: Connections, { disconnectDelay = 5000, canStopX32 = (): boolean => true }: { disconnectDelay?: number; canStopX32?: () => boolean } = {}): void {
   const wss = new WebSocketServer({ noServer: true });
 
   // Only handle upgrade requests that are NOT for dedicated sub-paths.
@@ -70,11 +70,13 @@ function setupWebSocket(server: http.Server, state: StateHandle, connections?: C
       disconnectTimer = setTimeout(() => {
         disconnectTimer = null;
         connectionsStarted = false;
-        connections.x32.stopMeterUpdates();
         connections.obs.disconnect();
-        connections.x32.disconnect();
         connections.proclaim.disconnect();
         connections.ptz.disconnect();
+        if (canStopX32()) {
+          connections.x32.stopMeterUpdates();
+          connections.x32.disconnect();
+        }
       }, disconnectDelay);
     });
   });

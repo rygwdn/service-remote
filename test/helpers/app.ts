@@ -130,10 +130,10 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
   setupRoutes(app, stubs, state, testConfigPath);
 
   const server = http.createServer(app);
-  setupWebSocket(server, state, stubs, { disconnectDelay: 0 });
   setupScreenshotWs(server);
   setupLevelsWs(server);
-  setupBusWs(server, state, stubs.x32, { disconnectDelay: 0 });
+  const busWs = setupBusWs(server, state, stubs.x32, { disconnectDelay: 0 });
+  setupWebSocket(server, state, stubs, { disconnectDelay: 0, canStopX32: () => !busWs.hasClients() });
 
   return { app, server, state, stubs, calls };
 }

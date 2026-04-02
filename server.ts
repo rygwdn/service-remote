@@ -79,8 +79,13 @@ app.use(express.json());
 let embeddedPublic: Record<string, { mimeType: string; content: Buffer }> = {};
 try { embeddedPublic = (await import('./src/embedded-public')).default; } catch (_) {}
 
+const noCache = (_req: express.Request, res: express.Response, next: express.NextFunction): void => {
+  res.set('Cache-Control', 'no-store');
+  next();
+};
+
 if (Object.keys(embeddedPublic).length > 0) {
-  app.use((req, res, next) => {
+  app.use(noCache, (req, res, next) => {
     const key = req.path === '/' ? '/index.html' : req.path;
     const file = embeddedPublic[key];
     if (!file) return next();
@@ -88,15 +93,15 @@ if (Object.keys(embeddedPublic).length > 0) {
     res.send(file.content);
   });
 } else {
-  app.use(express.static(path.join(__dirname, 'public')));
+  app.use(noCache, express.static(path.join(__dirname, 'public'), { etag: false, lastModified: false }));
 }
 
 setupRoutes(app, { obs, x32, proclaim, ptz });
-setupWebSocket(server, state, { obs, x32, proclaim, ptz });
 youtube.connect();
 setupLevelsWs(server);
 setupScreenshotWs(server);
-setupBusWs(server, state, x32);
+const busWs = setupBusWs(server, state, x32);
+setupWebSocket(server, state, { obs, x32, proclaim, ptz }, { canStopX32: () => !busWs.hasClients() });
 
 // Set up file logging next to config.json
 const logFile = path.join(path.dirname(config.userConfigPath), 'service-remote.log');

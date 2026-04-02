@@ -155,6 +155,28 @@ describe('WebSocket meter subscription lifecycle', () => {
     await waitForClose(ws2);
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
+
+  test('x32 is NOT stopped when main ws client leaves but bus-mix clients remain', async () => {
+    const { server, calls } = createTestApp();
+    const testPort = await startServer(server);
+
+    // Connect main WS client (starts x32)
+    const { ws: mainWs } = await connectAndReceive(testPort);
+
+    // Connect bus WS client
+    const busWs = new WebSocket(`ws://localhost:${testPort}/ws/bus?bus=8`);
+    await new Promise<void>((resolve) => busWs.once('open', resolve));
+
+    // Disconnect main WS client
+    await waitForClose(mainWs);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.equal(calls.x32.disconnect, 0, 'x32 should not disconnect while bus client is still connected');
+    assert.equal(calls.x32.stopMeterUpdates, 0, 'stopMeterUpdates should not be called while bus client remains');
+
+    busWs.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
 });
 
 describe('WebSocket level stripping', () => {

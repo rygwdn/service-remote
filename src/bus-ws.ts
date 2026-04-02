@@ -16,7 +16,7 @@ function buildBusState(busIndex: number, state: AppState): { type: string; busIn
   return { type: 'bus-state', busIndex, busChannel, channels };
 }
 
-function setupBusWs(server: http.Server, state: StateHandle, x32?: X32Connection, { disconnectDelay = 5000 }: { disconnectDelay?: number } = {}): void {
+function setupBusWs(server: http.Server, state: StateHandle, x32?: X32Connection, { disconnectDelay = 5000 }: { disconnectDelay?: number } = {}): { hasClients: () => boolean } {
   // One WebSocketServer for all /ws/bus connections; busIndex is read per-client from the URL.
   const wss = new WebSocketServer({ noServer: true });
 
@@ -133,6 +133,8 @@ function setupBusWs(server: http.Server, state: StateHandle, x32?: X32Connection
   wss.on('close', () => {
     clearInterval(heartbeatTimer);
   });
+
+  return { hasClients: () => totalBusClients() > 0 };
 }
 
 export { setupBusWs };
