@@ -41,9 +41,12 @@ function setupScreenshotWs(server: http.Server): (frame: Buffer) => void {
     logger.log('[Screenshot WS] Client connected');
   });
 
+  // Drop frames for clients whose send buffer is backed up (> 256 KB).
+  const BACKPRESSURE_THRESHOLD = 256 * 1024;
+
   function broadcastToServer(frame: Buffer): void {
     for (const client of wss.clients) {
-      if (client.readyState === WebSocket.OPEN) {
+      if (client.readyState === WebSocket.OPEN && client.bufferedAmount <= BACKPRESSURE_THRESHOLD) {
         try {
           client.send(frame);
         } catch {

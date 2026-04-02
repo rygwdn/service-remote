@@ -162,7 +162,7 @@ export interface X32Connection {
   connect(): void;
   disconnect(): void;
   isActive(): boolean;
-  setFader(channelIndex: number, value: number, type?: 'ch' | 'bus' | 'main' | 'mtx'): void;
+  setFader(channelIndex: number, value: number, type?: 'ch' | 'bus' | 'main' | 'mtx'): Promise<void>;
   toggleMute(channelIndex: number, type?: 'ch' | 'bus' | 'main' | 'mtx'): void;
   parseOscMessage(address: string, args: Array<{ value: unknown }>): { index: number; type: 'ch' | 'bus' | 'main' | 'mtx'; patch: Partial<Channel> } | null;
   startMeterUpdates(): void;
@@ -170,7 +170,7 @@ export interface X32Connection {
   setSpill(channelIndex: number, type: 'ch' | 'bus', assigned: boolean): void;
   startBusSendTracking(busIndex: number): void;
   stopBusSendTracking(busIndex: number): void;
-  setBusSend(channelIndex: number, busIndex: number, value: number): void;
+  setBusSend(channelIndex: number, busIndex: number, value: number): Promise<void>;
 }
 
 export interface ProclaimConnection {

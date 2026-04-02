@@ -60,6 +60,10 @@ const pendingFaders = new Map<string, { value: number; sentAt: number }>();
 const PENDING_FADER_TIMEOUT_MS = 2000;
 const PENDING_FADER_TOLERANCE = 0.05;
 
+// Pending bus-send map: key is `ch${channelIndex}-bus${busIndex}`, value is { level, sentAt }
+// Same suppression logic as pendingFaders, but for channel-to-bus send levels.
+const pendingBusSends = new Map<string, { level: number; sentAt: number }>();
+
 // OSC path suffix used for DCA group assignment messages (e.g. /ch/01/grp/dca)
 const DCA_GROUP_PATH = '/grp/dca';
 
@@ -565,6 +569,36 @@ function applyOscPatchWithPending(
   return rest;
 }
 
+/**
+ * Pure function: apply a bus-send patch respecting the pending bus-send map.
+ * Mirrors applyOscPatchWithPending but operates on BusSend.level.
+ */
+function applyBusSendPatchWithPending(
+  key: string,
+  patch: Partial<BusSend>,
+  pending: Map<string, { level: number; sentAt: number }>,
+): Partial<BusSend> {
+  if (!('level' in patch)) return patch;
+
+  const entry = pending.get(key);
+  if (!entry) return patch;
+
+  const age = Date.now() - entry.sentAt;
+  if (age >= PENDING_FADER_TIMEOUT_MS) {
+    pending.delete(key);
+    return patch;
+  }
+
+  const diff = Math.abs((patch.level as number) - entry.level);
+  if (diff <= PENDING_FADER_TOLERANCE) {
+    pending.delete(key);
+    return patch;
+  }
+
+  const { level: _level, ...rest } = patch;
+  return rest;
+}
+
 function updateChannel(index: number, type: 'ch' | 'bus' | 'main' | 'mtx', patch: Partial<Channel>): void {
   const ch = channels.find((c) => c.index === index && c.type === type);
   if (!ch) {
@@ -647,7 +681,13 @@ function stopMeterUpdates(): void {
   if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
 }
 
-function setFader(channelIndex: number, value: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {
+function waitForStateChange(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    state.once('change', () => resolve());
+  });
+}
+
+function setFader(channelIndex: number, value: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): Promise<void> {
   const clamped = Math.max(0, Math.min(1, value));
   logger.log(`[X32] setFader ${type} ${channelIndex} = ${clamped}`);
   // Record the pending fader before sending so that OSC echoes arriving during
@@ -662,8 +702,11 @@ function setFader(channelIndex: number, value: number, type: 'ch' | 'bus' | 'mai
   const ch = channels.find((c) => c.index === channelIndex && c.type === type);
   if (ch) {
     ch.fader = clamped;
+    const p = waitForStateChange();
     state.update('x32', { connected: true, channels: [...channels] });
+    return p;
   }
+  return Promise.resolve();
 }
 
 function setSpill(channelIndex: number, type: 'ch' | 'bus', assigned: boolean): void {
@@ -680,11 +723,13 @@ function updateBusSend(channelIndex: number, busIndex: number, patch: Partial<Bu
   const ch = channels.find((c) => c.index === channelIndex && c.type === 'ch');
   if (!ch) return;
   if (!ch.busSends) ch.busSends = [];
+  const key = `ch${channelIndex}-bus${busIndex}`;
+  const effectivePatch = applyBusSendPatchWithPending(key, patch, pendingBusSends);
   const existing = ch.busSends.find((s) => s.busIndex === busIndex);
   if (existing) {
-    Object.assign(existing, patch);
+    Object.assign(existing, effectivePatch);
   } else {
-    ch.busSends.push({ busIndex, level: 0, on: false, ...patch });
+    ch.busSends.push({ busIndex, level: 0, on: false, ...effectivePatch });
   }
   state.update('x32', { connected: true, channels: [...channels] });
 }
@@ -732,13 +777,29 @@ function stopBusSendTracking(busIndex: number): void {
   }
 }
 
-function setBusSend(channelIndex: number, busIndex: number, value: number): void {
+function setBusSend(channelIndex: number, busIndex: number, value: number): Promise<void> {
   const clamped = Math.max(0, Math.min(1, value));
   logger.log(`[X32] setBusSend ch ${channelIndex} → bus ${busIndex} = ${clamped}`);
+  const key = `ch${channelIndex}-bus${busIndex}`;
+  pendingBusSends.set(key, { level: clamped, sentAt: Date.now() });
   const ch = String(channelIndex).padStart(2, '0');
   const bus = String(busIndex).padStart(2, '0');
   sendOsc(`/ch/${ch}/mix/${bus}/level`, [{ value: clamped }]);
-  updateBusSend(channelIndex, busIndex, { level: clamped });
+  // Apply optimistically, bypassing the pending check (our own write always wins).
+  const channel = channels.find((c) => c.index === channelIndex && c.type === 'ch');
+  if (channel) {
+    if (!channel.busSends) channel.busSends = [];
+    const existing = channel.busSends.find((s) => s.busIndex === busIndex);
+    if (existing) {
+      existing.level = clamped;
+    } else {
+      channel.busSends.push({ busIndex, level: clamped, on: false });
+    }
+    const p = waitForStateChange();
+    state.update('x32', { connected: true, channels: [...channels] });
+    return p;
+  }
+  return Promise.resolve();
 }
 
 function toggleMute(channelIndex: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {
@@ -761,6 +822,7 @@ export {
   parseMeterBlob,
   buildMeterRequests,
   applyOscPatchWithPending,
+  applyBusSendPatchWithPending,
   connect,
   disconnect,
   isActive,

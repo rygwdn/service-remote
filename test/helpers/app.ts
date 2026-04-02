@@ -83,7 +83,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       connect: () => { calls.x32.connect++; },
       disconnect: () => { calls.x32.disconnect++; },
       isActive: () => x32Active,
-      setFader: (channel: number, value: number, _type?: 'ch' | 'bus') => { calls.x32.setFader = { channel, value }; },
+      setFader: async (channel: number, value: number, _type?: 'ch' | 'bus') => { calls.x32.setFader = { channel, value }; },
       toggleMute: (channel: number, _type?: 'ch' | 'bus') => { calls.x32.toggleMute = channel; },
       parseOscMessage: () => null,
       startMeterUpdates: () => { calls.x32.startMeterUpdates++; },
@@ -91,7 +91,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       setSpill: (channel: number, type: 'ch' | 'bus', assigned: boolean) => { calls.x32.setSpill = { channel, type, assigned }; },
       startBusSendTracking: (_busIndex: number) => { calls.x32.startBusSendTracking++; },
       stopBusSendTracking: (_busIndex: number) => { calls.x32.stopBusSendTracking++; },
-      setBusSend: (channel: number, busIndex: number, value: number) => { calls.x32.setBusSend = { channel, busIndex, value }; },
+      setBusSend: async (channel: number, busIndex: number, value: number) => { calls.x32.setBusSend = { channel, busIndex, value }; },
     },
     proclaim: {
       connect: async () => { calls.proclaim.connect++; },

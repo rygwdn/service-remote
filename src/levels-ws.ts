@@ -46,10 +46,13 @@ function setupLevelsWs(server: http.Server): (levels: LevelsPayload) => void {
     logger.log('[Levels WS] Client connected');
   });
 
+  // Drop frames for clients whose send buffer is backed up (> 64 KB).
+  const BACKPRESSURE_THRESHOLD = 64 * 1024;
+
   function broadcastToServer(levels: LevelsPayload): void {
     const msg = JSON.stringify(levels);
     for (const client of wss.clients) {
-      if (client.readyState === WebSocket.OPEN) {
+      if (client.readyState === WebSocket.OPEN && client.bufferedAmount <= BACKPRESSURE_THRESHOLD) {
         try {
           client.send(msg);
         } catch {
