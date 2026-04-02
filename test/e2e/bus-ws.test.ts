@@ -68,6 +68,33 @@ describe('Bus WebSocket (/ws/bus)', () => {
     assert.ok(calls.x32.startBusSendTracking > before, 'startBusSendTracking should have been called');
   });
 
+  test('connecting starts x32 and meter updates when x32 is not active', async () => {
+    const { server: s2, calls: c2 } = createTestApp({ x32Active: false });
+    const p2 = await startServer(s2);
+    const connectBefore = c2.x32.connect;
+    const meterBefore = c2.x32.startMeterUpdates;
+
+    const { ws } = await connectBusWs(p2, 8);
+    assert.ok(c2.x32.connect > connectBefore, 'x32.connect() should be called');
+    assert.ok(c2.x32.startMeterUpdates > meterBefore, 'x32.startMeterUpdates() should be called');
+
+    ws.close();
+    await new Promise((r) => setTimeout(r, 50));
+    await new Promise<void>((resolve) => s2.close(() => resolve()));
+  });
+
+  test('does not call x32.connect when x32 is already active', async () => {
+    const { server: s2, calls: c2 } = createTestApp({ x32Active: true });
+    const p2 = await startServer(s2);
+    const connectBefore = c2.x32.connect;
+
+    const { ws } = await connectBusWs(p2, 8);
+    assert.equal(c2.x32.connect, connectBefore, 'x32.connect() should NOT be called when already active');
+
+    ws.close();
+    await new Promise<void>((resolve) => s2.close(() => resolve()));
+  });
+
   test('channels array contains only ch-type channels with busSend on for the bus', async () => {
     const channels = [
       { index: 1, type: 'ch' as const, label: 'Vox', fader: 0.8, muted: false, level: 0, source: 1, linkedToNext: false, spill: false, color: 0,

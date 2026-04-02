@@ -628,6 +628,10 @@ function setPendingFader(type: 'ch' | 'bus' | 'main' | 'mtx', index: number, val
   pendingFaders.set(key, { value, sentAt: Date.now() });
 }
 
+function isActive(): boolean {
+  return wantConnected;
+}
+
 function startMeterUpdates(): void {
   logger.log('[X32] startMeterUpdates (connected=' + connected + ')');
   metersActive = true;
@@ -759,6 +763,7 @@ export {
   applyOscPatchWithPending,
   connect,
   disconnect,
+  isActive,
   setPendingFader,
   startMeterUpdates,
   stopMeterUpdates,

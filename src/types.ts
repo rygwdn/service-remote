@@ -161,6 +161,7 @@ export interface ObsConnection {
 export interface X32Connection {
   connect(): void;
   disconnect(): void;
+  isActive(): boolean;
   setFader(channelIndex: number, value: number, type?: 'ch' | 'bus' | 'main' | 'mtx'): void;
   toggleMute(channelIndex: number, type?: 'ch' | 'bus' | 'main' | 'mtx'): void;
   parseOscMessage(address: string, args: Array<{ value: unknown }>): { index: number; type: 'ch' | 'bus' | 'main' | 'mtx'; patch: Partial<Channel> } | null;

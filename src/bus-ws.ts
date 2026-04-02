@@ -31,6 +31,14 @@ function setupBusWs(server: http.Server, state: StateHandle, x32?: X32Connection
   const busClients = new Map<number, Set<WebSocket>>();
   // Per-bus disconnect timers
   const disconnectTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  // Whether bus-ws started the x32 connection (so it can stop it on last client leaving)
+  let busWsStartedX32 = false;
+
+  function totalBusClients(): number {
+    let n = 0;
+    for (const s of busClients.values()) n += s.size;
+    return n;
+  }
 
   function addClient(busIndex: number, ws: WebSocket): void {
     const existing = disconnectTimers.get(busIndex);
@@ -41,6 +49,13 @@ function setupBusWs(server: http.Server, state: StateHandle, x32?: X32Connection
 
     if (busClients.get(busIndex)!.size === 1 && x32) {
       x32.startBusSendTracking(busIndex);
+    }
+
+    // Start X32 connection + meters if this is the very first bus client and x32 is idle
+    if (totalBusClients() === 1 && x32 && !x32.isActive()) {
+      busWsStartedX32 = true;
+      x32.connect();
+      x32.startMeterUpdates();
     }
   }
 
@@ -54,6 +69,12 @@ function setupBusWs(server: http.Server, state: StateHandle, x32?: X32Connection
         const timer = setTimeout(() => {
           disconnectTimers.delete(busIndex);
           x32.stopBusSendTracking(busIndex);
+          // Stop x32 if bus-ws started it and no bus clients remain
+          if (busWsStartedX32 && totalBusClients() === 0) {
+            busWsStartedX32 = false;
+            x32.stopMeterUpdates();
+            x32.disconnect();
+          }
         }, disconnectDelay);
         disconnectTimers.set(busIndex, timer);
       }

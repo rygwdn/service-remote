@@ -46,12 +46,18 @@ interface TestApp {
   calls: TestCalls;
 }
 
+interface CreateTestAppOptions {
+  /** Simulate whether X32 is already active (isActive() return value). Default: false. */
+  x32Active?: boolean;
+}
+
 /**
  * Creates a fresh Express + WebSocket server with stub connection objects.
  * Returns { server, state, stubs, calls }.
  * Call server.close() in afterEach/after to clean up.
  */
-function createTestApp(): TestApp {
+function createTestApp(options: CreateTestAppOptions = {}): TestApp {
+  const { x32Active = false } = options;
   const state = new State();
 
   // Record every call made through the stubs so tests can assert on them.
@@ -76,6 +82,7 @@ function createTestApp(): TestApp {
     x32: {
       connect: () => { calls.x32.connect++; },
       disconnect: () => { calls.x32.disconnect++; },
+      isActive: () => x32Active,
       setFader: (channel: number, value: number, _type?: 'ch' | 'bus') => { calls.x32.setFader = { channel, value }; },
       toggleMute: (channel: number, _type?: 'ch' | 'bus') => { calls.x32.toggleMute = channel; },
       parseOscMessage: () => null,
