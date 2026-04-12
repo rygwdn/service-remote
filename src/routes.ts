@@ -88,9 +88,9 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
   });
 
   // --- X32 ---
-  app.post('/api/x32/fader', async (req: Request, res: Response) => {
+  app.post('/api/x32/fader', (req: Request, res: Response) => {
     try {
-      await x32.setFader(req.body.channel, req.body.value, req.body.type || 'ch');
+      x32.setFader(req.body.channel, req.body.value, req.body.type || 'ch');
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -116,14 +116,14 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
     }
   });
 
-  app.post('/api/x32/bus-send', async (req: Request, res: Response) => {
+  app.post('/api/x32/bus-send', (req: Request, res: Response) => {
     const { channel, busIndex, value } = req.body;
     if (busIndex == null || value == null) {
       res.status(400).json({ error: 'channel, busIndex, and value are required' });
       return;
     }
     try {
-      await x32.setBusSend(channel, busIndex, value);
+      x32.setBusSend(channel, busIndex, value);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });

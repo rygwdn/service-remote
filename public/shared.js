@@ -48,41 +48,85 @@ function post(url, body) {
     .catch((err) => console.error(`POST ${url} error:`, err));
 }
 
-function setX32Fader(channel, type, value) { post('/api/x32/fader', { channel, type, value }); }
-function toggleX32Mute(channel, type)      { post('/api/x32/mute', { channel, type }); }
+function toggleX32Mute(channel, type) { post('/api/x32/mute', { channel, type }); }
+
+// Sends a fader POST, cancelling any in-flight request for the same key.
+// Returns the fetch promise (resolves when the server responds).
+// inflight: Map<key, AbortController> — shared per component instance.
+function sendFader(inflight, key, url, body) {
+  const prev = inflight.get(key);
+  if (prev) prev.abort();
+  const ctrl = new AbortController();
+  inflight.set(key, ctrl);
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: ctrl.signal,
+  })
+    .then((res) => {
+      inflight.delete(key);
+      if (!res.ok) res.text().then((t) => console.error(`POST ${url} failed (${res.status}):`, t));
+    })
+    .catch((err) => {
+      if (err.name !== 'AbortError') console.error(`POST ${url} error:`, err);
+      // AbortError is expected when a newer drag value supersedes this one.
+    });
+}
 
 // X32 vertical fader Alpine component — tracks touch so server updates don't jump the slider.
+// touched stays true until the server responds (or the request is replaced by a newer one).
 // Register this after Alpine is loaded: Alpine.data('x32Fader', x32FaderComponent)
 function x32FaderComponent() {
   return {
     touched: false,
-    _releaseTimer: null,
+    _debounce: null,
+    _inflight: new Map(),
     releaseSoon() {
+      // touched clears only after all in-flight requests for this fader settle.
+      // We check on a short poll rather than tracking each promise individually.
       clearTimeout(this._releaseTimer);
-      this._releaseTimer = setTimeout(() => { this.touched = false; }, 500);
+      this._releaseTimer = setInterval(() => {
+        if (this._inflight.size === 0) {
+          clearInterval(this._releaseTimer);
+          this._releaseTimer = null;
+          this.touched = false;
+        }
+      }, 50);
     },
     onFaderInput(ch, el) {
       clearTimeout(this._debounce);
+      const value = parseFloat(el.value);
       this._debounce = setTimeout(() => {
-        setX32Fader(ch.index, ch.type, parseFloat(el.value));
+        const key = `${ch.type}-${ch.index}`;
+        sendFader(this._inflight, key, '/api/x32/fader', { channel: ch.index, type: ch.type, value });
       }, 50);
     },
   };
 }
 
-// Bus send fader Alpine component — same touch logic but posts to /api/x32/bus-send.
+// Bus send fader Alpine component — same approach but posts to /api/x32/bus-send.
 function busSendFaderComponent(busIndex) {
   return {
     touched: false,
-    _releaseTimer: null,
+    _debounce: null,
+    _inflight: new Map(),
     releaseSoon() {
       clearTimeout(this._releaseTimer);
-      this._releaseTimer = setTimeout(() => { this.touched = false; }, 500);
+      this._releaseTimer = setInterval(() => {
+        if (this._inflight.size === 0) {
+          clearInterval(this._releaseTimer);
+          this._releaseTimer = null;
+          this.touched = false;
+        }
+      }, 50);
     },
     onFaderInput(ch, el) {
       clearTimeout(this._debounce);
+      const value = parseFloat(el.value);
       this._debounce = setTimeout(() => {
-        post('/api/x32/bus-send', { channel: ch.index, busIndex, value: parseFloat(el.value) });
+        const key = `ch${ch.index}-bus${busIndex}`;
+        sendFader(this._inflight, key, '/api/x32/bus-send', { channel: ch.index, busIndex, value });
       }, 50);
     },
     getBusSendLevel(ch) {
