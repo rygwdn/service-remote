@@ -104,16 +104,19 @@
       connectBusWs(_busIndex);
     });
 
-    // --- Bus WebSocket ---
+    // --- Unified WebSocket (/ws) — subscribes to bus:N and levels ---
     let busWs;
     let busReconnectDelay = 1000;
 
     function connectBusWs(busIndex) {
       if (busWs && busWs.readyState < WebSocket.CLOSING) return;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      busWs = new WebSocket(`${proto}://${location.host}/ws/bus?bus=${busIndex}`);
+      busWs = new WebSocket(`${proto}://${location.host}/ws`);
 
-      busWs.onopen = () => { busReconnectDelay = 1000; };
+      busWs.onopen = () => {
+        busReconnectDelay = 1000;
+        busWs.send(JSON.stringify({ type: 'subscribe', channels: [`bus:${busIndex}`, 'levels'] }));
+      };
 
       busWs.onmessage = (e) => {
         if (!window.Alpine) return;
@@ -123,6 +126,8 @@
           store.connected = true;
           store.busChannel = msg.busChannel;
           store.channels = msg.channels;
+        } else if (msg.type === 'levels') {
+          handleLevelsMessage(msg);
         }
       };
 
@@ -139,8 +144,6 @@
       reconnect: () => connectBusWs(_busIndex),
       resetDelay: () => { busReconnectDelay = 1000; },
     });
-
-    connectLevelsWs();
   </script>
 </body>
 </html>

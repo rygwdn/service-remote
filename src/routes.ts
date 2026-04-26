@@ -1,6 +1,6 @@
-import type { Application, Request, Response } from 'express';
 import fs from 'fs';
 import os from 'os';
+import path from 'path';
 import qrcode = require('qrcode');
 import type { Connections } from './types';
 import * as discovery from './discovery';
@@ -13,161 +13,189 @@ const userConfigPath = config.userConfigPath;
 
 const THUMB_POLL_TIMEOUT_MS = 5000;
 
-function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections, stateOverride?: typeof state, configPathOverride?: string): void {
+// Concurrency limiter for Proclaim thumbnail fetches
+let activeThumbFetches = 0;
+const MAX_CONCURRENT_THUMBS = 3;
+const thumbQueue: Array<() => void> = [];
+
+// Server-side image cache keyed by (itemId, slideIndex, localRevision)
+const thumbCache = new Map<string, Buffer>();
+
+function acquireThumbSlot(): Promise<void> {
+  return new Promise((resolve) => {
+    if (activeThumbFetches < MAX_CONCURRENT_THUMBS) {
+      activeThumbFetches++;
+      resolve();
+    } else {
+      thumbQueue.push(() => { activeThumbFetches++; resolve(); });
+    }
+  });
+}
+
+function releaseThumbSlot(): void {
+  activeThumbFetches--;
+  if (thumbQueue.length > 0) thumbQueue.shift()!();
+}
+
+function json(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function jsonError(message: string, status = 500): Response {
+  return json({ error: message }, status);
+}
+
+type Handler = (req: Request, params: Record<string, string>) => Promise<Response> | Response;
+
+interface Route {
+  method: string;
+  pattern: URLPattern;
+  handler: Handler;
+}
+
+function setupRoutes(
+  connections: Connections,
+  stateOverride?: typeof state,
+  configPathOverride?: string,
+): (req: Request) => Promise<Response> | Response | null {
+  const { obs, x32, proclaim, ptz } = connections;
   const activeState = stateOverride ?? state;
   const cfgPath = configPathOverride ?? userConfigPath;
 
-  // Concurrency limiter for Proclaim thumbnail fetches (instance-local so tests don't share state)
-  let activeThumbFetches = 0;
-  const MAX_CONCURRENT_THUMBS = 3;
-  const thumbQueue: Array<() => void> = [];
+  const routes: Route[] = [];
 
-  // Server-side image cache keyed by (itemId, slideIndex, localRevision)
-  const thumbCache = new Map<string, Buffer>();
-
-  function acquireThumbSlot(): Promise<void> {
-    return new Promise((resolve) => {
-      if (activeThumbFetches < MAX_CONCURRENT_THUMBS) {
-        activeThumbFetches++;
-        resolve();
-      } else {
-        thumbQueue.push(() => { activeThumbFetches++; resolve(); });
-      }
-    });
-  }
-
-  function releaseThumbSlot(): void {
-    activeThumbFetches--;
-    if (thumbQueue.length > 0) thumbQueue.shift()!();
+  function route(method: string, pathname: string, handler: Handler): void {
+    routes.push({ method, pattern: new URLPattern({ pathname }), handler });
   }
 
   // --- OBS ---
-  app.post('/api/obs/scene', async (req: Request, res: Response) => {
+  route('POST', '/api/obs/scene', async (req) => {
     try {
-      await obs.setScene(req.body.scene);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { scene: string };
+      await obs.setScene(body.scene);
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/obs/mute', async (req: Request, res: Response) => {
+  route('POST', '/api/obs/mute', async (req) => {
     try {
-      await obs.toggleMute(req.body.input);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { input: string };
+      await obs.toggleMute(body.input);
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/obs/volume', async (req: Request, res: Response) => {
+  route('POST', '/api/obs/volume', async (req) => {
     try {
-      await obs.setInputVolume(req.body.input, req.body.volumeDb);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { input: string; volumeDb: number };
+      await obs.setInputVolume(body.input, body.volumeDb);
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/obs/stream', async (req: Request, res: Response) => {
+  route('POST', '/api/obs/stream', async () => {
     try {
       await obs.toggleStream();
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/obs/record', async (req: Request, res: Response) => {
+  route('POST', '/api/obs/record', async () => {
     try {
       await obs.toggleRecord();
-      res.json({ ok: true });
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
+  });
+
+  route('GET', '/api/obs/screenshot', async () => {
+    try {
+      const sceneName = activeState.get().obs.currentScene;
+      if (!sceneName) return new Response(null, { status: 503 });
+      const buf = await obs.getSceneScreenshot(sceneName);
+      return new Response(new Uint8Array(buf), { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' } });
     } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
+      logger.error('[OBS] Screenshot failed:', (err as Error).message);
+      return jsonError((err as Error).message);
     }
   });
 
   // --- X32 ---
-  app.post('/api/x32/fader', (req: Request, res: Response) => {
+  route('POST', '/api/x32/fader', async (req) => {
     try {
-      x32.setFader(req.body.channel, req.body.value, req.body.type || 'ch');
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { channel: number; value: number; type?: 'ch' | 'bus' | 'main' | 'mtx' };
+      x32.setFader(body.channel, body.value, body.type || 'ch');
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/x32/mute', (req: Request, res: Response) => {
+  route('POST', '/api/x32/mute', async (req) => {
     try {
-      x32.toggleMute(req.body.channel, req.body.type || 'ch');
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { channel: number; type?: 'ch' | 'bus' | 'main' | 'mtx' };
+      x32.toggleMute(body.channel, body.type || 'ch');
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/x32/spill', (req: Request, res: Response) => {
+  route('POST', '/api/x32/spill', async (req) => {
     try {
-      const type = req.body.type === 'bus' ? 'bus' : 'ch';
-      x32.setSpill(req.body.channel, type, !!req.body.assigned);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { channel: number; type?: 'ch' | 'bus'; assigned: boolean };
+      const type = body.type === 'bus' ? 'bus' : 'ch';
+      x32.setSpill(body.channel, type, !!body.assigned);
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/x32/bus-send', (req: Request, res: Response) => {
-    const { channel, busIndex, value } = req.body;
-    if (busIndex == null || value == null) {
-      res.status(400).json({ error: 'channel, busIndex, and value are required' });
-      return;
-    }
+  route('POST', '/api/x32/bus-send', async (req) => {
     try {
-      x32.setBusSend(channel, busIndex, value);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { channel: number; busIndex?: number; value?: number };
+      if (body.busIndex == null || body.value == null) {
+        return jsonError('channel, busIndex, and value are required', 400);
+      }
+      x32.setBusSend(body.channel, body.busIndex, body.value);
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
   // --- Proclaim ---
-  app.post('/api/proclaim/action', async (req: Request, res: Response) => {
+  route('POST', '/api/proclaim/action', async (req) => {
     try {
-      const ok = await proclaim.sendAction(req.body.action, req.body.index);
-      res.json({ ok });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { action: string; index?: number };
+      const ok = await proclaim.sendAction(body.action, body.index);
+      return json({ ok });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/proclaim/goto-item', async (req: Request, res: Response) => {
+  route('POST', '/api/proclaim/goto-item', async (req) => {
     try {
-      const ok = await proclaim.goToItem(req.body.itemId);
-      res.json({ ok });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { itemId: string };
+      const ok = await proclaim.goToItem(body.itemId);
+      return json({ ok });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.get('/api/proclaim/thumb', async (req: Request, res: Response) => {
-    const itemId = req.query.itemId as string | undefined;
-    const slideIndex = req.query.slideIndex as string | undefined;
+  route('GET', '/api/proclaim/thumb', async (req) => {
+    const url = new URL(req.url);
+    const itemId = url.searchParams.get('itemId') ?? undefined;
+    const slideIndex = url.searchParams.get('slideIndex') ?? undefined;
 
-    // Look up the canonical localRevision for this slide (used for cache key + HTTP headers)
     const localRevision = proclaim.getSlideLocalRevision(itemId, slideIndex);
-    // Include itemId + slideIndex in cache key — localRevision alone may be shared across slides
     const cacheKey = localRevision ? `${itemId}:${slideIndex}:${localRevision}` : null;
 
-    // Serve from server-side cache if available
     if (cacheKey && thumbCache.has(cacheKey)) {
-      res.set('Content-Type', 'image/png');
-      res.set('Cache-Control', 'public, max-age=31536000, immutable');
-      return res.send(thumbCache.get(cacheKey));
+      return new Response(new Uint8Array(thumbCache.get(cacheKey)!), {
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        },
+      });
     }
 
     await acquireThumbSlot();
     try {
-      const url = proclaim.getThumbUrl(itemId, slideIndex, req.query.localRevision as string | undefined);
+      const thumbUrl = proclaim.getThumbUrl(itemId, slideIndex, url.searchParams.get('localRevision') ?? undefined);
       const sessionId = proclaim.getOnAirSessionId();
       const headers: Record<string, string> = { 'Accept-Encoding': 'identity' };
       if (sessionId) headers['OnAirSessionId'] = sessionId;
@@ -176,189 +204,136 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
       let imageBuffer: Buffer | null = null;
 
       while (Date.now() < deadline) {
-        const r = await fetch(url, { headers });
+        const r = await fetch(thumbUrl, { headers });
         if (!r.ok) {
-          logger.error(`[Proclaim] Thumb ${r.status} for: ${url} (sessionId=${sessionId})`);
-          return res.status(r.status).end();
+          logger.error(`[Proclaim] Thumb ${r.status} for: ${thumbUrl} (sessionId=${sessionId})`);
+          return new Response(null, { status: r.status });
         }
         const contentType = r.headers.get('content-type') || '';
         if (contentType.startsWith('image/')) {
           imageBuffer = Buffer.from(await r.arrayBuffer());
           break;
         }
-        // Check for completionEstimateMs in JSON response
         let estimateMs = 0;
         try {
-          const json = JSON.parse(await r.text());
-          if (typeof json.completionEstimateMs === 'number') {
-            estimateMs = json.completionEstimateMs;
-          }
-        } catch {
-          // not JSON or no estimate — fall through to 204
-        }
+          const jsonBody = JSON.parse(await r.text());
+          if (typeof jsonBody.completionEstimateMs === 'number') estimateMs = jsonBody.completionEstimateMs;
+        } catch { /* not JSON */ }
         if (estimateMs <= 0) {
-          logger.warn(`[Proclaim] Thumb returned non-image content-type: ${contentType} for: ${url}`);
-          return res.status(204).end();
+          logger.warn(`[Proclaim] Thumb returned non-image content-type: ${contentType} for: ${thumbUrl}`);
+          return new Response(null, { status: 204 });
         }
-        // Wait the estimated time before retrying (clamped to remaining deadline)
         const wait = Math.min(estimateMs, deadline - Date.now());
         if (wait > 0) await new Promise<void>((resolve) => setTimeout(resolve, wait));
       }
 
       if (!imageBuffer) {
-        logger.warn(`[Proclaim] Thumb poll timed out after ${THUMB_POLL_TIMEOUT_MS}ms for: ${url}`);
-        return res.status(204).end();
+        logger.warn(`[Proclaim] Thumb poll timed out after ${THUMB_POLL_TIMEOUT_MS}ms for: ${thumbUrl}`);
+        return new Response(null, { status: 204 });
       }
 
-      // Cache by (itemId, slideIndex, localRevision) if available
+      const cacheHeaders: Record<string, string> = { 'Content-Type': 'image/png' };
       if (cacheKey) {
         thumbCache.set(cacheKey, imageBuffer);
-        res.set('Cache-Control', 'public, max-age=31536000, immutable');
+        cacheHeaders['Cache-Control'] = 'public, max-age=31536000, immutable';
       } else {
-        res.set('Cache-Control', 'no-store');
+        cacheHeaders['Cache-Control'] = 'no-store';
       }
-      res.set('Content-Type', 'image/png');
-      res.send(imageBuffer);
+      return new Response(new Uint8Array(imageBuffer), { headers: cacheHeaders });
     } catch (err) {
       logger.error('[Proclaim] Thumb fetch failed:', (err as Error).message);
-      res.status(500).end();
+      return new Response(null, { status: 500 });
     } finally {
       releaseThumbSlot();
     }
   });
 
   // --- PTZ ---
-  app.post('/api/ptz/pan-tilt', (req: Request, res: Response) => {
+  route('POST', '/api/ptz/pan-tilt', async (req) => {
     try {
-      const { camera = 0, panDir, tiltDir, panSpeed, tiltSpeed } = req.body as {
-        camera?: number; panDir: -1 | 0 | 1; tiltDir: -1 | 0 | 1;
-        panSpeed?: number; tiltSpeed?: number;
-      };
-      ptz.panTilt(camera, panDir, tiltDir, panSpeed, tiltSpeed);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { camera?: number; panDir: -1 | 0 | 1; tiltDir: -1 | 0 | 1; panSpeed?: number; tiltSpeed?: number };
+      ptz.panTilt(body.camera ?? 0, body.panDir, body.tiltDir, body.panSpeed, body.tiltSpeed);
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/ptz/zoom', (req: Request, res: Response) => {
+  route('POST', '/api/ptz/zoom', async (req) => {
     try {
-      const { camera = 0, direction } = req.body as { camera?: number; direction: 'in' | 'out' };
-      ptz.zoom(camera, direction);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { camera?: number; direction: 'in' | 'out' };
+      ptz.zoom(body.camera ?? 0, body.direction);
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/ptz/focus', (req: Request, res: Response) => {
+  route('POST', '/api/ptz/focus', async (req) => {
     try {
-      const { camera = 0, mode } = req.body as { camera?: number; mode: 'auto' | 'manual' | 'near' | 'far' };
-      ptz.focus(camera, mode);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { camera?: number; mode: 'auto' | 'manual' | 'near' | 'far' };
+      ptz.focus(body.camera ?? 0, body.mode);
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/ptz/preset', (req: Request, res: Response) => {
+  route('POST', '/api/ptz/preset', async (req) => {
     try {
-      const { camera = 0, action, preset } = req.body as { camera?: number; action: 'recall' | 'save'; preset: number };
-      ptz.preset(camera, action, preset);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { camera?: number; action: 'recall' | 'save'; preset: number };
+      ptz.preset(body.camera ?? 0, body.action, body.preset);
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/ptz/home', (req: Request, res: Response) => {
+  route('POST', '/api/ptz/home', async (req) => {
     try {
-      const { camera = 0 } = req.body as { camera?: number };
-      ptz.home(camera);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const body = await req.json() as { camera?: number };
+      ptz.home(body.camera ?? 0);
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
   // --- YouTube ---
-  app.post('/api/youtube/start', async (req: Request, res: Response) => {
+  route('POST', '/api/youtube/start', async () => {
     try {
       await youtube.startBroadcast();
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/youtube/stop', async (req: Request, res: Response) => {
+  route('POST', '/api/youtube/stop', async () => {
     try {
       await youtube.stopBroadcast();
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/youtube/import-obs-creds', async (req: Request, res: Response) => {
+  route('POST', '/api/youtube/import-obs-creds', async (req) => {
     try {
-      const creds = await youtube.importObsCreds(req.body.obsConfigDir as string | undefined);
-      if (!creds) {
-        res.json({ found: false });
-      } else {
-        // Seed the in-memory token cache if OBS has a non-expired token
-        if (creds.accessToken && creds.tokenExpiry && creds.tokenExpiry > Date.now() + 60_000) {
-          youtube.seedAccessToken(creds.accessToken, creds.tokenExpiry);
-        }
-        res.json({ found: true });
+      const body = await req.json() as { obsConfigDir?: string };
+      const creds = await youtube.importObsCreds(body.obsConfigDir);
+      if (!creds) return json({ found: false });
+      if (creds.accessToken && creds.tokenExpiry && creds.tokenExpiry > Date.now() + 60_000) {
+        youtube.seedAccessToken(creds.accessToken, creds.tokenExpiry);
       }
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      return json({ found: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.get('/api/youtube/broadcasts', async (req: Request, res: Response) => {
+  route('GET', '/api/youtube/broadcasts', async () => {
     try {
       const broadcasts = await youtube.listBroadcasts();
-      res.json({ broadcasts });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      return json({ broadcasts });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  // --- OBS program preview screenshot ---
-  app.get('/api/obs/screenshot', async (req: Request, res: Response) => {
-    try {
-      const currentState = activeState.get();
-      const sceneName = currentState.obs.currentScene;
-      if (!sceneName) return res.status(503).end();
-      const buf = await obs.getSceneScreenshot(sceneName);
-      res.set('Content-Type', 'image/jpeg');
-      res.set('Cache-Control', 'no-store');
-      res.send(buf);
-    } catch (err) {
-      logger.error('[OBS] Screenshot failed:', (err as Error).message);
-      res.status(500).json({ error: (err as Error).message });
-    }
-  });
-
-  // --- State (for initial page load) ---
-  app.get('/api/state', (req: Request, res: Response) => {
-    res.json(activeState.get());
-  });
+  // --- State ---
+  route('GET', '/api/state', () => json(activeState.get()));
 
   // --- Logs ---
-  app.get('/api/logs', (req: Request, res: Response) => {
-    res.json({ logs: logger.getLogs() });
-  });
+  route('GET', '/api/logs', () => json({ logs: logger.getLogs() }));
 
   // --- Config ---
-  app.get('/api/config', (req: Request, res: Response) => {
-    res.json({ obs: config.obs, x32: config.x32, proclaim: config.proclaim, ptz: config.ptz, youtube: config.youtube });
-  });
+  route('GET', '/api/config', () => json({ obs: config.obs, x32: config.x32, proclaim: config.proclaim, ptz: config.ptz, youtube: config.youtube }));
 
-  app.post('/api/config', async (req: Request, res: Response) => {
-    const body = req.body as {
+  route('POST', '/api/config', async (req) => {
+    const body = await req.json() as {
       obs?: { address?: string; password?: string; screenshotInterval?: number };
       x32?: { address?: string; port?: number };
       proclaim?: { host?: string; port?: number; password?: string; pollInterval?: number };
@@ -366,125 +341,96 @@ function setupRoutes(app: Application, { obs, x32, proclaim, ptz }: Connections,
       youtube?: { apiKey?: string; broadcastId?: string; pollInterval?: number };
     };
     if (!body.obs || !body.x32 || !body.proclaim) {
-      res.status(400).json({ error: 'Request must include obs, x32, and proclaim keys' });
-      return;
+      return jsonError('Request must include obs, x32, and proclaim keys', 400);
     }
-
     const obsChanged = body.obs.address !== config.obs.address || body.obs.password !== config.obs.password;
     const x32Changed = body.x32.address !== config.x32.address || body.x32.port !== config.x32.port;
     const proclaimChanged = body.proclaim.host !== config.proclaim.host || body.proclaim.port !== config.proclaim.port || body.proclaim.password !== config.proclaim.password || body.proclaim.pollInterval !== config.proclaim.pollInterval;
     const ptzChanged = body.ptz != null && JSON.stringify(body.ptz) !== JSON.stringify(config.ptz);
-
     try {
-      const newConfig = {
-        server: config.server,
-        obs: body.obs,
-        x32: body.x32,
-        proclaim: body.proclaim,
-        ptz: body.ptz ?? config.ptz,
-        youtube: body.youtube ?? config.youtube,
-        ui: config.ui,
-      };
+      const newConfig = { server: config.server, obs: body.obs, x32: body.x32, proclaim: body.proclaim, ptz: body.ptz ?? config.ptz, youtube: body.youtube ?? config.youtube, ui: config.ui };
       fs.writeFileSync(cfgPath, JSON.stringify(newConfig, null, 2), 'utf-8');
       config.reload();
-
       if (obsChanged) { obs.disconnect(); await obs.connect(); }
       if (x32Changed) { x32.disconnect(); x32.connect(); }
       if (proclaimChanged) { proclaim.disconnect(); await proclaim.connect(); }
       if (ptzChanged) { ptz.disconnect(); ptz.connect(); }
-
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
-  // --- UI preferences (hidden faders) ---
-  app.get('/api/ui/hidden', (req: Request, res: Response) => {
-    res.json({ hiddenObs: config.ui.hiddenObs, hiddenX32: config.ui.hiddenX32 });
-  });
+  // --- UI preferences ---
+  route('GET', '/api/ui/hidden', () => json({ hiddenObs: config.ui.hiddenObs, hiddenX32: config.ui.hiddenX32 }));
 
-  app.post('/api/ui/hidden', (req: Request, res: Response) => {
-    const { hiddenObs, hiddenX32 } = req.body as { hiddenObs?: unknown; hiddenX32?: unknown };
-    if (!Array.isArray(hiddenObs) || !Array.isArray(hiddenX32)) {
-      res.status(400).json({ error: 'hiddenObs and hiddenX32 must be arrays' });
-      return;
+  route('POST', '/api/ui/hidden', async (req) => {
+    const body = await req.json() as { hiddenObs?: unknown; hiddenX32?: unknown };
+    if (!Array.isArray(body.hiddenObs) || !Array.isArray(body.hiddenX32)) {
+      return jsonError('hiddenObs and hiddenX32 must be arrays', 400);
     }
     try {
       let existing: Record<string, unknown> = {};
       if (fs.existsSync(cfgPath)) {
         existing = JSON.parse(fs.readFileSync(cfgPath, 'utf-8')) as Record<string, unknown>;
       }
-      existing.ui = { hiddenObs, hiddenX32 };
+      existing.ui = { hiddenObs: body.hiddenObs, hiddenX32: body.hiddenX32 };
       fs.writeFileSync(cfgPath, JSON.stringify(existing, null, 2), 'utf-8');
       config.reload();
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      return json({ ok: true });
+    } catch (err) { return jsonError((err as Error).message); }
   });
 
   // --- Discovery ---
-  app.post('/api/discover/x32', async (req: Request, res: Response) => {
-    try {
-      const result = await discovery.discoverX32();
-      res.json(result);
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+  route('POST', '/api/discover/x32', async () => {
+    try { return json(await discovery.discoverX32()); }
+    catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/discover/obs', async (req: Request, res: Response) => {
-    try {
-      const result = await discovery.discoverObs();
-      res.json(result);
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+  route('POST', '/api/discover/obs', async () => {
+    try { return json(await discovery.discoverObs()); }
+    catch (err) { return jsonError((err as Error).message); }
   });
 
-  app.post('/api/discover/proclaim', async (req: Request, res: Response) => {
-    try {
-      const result = await discovery.discoverProclaim();
-      res.json(result);
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+  route('POST', '/api/discover/proclaim', async () => {
+    try { return json(await discovery.discoverProclaim()); }
+    catch (err) { return jsonError((err as Error).message); }
   });
 
   // --- Server addresses ---
-  app.get('/api/server/addresses', (req: Request, res: Response) => {
+  route('GET', '/api/server/addresses', () => {
     const port = config.server.port;
     const ifaces = os.networkInterfaces();
     const addresses: string[] = [];
     for (const iface of Object.values(ifaces)) {
       if (!iface) continue;
       for (const addr of iface) {
-        if (addr.family === 'IPv4' && !addr.internal) {
-          addresses.push(`http://${addr.address}:${port}`);
-        }
+        if (addr.family === 'IPv4' && !addr.internal) addresses.push(`http://${addr.address}:${port}`);
       }
     }
-    // Always include localhost
     addresses.unshift(`http://localhost:${port}`);
-    res.json({ port, addresses });
+    return json({ port, addresses });
   });
 
-  app.get('/api/server/qr', async (req: Request, res: Response) => {
-    const url = req.query.url as string | undefined;
-    if (!url) {
-      res.status(400).json({ error: 'url query parameter required' });
-      return;
-    }
+  route('GET', '/api/server/qr', async (req) => {
+    const url = new URL(req.url);
+    const qrUrl = url.searchParams.get('url');
+    if (!qrUrl) return jsonError('url query parameter required', 400);
     try {
-      const svg = await qrcode.toString(url, { type: 'svg', margin: 1 });
-      res.set('Content-Type', 'image/svg+xml');
-      res.set('Cache-Control', 'public, max-age=300');
-      res.send(svg);
-    } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
-    }
+      const svg = await qrcode.toString(qrUrl, { type: 'svg', margin: 1 });
+      return new Response(svg, {
+        headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=300' },
+      });
+    } catch (err) { return jsonError((err as Error).message); }
   });
+
+  return function handleRequest(req: Request): Response | Promise<Response> | null {
+    const url = new URL(req.url);
+    for (const r of routes) {
+      if (r.method !== req.method) continue;
+      const match = r.pattern.exec({ pathname: url.pathname });
+      if (match) return r.handler(req, match.pathname.groups as Record<string, string>);
+    }
+    return null; // no route matched — caller handles static files / 404
+  };
 }
 
 export { setupRoutes };

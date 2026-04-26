@@ -192,81 +192,58 @@ document.addEventListener('alpine:init', () => {
   }));
 });
 
-// --- WebSocket ---
+// --- Unified WebSocket (/ws) ---
+// Subscribes to: state, levels, screenshot
 let ws;
 let reconnectDelay = 1000;
+let currentScreenshotUrl = null;
 
 function connectWs() {
-  // Don't create a new connection if one is already open or connecting
   if (ws && ws.readyState < WebSocket.CLOSING) return;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}`);
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws.binaryType = 'blob';
 
   ws.onopen = () => {
     reconnectDelay = 1000;
+    ws.send(JSON.stringify({ type: 'subscribe', channels: ['levels', 'screenshot'] }));
     if (window.Alpine) Alpine.store('ui').serverConnected = true;
   };
 
   ws.onmessage = (e) => {
-    if (!window.Alpine) return;
+    if (e.data instanceof Blob) {
+      // Binary frame = screenshot JPEG
+      const newUrl = URL.createObjectURL(e.data);
+      const p1 = document.getElementById('obs-preview');
+      const p2 = document.getElementById('ov-obs-preview');
+      const p3 = document.getElementById('ptz-obs-preview');
+      if (p1) p1.src = newUrl;
+      if (p2) p2.src = newUrl;
+      if (p3) p3.src = newUrl;
+      if (currentScreenshotUrl) URL.revokeObjectURL(currentScreenshotUrl);
+      currentScreenshotUrl = newUrl;
+      return;
+    }
     const msg = JSON.parse(e.data);
-    if (msg.type === 'state') {
+    if (msg.type === 'state' && window.Alpine) {
       const store = Alpine.store('state');
       store.obs = msg.data.obs;
       store.x32 = msg.data.x32;
       store.proclaim = msg.data.proclaim;
       if (msg.data.ptz) store.ptz = msg.data.ptz;
       if (msg.data.youtube) store.youtube = msg.data.youtube;
+    } else if (msg.type === 'levels') {
+      handleLevelsMessage(msg);
     }
   };
 
   ws.onclose = () => {
     if (window.Alpine) Alpine.store('ui').serverConnected = false;
-    // Don't schedule reconnect while the tab is hidden — visibilitychange will reconnect
     if (document.hidden) return;
     setTimeout(connectWs, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 10000);
   };
 }
-
-
-// --- Screenshot WebSocket ---
-let screenshotWs;
-let screenshotReconnectDelay = 1000;
-let currentScreenshotUrl = null;
-
-function connectScreenshotWs() {
-  // Don't create a new connection if one is already open or connecting
-  if (screenshotWs && screenshotWs.readyState < WebSocket.CLOSING) return;
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  screenshotWs = new WebSocket(`${proto}://${location.host}/ws/screenshot`);
-  screenshotWs.binaryType = 'blob';
-
-  screenshotWs.onopen = () => { screenshotReconnectDelay = 1000; };
-
-  screenshotWs.onmessage = (e) => {
-    if (!(e.data instanceof Blob)) return;
-    const newUrl = URL.createObjectURL(e.data);
-    // Update all preview elements
-    const p1 = document.getElementById('obs-preview');
-    const p2 = document.getElementById('ov-obs-preview');
-    const p3 = document.getElementById('ptz-obs-preview');
-    if (p1) p1.src = newUrl;
-    if (p2) p2.src = newUrl;
-    if (p3) p3.src = newUrl;
-    // Revoke the previous object URL to avoid memory leaks
-    if (currentScreenshotUrl) URL.revokeObjectURL(currentScreenshotUrl);
-    currentScreenshotUrl = newUrl;
-  };
-
-  screenshotWs.onclose = () => {
-    if (document.hidden) return;
-    setTimeout(connectScreenshotWs, screenshotReconnectDelay);
-    screenshotReconnectDelay = Math.min(screenshotReconnectDelay * 2, 10000);
-  };
-}
-
-connectScreenshotWs();
 
 // Sort X32 channels for display: main L/R first, then bus, then ch, then mtx.
 const X32_TYPE_ORDER = { main: 0, bus: 1, ch: 2, mtx: 3 };
@@ -279,18 +256,10 @@ function sortedX32Channels(channels) {
   });
 }
 
-connectLevelsWs();
-
-// Register main WS and screenshot WS with the shared visibility handler
 registerManagedWs({
   getWs: () => ws,
   reconnect: connectWs,
   resetDelay: () => { reconnectDelay = 1000; },
-});
-registerManagedWs({
-  getWs: () => screenshotWs,
-  reconnect: connectScreenshotWs,
-  resetDelay: () => { screenshotReconnectDelay = 1000; },
 });
 
 // --- API helpers ---

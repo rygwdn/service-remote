@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import { State } from '../../src/state';
 import * as logger from '../../src/logger';
 
+// Save native fetch so afterEach cleanup restores it instead of deleting it.
+// Deleting globalThis.fetch removes the native binding permanently across tests.
+const _nativeFetch = globalThis.fetch;
+function restoreFetch() { (globalThis as any).fetch = _nativeFetch; }
+
 // Test the goToItem logic
 describe('proclaim.goToItem', () => {
   test('only sends sectionCommand for non-Service items (no GoToServiceItem)', () => {
@@ -98,7 +103,7 @@ function mockFetch(responses: MockResponse[]): void {
 
 describe('proclaim._authenticateAppCommand', () => {
   afterEach(() => {
-    delete (globalThis as any).fetch;
+    restoreFetch();
     for (const key of Object.keys(require.cache)) {
       if (key.includes('connections/proclaim')) delete require.cache[key];
     }
@@ -126,7 +131,7 @@ describe('proclaim._authenticateAppCommand', () => {
 
 describe('proclaim._authenticateRemote', () => {
   afterEach(() => {
-    delete (globalThis as any).fetch;
+    restoreFetch();
     for (const key of Object.keys(require.cache)) {
       if (key.includes('connections/proclaim')) delete require.cache[key];
     }
@@ -169,7 +174,7 @@ describe('proclaim._authenticateRemote', () => {
 
 describe('proclaim.sendAction', () => {
   afterEach(() => {
-    delete (globalThis as any).fetch;
+    restoreFetch();
     for (const key of Object.keys(require.cache)) {
       if (key.includes('connections/proclaim')) delete require.cache[key];
     }
@@ -234,7 +239,7 @@ describe('proclaim.sendAction', () => {
 
 describe('proclaim service item indexing', () => {
   afterEach(() => {
-    delete (globalThis as any).fetch;
+    restoreFetch();
     for (const key of Object.keys(require.cache)) {
       if (key.includes('connections/proclaim') || key.includes('src/state')) {
         delete require.cache[key];
@@ -341,7 +346,7 @@ describe('proclaim service item indexing', () => {
 
 describe('proclaim statusChanged initial poll', () => {
   afterEach(() => {
-    delete (globalThis as any).fetch;
+    restoreFetch();
     for (const key of Object.keys(require.cache)) {
       if (key.includes('connections/proclaim') || key.includes('src/state')) {
         delete require.cache[key];
@@ -373,7 +378,7 @@ describe('proclaim statusChanged initial poll', () => {
 
 describe('proclaim 404 logging', () => {
   afterEach(() => {
-    delete (globalThis as any).fetch;
+    restoreFetch();
     for (const key of Object.keys(require.cache)) {
       if (key.includes('connections/proclaim') || key.includes('src/state')) {
         delete require.cache[key];
@@ -406,7 +411,7 @@ describe('proclaim 404 logging', () => {
 
 describe('proclaim._pollStatus', () => {
   afterEach(() => {
-    delete (globalThis as any).fetch;
+    restoreFetch();
     for (const key of Object.keys(require.cache)) {
       if (key.includes('connections/proclaim') || key.includes('src/state')) {
         delete require.cache[key];

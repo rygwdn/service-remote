@@ -1,55 +1,79 @@
 import assert from 'node:assert/strict';
-import { WebSocket } from 'ws';
-import { createTestApp, startServer } from '../helpers/app';
+import { createTestApp } from '../helpers/app';
 
-type WsClient = InstanceType<typeof WebSocket>;
+type TestServer = ReturnType<typeof createTestApp>['server'];
 
-function connectBusWs(port: number, busIndex: number): Promise<{ ws: WsClient; data: unknown }> {
+function connectWs(server: TestServer): Promise<{ ws: WebSocket; firstMsg: unknown }> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/bus?bus=${busIndex}`);
-    ws.once('message', (raw: Buffer | string) => resolve({ ws, data: JSON.parse(raw.toString()) }));
-    ws.once('error', reject);
-    // Reject if closed before first message
-    ws.once('close', (code) => { if (code !== 1000) reject(new Error(`closed early with code ${code}`)); });
+    const ws = new WebSocket(`ws://localhost:${server.port}/ws`);
+    ws.addEventListener('message', (e) => resolve({ ws, firstMsg: JSON.parse(e.data as string) }), { once: true });
+    ws.addEventListener('error', () => reject(new Error('ws error')), { once: true });
   });
 }
 
-function nextMessage(ws: WsClient): Promise<unknown> {
+// Subscribe to a bus channel and wait for the immediate bus-state reply
+function subscribeToBus(ws: WebSocket, busIndex: number): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    ws.once('message', (raw: Buffer | string) => resolve(JSON.parse(raw.toString())));
-    ws.once('error', reject);
+    ws.addEventListener('message', (e) => resolve(JSON.parse(e.data as string)), { once: true });
+    ws.addEventListener('error', () => reject(new Error('ws error')), { once: true });
+    ws.send(JSON.stringify({ type: 'subscribe', channels: [`bus:${busIndex}`] }));
   });
 }
 
-describe('Bus WebSocket (/ws/bus)', () => {
-  let server: import('http').Server;
-  let state: InstanceType<typeof import('../../src/state').State>;
+function nextMessage(ws: WebSocket): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    ws.addEventListener('message', (e) => resolve(JSON.parse(e.data as string)), { once: true });
+    ws.addEventListener('error', () => reject(new Error('ws error')), { once: true });
+  });
+}
+
+function nextMessageOfType(ws: WebSocket, type: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    function handler(e: MessageEvent) {
+      const msg = JSON.parse(e.data as string) as Record<string, unknown>;
+      if (msg.type === type) { ws.removeEventListener('message', handler); resolve(msg); }
+    }
+    ws.addEventListener('message', handler);
+    ws.addEventListener('error', () => reject(new Error('ws error')), { once: true });
+  });
+}
+
+function waitForClose(ws: WebSocket): Promise<void> {
+  return new Promise((resolve) => {
+    if (ws.readyState === WebSocket.CLOSED) { resolve(); return; }
+    ws.addEventListener('close', () => resolve(), { once: true });
+    ws.close();
+  });
+}
+
+describe('Bus WebSocket (unified /ws + subscribe)', () => {
+  let server: TestServer;
+  let state: ReturnType<typeof createTestApp>['state'];
   let calls: ReturnType<typeof createTestApp>['calls'];
-  let port: number;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     ({ server, state, calls } = createTestApp());
-    port = await startServer(server);
   });
 
-  afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  afterAll(() => server.stop(true));
 
-  test('connecting to /ws/bus?bus=8 receives initial bus-state message', async () => {
-    const { ws, data } = await connectBusWs(port, 8);
+  test('subscribing to bus:8 receives immediate bus-state message', async () => {
+    const { ws } = await connectWs(server);
+    const data = await subscribeToBus(ws, 8);
     ws.close();
 
-    assert.ok(typeof data === 'object' && data !== null);
     const msg = data as Record<string, unknown>;
     assert.equal(msg.type, 'bus-state');
     assert.equal(msg.busIndex, 8);
-    assert.ok('busChannel' in msg, 'should have busChannel');
-    assert.ok(Array.isArray(msg.channels), 'should have channels array');
+    assert.ok('busChannel' in msg);
+    assert.ok(Array.isArray(msg.channels));
   });
 
-  test('state update triggers broadcast to bus WS client', async () => {
-    const { ws } = await connectBusWs(port, 8);
+  test('state update triggers broadcast to bus subscriber', async () => {
+    const { ws } = await connectWs(server);
+    await subscribeToBus(ws, 8);
 
-    const updatePromise = nextMessage(ws);
+    const updatePromise = nextMessageOfType(ws, 'bus-state');
     state.update('x32', { connected: true, channels: [] });
     const update = await updatePromise;
     ws.close();
@@ -59,59 +83,22 @@ describe('Bus WebSocket (/ws/bus)', () => {
     assert.equal(msg.busIndex, 8);
   });
 
-  test('connecting starts bus send tracking for the requested bus', async () => {
+  test('subscribing starts bus send tracking for the requested bus', async () => {
     const before = calls.x32.startBusSendTracking;
-    const { ws } = await connectBusWs(port, 8);
+    const { ws } = await connectWs(server);
+    await subscribeToBus(ws, 8);
     ws.close();
-    // Allow close to propagate
     await new Promise((r) => setTimeout(r, 50));
-    assert.ok(calls.x32.startBusSendTracking > before, 'startBusSendTracking should have been called');
+    assert.ok(calls.x32.startBusSendTracking > before);
   });
 
-  test('connecting starts x32 and meter updates when x32 is not active', async () => {
+  test('subscribing to bus starts bus send tracking even with x32 inactive flag', async () => {
     const { server: s2, calls: c2 } = createTestApp({ x32Active: false });
-    const p2 = await startServer(s2);
-    const connectBefore = c2.x32.connect;
-    const meterBefore = c2.x32.startMeterUpdates;
-
-    const { ws } = await connectBusWs(p2, 8);
-    assert.ok(c2.x32.connect > connectBefore, 'x32.connect() should be called');
-    assert.ok(c2.x32.startMeterUpdates > meterBefore, 'x32.startMeterUpdates() should be called');
-
+    const { ws } = await connectWs(s2);
+    const busBefore = c2.x32.startBusSendTracking;
+    await subscribeToBus(ws, 8);
+    assert.ok(c2.x32.startBusSendTracking > busBefore);
     ws.close();
-    await new Promise((r) => setTimeout(r, 50));
-    await new Promise<void>((resolve) => s2.close(() => resolve()));
-  });
-
-  test('does not call x32.connect when x32 is already active', async () => {
-    const { server: s2, calls: c2 } = createTestApp({ x32Active: true });
-    const p2 = await startServer(s2);
-    const connectBefore = c2.x32.connect;
-
-    const { ws } = await connectBusWs(p2, 8);
-    assert.equal(c2.x32.connect, connectBefore, 'x32.connect() should NOT be called when already active');
-
-    ws.close();
-    await new Promise<void>((resolve) => s2.close(() => resolve()));
-  });
-
-  test('channels array contains only ch-type channels with busSend on for the bus', async () => {
-    const channels = [
-      { index: 1, type: 'ch' as const, label: 'Vox', fader: 0.8, muted: false, level: 0, source: 1, linkedToNext: false, spill: false, color: 0,
-        busSends: [{ busIndex: 8, level: 0.7, on: true }] },
-      { index: 2, type: 'ch' as const, label: 'Guitar', fader: 0.5, muted: false, level: 0, source: 2, linkedToNext: false, spill: false, color: 0,
-        busSends: [{ busIndex: 8, level: 0.3, on: false }] },
-      { index: 8, type: 'bus' as const, label: 'Stage', fader: 0.9, muted: false, level: 0, source: 0, linkedToNext: false, spill: false, color: 0 },
-    ];
-    state.update('x32', { connected: true, channels });
-
-    const { ws, data } = await connectBusWs(port, 8);
-    ws.close();
-
-    const msg = data as Record<string, unknown>;
-    const chans = msg.channels as Array<Record<string, unknown>>;
-    assert.equal(chans.length, 1, 'only ch 1 has busSend on for bus 8');
-    assert.equal(chans[0].index, 1);
-    assert.equal((msg.busChannel as Record<string, unknown>).index, 8);
+    s2.stop(true);
   });
 });

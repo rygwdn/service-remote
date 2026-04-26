@@ -136,42 +136,26 @@ function busSendFaderComponent(busIndex) {
   };
 }
 
-// --- Levels WebSocket (direct DOM updates, bypasses Alpine) ---
-let levelsWsConn;
-let levelsReconnectDelay = 1000;
-
-function connectLevelsWs() {
-  if (levelsWsConn && levelsWsConn.readyState < WebSocket.CLOSING) return;
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  levelsWsConn = new WebSocket(`${proto}://${location.host}/ws/levels`);
-
-  levelsWsConn.onopen = () => { levelsReconnectDelay = 1000; };
-
-  levelsWsConn.onmessage = (e) => {
-    const { x32, obs } = JSON.parse(e.data);
-    if (x32) {
-      for (const [key, level] of Object.entries(x32)) {
-        const els = document.querySelectorAll(`[data-level-key="${key}"]`);
-        for (const el of els) {
-          el.style.width = mulToDisplayPct(level).toFixed(1) + '%';
-        }
+// --- Levels message handler (called from the unified WS onmessage) ---
+// Applies x32/obs level data directly to DOM without going through Alpine.
+function handleLevelsMessage(payload) {
+  const { x32, obs } = payload;
+  if (x32) {
+    for (const [key, level] of Object.entries(x32)) {
+      const els = document.querySelectorAll(`[data-level-key="${key}"]`);
+      for (const el of els) {
+        el.style.width = mulToDisplayPct(level).toFixed(1) + '%';
       }
     }
-    if (obs) {
-      for (const [name, level] of Object.entries(obs)) {
-        const els = document.querySelectorAll(`[data-level-obs="${CSS.escape(name)}"]`);
-        for (const el of els) {
-          el.style.width = mulToDisplayPct(level).toFixed(1) + '%';
-        }
+  }
+  if (obs) {
+    for (const [name, level] of Object.entries(obs)) {
+      const els = document.querySelectorAll(`[data-level-obs="${CSS.escape(name)}"]`);
+      for (const el of els) {
+        el.style.width = mulToDisplayPct(level).toFixed(1) + '%';
       }
     }
-  };
-
-  levelsWsConn.onclose = () => {
-    if (document.hidden) return;
-    setTimeout(connectLevelsWs, levelsReconnectDelay);
-    levelsReconnectDelay = Math.min(levelsReconnectDelay * 2, 10000);
-  };
+  }
 }
 
 // Registry of all managed WebSocket connections for visibility-change handling.
@@ -193,11 +177,4 @@ document.addEventListener('visibilitychange', () => {
       reconnect();
     }
   }
-});
-
-// Register the levels WS
-registerManagedWs({
-  getWs: () => levelsWsConn,
-  reconnect: connectLevelsWs,
-  resetDelay: () => { levelsReconnectDelay = 1000; },
 });

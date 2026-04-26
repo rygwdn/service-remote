@@ -1,65 +1,17 @@
-import { WebSocketServer, WebSocket } from 'ws';
-import http from 'http';
-import * as logger from './logger';
+// screenshot-ws.ts — thin broadcast module for JPEG screenshot frames.
+// The actual WebSocket server lives in ws.ts (unified Bun WS handler).
+// obs.ts calls broadcast() here; ws.ts wires in a receiver via setPublisher().
 
-// The module-level broadcaster is updated each time setupScreenshotWs is called.
-// obs.ts calls broadcast() which always forwards to the most recently set up instance.
-let activeBroadcast: ((frame: Buffer) => void) | null = null;
+type Publisher = (frame: Buffer) => void;
 
-/**
- * Broadcasts a raw JPEG Buffer to all connected /ws/screenshot clients.
- * No-op if no WS server has been set up yet.
- */
+let activePublisher: Publisher | null = null;
+
+function setPublisher(pub: Publisher): void {
+  activePublisher = pub;
+}
+
 function broadcast(frame: Buffer): void {
-  if (activeBroadcast) activeBroadcast(frame);
+  if (activePublisher) activePublisher(frame);
 }
 
-/**
- * Attaches a WebSocket server to the HTTP server that serves binary
- * JPEG frames at the path /ws/screenshot.
- *
- * Each call creates a new WebSocketServer bound to the given http.Server.
- * The returned broadcaster sends frames only to clients of that server.
- * Also updates the module-level broadcaster so obs.ts's broadcast() call
- * is routed to the most recently set up instance.
- *
- * Returns the broadcaster function bound to this server.
- */
-function setupScreenshotWs(server: http.Server): (frame: Buffer) => void {
-  const wss = new WebSocketServer({ noServer: true });
-
-  // Handle HTTP upgrade requests for /ws/screenshot on this server
-  server.on('upgrade', (req, socket, head) => {
-    if (req.url === '/ws/screenshot') {
-      wss.handleUpgrade(req, socket as import('stream').Duplex, head, (client) => {
-        wss.emit('connection', client, req);
-      });
-    }
-  });
-
-  wss.on('connection', () => {
-    logger.log('[Screenshot WS] Client connected');
-  });
-
-  // Drop frames for clients whose send buffer is backed up (> 256 KB).
-  const BACKPRESSURE_THRESHOLD = 256 * 1024;
-
-  function broadcastToServer(frame: Buffer): void {
-    for (const client of wss.clients) {
-      if (client.readyState === WebSocket.OPEN && client.bufferedAmount <= BACKPRESSURE_THRESHOLD) {
-        try {
-          client.send(frame);
-        } catch {
-          // Client disconnected between readyState check and send
-        }
-      }
-    }
-  }
-
-  // Update the module-level broadcaster to point at this server's instance
-  activeBroadcast = broadcastToServer;
-
-  return broadcastToServer;
-}
-
-export { setupScreenshotWs, broadcast };
+export { setPublisher, broadcast };
