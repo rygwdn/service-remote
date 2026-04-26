@@ -62,14 +62,25 @@ const alpineJs = fs.readFileSync(alpinePath, 'utf8');
 
 export const test = base.extend<{ setState: Fixtures['setState'] }, { serverUrl: Fixtures['serverUrl'] }>({
   serverUrl: [async ({}, use) => {
-    const path = require('path');
-    const express = require('express');
-    const { createTestApp, startServer } = require('../helpers/app');
-    const { app, server } = createTestApp();
-    app.use(express.static(path.resolve(__dirname, '../../public')));
-    const port = await startServer(server);
+    const { spawn } = require('child_process') as typeof import('child_process');
+    const nodePath = require('path') as typeof import('path');
+    const serverScript = nodePath.resolve(__dirname, '../helpers/test-server.ts');
+
+    const proc = spawn('bun', ['run', serverScript], { stdio: ['ignore', 'pipe', 'ignore'] });
+
+    const port: number = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Test server did not start in time')), 10000);
+      let buf = '';
+      proc.stdout!.on('data', (chunk: Buffer) => {
+        buf += chunk.toString();
+        const line = buf.split('\n')[0].trim();
+        if (line) { clearTimeout(timeout); resolve(parseInt(line, 10)); }
+      });
+      proc.on('error', reject);
+    });
+
     await use(`http://localhost:${port}`);
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    proc.kill('SIGTERM');
   }, { scope: 'worker' }],
 
   page: async ({ page, serverUrl }, use) => {

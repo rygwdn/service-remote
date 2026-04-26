@@ -1,15 +1,12 @@
-import http from 'http';
 import path from 'path';
 import os from 'os';
-import express from 'express';
 import { State } from '../../src/state';
 import { setupRoutes } from '../../src/routes';
 import { setupWebSocket } from '../../src/ws';
+import * as levelsWs from '../../src/levels-ws';
+import * as screenshotWs from '../../src/screenshot-ws';
 import type { Connections } from '../../src/types';
-import { setupScreenshotWs } from '../../src/screenshot-ws';
-import { setupLevelsWs } from '../../src/levels-ws';
-import { setupBusWs } from '../../src/bus-ws';
-
+import type { SocketData } from '../../src/ws';
 
 interface TestCalls {
   obs: {
@@ -39,28 +36,21 @@ interface TestCalls {
 }
 
 interface TestApp {
-  app: ReturnType<typeof express>;
-  server: http.Server;
+  server: ReturnType<typeof Bun.serve>;
   state: InstanceType<typeof State>;
   stubs: Connections;
   calls: TestCalls;
 }
 
 interface CreateTestAppOptions {
-  /** Simulate whether X32 is already active (isActive() return value). Default: false. */
   x32Active?: boolean;
+  servePublic?: boolean;
 }
 
-/**
- * Creates a fresh Express + WebSocket server with stub connection objects.
- * Returns { server, state, stubs, calls }.
- * Call server.close() in afterEach/after to clean up.
- */
 function createTestApp(options: CreateTestAppOptions = {}): TestApp {
-  const { x32Active = false } = options;
-  const state = new State();
+  const { x32Active = false, servePublic = false } = options;
+  const testState = new State();
 
-  // Record every call made through the stubs so tests can assert on them.
   const calls: TestCalls = {
     obs:     { connect: 0, disconnect: 0, startMeterUpdates: 0, stopMeterUpdates: 0 },
     x32:     { connect: 0, disconnect: 0, startMeterUpdates: 0, stopMeterUpdates: 0, startBusSendTracking: 0, stopBusSendTracking: 0 },
@@ -122,29 +112,40 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
   };
 
-  // Use a temp path for config writes during tests to avoid touching real config.json
   const testConfigPath = path.join(os.tmpdir(), `test-config-${Date.now()}.json`);
+  const handleRequest = setupRoutes(stubs, testState, testConfigPath);
+  const { websocket, upgrade, hasClients } = setupWebSocket(
+    testState,
+    stubs,
+    { disconnectDelay: 0, canStopX32: () => !hasClients() },
+  );
 
-  const app = express();
-  app.use(express.json());
-  setupRoutes(app, stubs, state, testConfigPath);
+  // Wire levels and screenshot publishers to the test state (no-op publish since
+  // tests drive levels/screenshot directly via levelsWs.broadcast / screenshotWs.broadcast)
+  levelsWs.setPublisher(() => {});
+  screenshotWs.setPublisher(() => {});
 
-  const server = http.createServer(app);
-  setupScreenshotWs(server);
-  setupLevelsWs(server);
-  const busWs = setupBusWs(server, state, stubs.x32, { disconnectDelay: 0 });
-  setupWebSocket(server, state, stubs, { disconnectDelay: 0, canStopX32: () => !busWs.hasClients() });
+  const publicDir = path.join(__dirname, '../../public');
 
-  return { app, server, state, stubs, calls };
-}
-
-/**
- * Starts the server on a random port and resolves with the bound port.
- */
-function startServer(server: http.Server): Promise<number> {
-  return new Promise((resolve) => {
-    server.listen(0, () => resolve((server.address() as { port: number }).port));
+  const server = Bun.serve<SocketData>({
+    port: 0, // random ephemeral port
+    async fetch(req, srv) {
+      if (upgrade(req, srv)) return undefined as unknown as Response;
+      const res = handleRequest(req);
+      if (res) return res;
+      if (servePublic) {
+        const { pathname } = new URL(req.url);
+        const key = pathname === '/' ? '/index.html' : pathname;
+        const file = Bun.file(path.join(publicDir, key));
+        if (await file.exists()) return new Response(file);
+      }
+      return new Response('Not found', { status: 404 });
+    },
+    websocket,
   });
+
+  return { server, state: testState, stubs, calls };
 }
 
-export { createTestApp, startServer };
+export { createTestApp };
+export type { TestCalls };
