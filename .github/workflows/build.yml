@@ -41,7 +41,7 @@ jobs:
 
   build-windows:
     name: Build Windows Executable
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -53,10 +53,10 @@ jobs:
         run: bun install
 
       - name: Build Windows executable
-        run: bun run build -- --target=bun-windows-x64
+        run: bun run build
 
       - name: Create zip
-        run: zip -j service-remote-windows.zip dist/*
+        run: Compress-Archive -Path dist\* -DestinationPath service-remote-windows.zip
 
       - name: Upload zip artifact
         uses: actions/upload-artifact@v4

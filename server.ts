@@ -1,4 +1,18 @@
 import path from 'path';
+import { handleServiceArgs, installService, uninstallService } from './src/service';
+
+// Handle --install-service / --uninstall-service before loading any other modules.
+if (process.platform === 'win32') {
+  const serviceAction = handleServiceArgs();
+  if (serviceAction === 'install') {
+    installService(process.execPath);
+    process.exit(0);
+  } else if (serviceAction === 'uninstall') {
+    uninstallService();
+    process.exit(0);
+  }
+}
+
 import config from './src/config';
 import * as logger from './src/logger';
 import { version } from './src/version';

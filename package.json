@@ -14,7 +14,9 @@
     "check": "bun run typecheck && bun run lint && bun run test && bun run test:ui",
     "build": "bun scripts/build.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "bun scripts/check-no-console.ts"
+    "lint": "bun scripts/check-no-console.ts",
+    "install-service": "bun server.ts --install-service",
+    "uninstall-service": "bun server.ts --uninstall-service"
   },
   "dependencies": {
     "node-osc": "^11.2.2",

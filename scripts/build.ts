@@ -17,8 +17,12 @@ function run(cmd: string): void {
   execSync(cmd, { cwd: root, stdio: 'inherit' });
 }
 
+// 0. Generate icon
+console.log('Step 0: Generating icon …');
+run('bun scripts/generate-icon.ts');
+
 // 1. Embed public/ assets
-console.log('Step 1: Embedding public/ assets …');
+console.log('\nStep 1: Embedding public/ assets …');
 run('bun scripts/embed-public.ts');
 
 // 2. Compile

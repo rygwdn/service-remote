@@ -1,4 +1,6 @@
 import { spawn, exec } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 import os from 'os';
 import * as logger from './logger';
 import type { ChangeEvent } from './types';
@@ -14,6 +16,19 @@ function getFirstLanAddress(port: number): string | null {
     }
   }
   return null;
+}
+
+function getIconBase64(): string {
+  // In compiled mode favicon.ico is baked into embedded-public; fall back to the filesystem in dev.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('./embedded-public') as { default: Record<string, { content: Buffer }> };
+    const entry = mod.default['/favicon.ico'];
+    if (entry) return entry.content.toString('base64');
+  } catch (_) {}
+  const p = path.join(__dirname, '../public/favicon.ico');
+  if (fs.existsSync(p)) return fs.readFileSync(p).toString('base64');
+  return '';
 }
 
 // PS1 script embedded at compile time — no external file needed at runtime.
@@ -38,8 +53,16 @@ Add-Type -AssemblyName System.Drawing
 
 [Console]::Error.WriteLine('[Tray] Assemblies loaded')
 
-# Build a 16x16 solid-blue bitmap as the tray icon (no external file needed)
+# Load the branded ICO from embedded base64, or fall back to a solid-blue bitmap
 function New-TrayIcon {
+    $b64 = '__ICON_B64__'
+    if ($b64 -ne '') {
+        try {
+            $bytes = [System.Convert]::FromBase64String($b64)
+            $ms = New-Object System.IO.MemoryStream(,$bytes)
+            return New-Object System.Drawing.Icon($ms)
+        } catch {}
+    }
     $bmp = New-Object System.Drawing.Bitmap 16, 16
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $g.Clear([System.Drawing.Color]::FromArgb(0, 87, 166))
@@ -160,7 +183,9 @@ function startTray(
 
   // Encode the embedded script as UTF-16LE base64 for PowerShell -EncodedCommand.
   // This leaves stdin free for the JSON IPC channel.
-  const encoded = Buffer.from(TRAY_SCRIPT, 'utf16le').toString('base64');
+  const iconB64 = getIconBase64();
+  const script = TRAY_SCRIPT.replace('__ICON_B64__', iconB64);
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
   logger.log('[Tray] Spawning PowerShell tray script (embedded)');
 
   const child = spawn('powershell.exe', [
