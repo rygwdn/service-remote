@@ -6,7 +6,7 @@
  *   2. Run `bun build --compile` to bundle all JS + the Bun runtime
  */
 
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -15,6 +15,12 @@ const dist = path.join(root, 'dist');
 
 function run(cmd: string): void {
   execSync(cmd, { cwd: root, stdio: 'inherit' });
+}
+
+function runArgs(args: string[]): void {
+  const result = spawnSync(args[0], args.slice(1), { cwd: root, stdio: 'inherit', shell: false });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
 // 0. Generate icon
@@ -49,17 +55,15 @@ const outfile = path.join(dist, exeName);
 // silently in the background. Only supported when building natively on Windows.
 const windowsFlags = (targetIsWindows && process.platform === 'win32') ? ['--windows-hide-console'] : [];
 
-run(
-  [
-    'bun build',
-    '--compile',
-    '--minify',
-    `--target=${target}`,
-    ...windowsFlags,
-    `--define 'process.env.GIT_SHA="${gitSha}"'`,
-    'server.ts',
-    `--outfile=${outfile}`,
-  ].join(' ')
-);
+runArgs([
+  'bun', 'build',
+  '--compile',
+  '--minify',
+  `--target=${target}`,
+  ...windowsFlags,
+  `--define`, `process.env.GIT_SHA="${gitSha}"`,
+  'server.ts',
+  `--outfile=${outfile}`,
+]);
 
 console.log(`\nBuild complete → ${outfile}`);
