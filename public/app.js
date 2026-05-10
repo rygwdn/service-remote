@@ -74,7 +74,7 @@ document.addEventListener('alpine:init', () => {
 
     async loadServerAddresses() {
       try {
-        const res = await fetch('/api/server/addresses');
+        const res = await fetch(basePath + '/api/server/addresses');
         const data = await res.json();
         this.serverAddresses = data.addresses ?? [];
       } catch (_) { /* non-critical */ }
@@ -107,7 +107,7 @@ document.addEventListener('alpine:init', () => {
     async saveConfig() {
       this.saveStatus = 'Saving…';
       try {
-        const res = await fetch('/api/config', {
+        const res = await fetch(basePath + '/api/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(this.cfg),
@@ -124,7 +124,7 @@ document.addEventListener('alpine:init', () => {
     async discoverObs() {
       this.discoverStatus.obs = 'Checking…';
       try {
-        const res = await fetch('/api/discover/obs', { method: 'POST' });
+        const res = await fetch(basePath + '/api/discover/obs', { method: 'POST' });
         const data = await res.json();
         if (data.found) { this.cfg.obs.address = data.address; this.discoverStatus.obs = 'Found'; }
         else { this.discoverStatus.obs = 'Not found'; }
@@ -134,7 +134,7 @@ document.addEventListener('alpine:init', () => {
     async discoverX32() {
       this.discoverStatus.x32 = 'Scanning…';
       try {
-        const res = await fetch('/api/discover/x32', { method: 'POST' });
+        const res = await fetch(basePath + '/api/discover/x32', { method: 'POST' });
         const data = await res.json();
         if (data.found) { this.cfg.x32.address = data.address; this.discoverStatus.x32 = 'Found: ' + data.address; }
         else { this.discoverStatus.x32 = 'Not found'; }
@@ -144,7 +144,7 @@ document.addEventListener('alpine:init', () => {
     async discoverProclaim() {
       this.discoverStatus.proclaim = 'Checking…';
       try {
-        const res = await fetch('/api/discover/proclaim', { method: 'POST' });
+        const res = await fetch(basePath + '/api/discover/proclaim', { method: 'POST' });
         const data = await res.json();
         if (data.found) {
           this.cfg.proclaim.host = data.address;
@@ -161,7 +161,7 @@ document.addEventListener('alpine:init', () => {
       this.youtubeBroadcastsStatus = 'Searching…';
       this.youtubeBroadcasts = [];
       try {
-        const res = await fetch('/api/youtube/broadcasts');
+        const res = await fetch(basePath + '/api/youtube/broadcasts');
         const data = await res.json();
         if (!res.ok) {
           this.youtubeBroadcastsStatus = 'Error: ' + (data.error || 'unknown');
@@ -181,7 +181,7 @@ document.addEventListener('alpine:init', () => {
 
     async loadLogs() {
       try {
-        const res = await fetch('/api/logs');
+        const res = await fetch(basePath + '/api/logs');
         const data = await res.json();
         this.logs = data.logs || [];
         this.$nextTick(() => {
@@ -201,7 +201,7 @@ let currentScreenshotUrl = null;
 function connectWs() {
   if (ws && ws.readyState < WebSocket.CLOSING) return;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws = new WebSocket(`${proto}://${location.host}${basePath}/ws`);
   ws.binaryType = 'blob';
 
   ws.onopen = () => {
@@ -336,7 +336,7 @@ function saveHiddenToServer() {
   saveHiddenTimer = setTimeout(async () => {
     const ui = Alpine.store('ui');
     try {
-      await fetch('/api/ui/hidden', {
+      await fetch(basePath + '/api/ui/hidden', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hiddenObs: ui.hidden.obs, hiddenX32: [] }),
@@ -347,7 +347,7 @@ function saveHiddenToServer() {
 
 async function loadHiddenFromServer() {
   try {
-    const res = await fetch('/api/ui/hidden');
+    const res = await fetch(basePath + '/api/ui/hidden');
     if (!res.ok) return;
     const data = await res.json();
     const ui = Alpine.store('ui');
@@ -366,7 +366,7 @@ let thumbRevision = 0;
 function thumbUrl(itemId, slideIndex) {
   const p = Alpine.store('proclaim');
   const localRevision = p?.slideRevisions?.[itemId]?.[String(slideIndex)] ?? thumbRevision;
-  return `/api/proclaim/thumb?itemId=${encodeURIComponent(itemId)}&slideIndex=${encodeURIComponent(slideIndex)}&localRevision=${encodeURIComponent(localRevision)}`;
+  return `${basePath}/api/proclaim/thumb?itemId=${encodeURIComponent(itemId)}&slideIndex=${encodeURIComponent(slideIndex)}&localRevision=${encodeURIComponent(localRevision)}`;
 }
 
 function thumbHtml(thumb) {
@@ -474,7 +474,7 @@ function esc(str) {
 // Fetch config from server and store in currentConfig. Returns the data or null on failure.
 async function fetchConfig() {
   try {
-    const res = await fetch('/api/config');
+    const res = await fetch(basePath + '/api/config');
     if (!res.ok) return null;
     currentConfig = await res.json();
     return currentConfig;

@@ -7,7 +7,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="color-scheme" content="dark">
   <title>Service Remote</title>
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="style.css">
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body x-data>
@@ -384,7 +384,7 @@
             <a :href="url" target="_blank" x-text="url" class="server-address-link"></a>
             <div class="qr-anchor">
               <span class="qr-icon">&#x1F4F1;</span>
-              <img class="qr-popup" :src="'/api/server/qr?url='+encodeURIComponent(url)" :alt="'QR for '+url">
+              <img class="qr-popup" :src="basePath+'/api/server/qr?url='+encodeURIComponent(url)" :alt="'QR for '+url">
             </div>
           </div>
         </template>
@@ -402,7 +402,7 @@
               <span style="font-size:11px;color:var(--text-dim);margin-right:4px;" x-text="ch.label"></span>
               <div class="qr-anchor">
                 <span class="qr-icon">&#x1F4F1;</span>
-                <img class="qr-popup" :src="'/api/server/qr?url='+encodeURIComponent(base+'/bus-mix.html?bus='+ch.index)" :alt="'QR for bus '+ch.index">
+                <img class="qr-popup" :src="basePath+'/api/server/qr?url='+encodeURIComponent(base+'/bus-mix.html?bus='+ch.index)" :alt="'QR for bus '+ch.index">
               </div>
             </div>
           </template>
@@ -501,7 +501,7 @@
 
   </main>
 
-  <script src="/shared.js"></script>
-  <script src="/app.js"></script>
+  <script src="shared.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

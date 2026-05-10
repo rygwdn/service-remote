@@ -83,20 +83,40 @@ const { websocket, upgrade, hasClients } = setupWebSocket(
 
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : config.server.port;
 
+// BASE_PATH: optional subpath prefix (e.g. "/service"). Strip trailing slash.
+const BASE_PATH = (process.env.SERVICE_REMOTE_BASE_PATH ?? '').replace(/\/+$/, '');
+
+function rewriteUrl(req: Request): Request {
+  if (!BASE_PATH) return req;
+  const url = new URL(req.url);
+  if (!url.pathname.startsWith(BASE_PATH + '/') && url.pathname !== BASE_PATH) return req;
+  url.pathname = url.pathname.slice(BASE_PATH.length) || '/';
+  return new Request(url.toString(), req);
+}
+
 const server = Bun.serve<import('./src/ws').SocketData>({
   port,
 
   async fetch(req, srv) {
+    const { pathname } = new URL(req.url);
+
+    // Redirect bare subpath to subpath + "/" so relative asset URLs resolve correctly
+    if (BASE_PATH && pathname === BASE_PATH) {
+      return Response.redirect(BASE_PATH + '/', 301);
+    }
+
+    const rewritten = rewriteUrl(req);
+
     // WebSocket upgrade
-    if (upgrade(req, srv)) return undefined as unknown as Response;
+    if (upgrade(rewritten, srv)) return undefined as unknown as Response;
 
     // API routes
-    const apiResponse = handleRequest(req);
+    const apiResponse = handleRequest(rewritten);
     if (apiResponse) return apiResponse;
 
     // Static files
-    const { pathname } = new URL(req.url);
-    const staticResponse = await serveStatic(pathname);
+    const { pathname: rewrittenPath } = new URL(rewritten.url);
+    const staticResponse = await serveStatic(rewrittenPath);
     if (staticResponse) return staticResponse;
 
     return new Response('Not found', { status: 404 });

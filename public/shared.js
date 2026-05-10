@@ -1,5 +1,15 @@
 // shared.js — utilities shared between index.html and bus-mix.html
 
+// Derive the base path from the current page URL so all API calls and WebSocket
+// connections work when the app is hosted under a subpath (e.g. /service/).
+// location.pathname for /service/ → basePath = '/service'
+// location.pathname for /        → basePath = ''
+// Exposed as window.basePath so Alpine template expressions can reference it.
+const basePath = window.basePath = (() => {
+  const p = location.pathname.replace(/\/[^/]*$/, ''); // strip trailing filename/segment
+  return p === '/' ? '' : p;
+})();
+
 // X32 scribble strip color index → { border, bg } tuned for the dark navy theme.
 // Indices 0 and 8 (Off) return null — the type-based CSS class acts as fallback.
 const X32_COLOR_STYLES = [
@@ -43,9 +53,10 @@ function mulToDisplayPct(mul) {
 
 // POST helper
 function post(url, body) {
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    .then((res) => { if (!res.ok) res.text().then((t) => console.error(`POST ${url} failed (${res.status}):`, t)); })
-    .catch((err) => console.error(`POST ${url} error:`, err));
+  const fullUrl = basePath + url;
+  fetch(fullUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then((res) => { if (!res.ok) res.text().then((t) => console.error(`POST ${fullUrl} failed (${res.status}):`, t)); })
+    .catch((err) => console.error(`POST ${fullUrl} error:`, err));
 }
 
 function toggleX32Mute(channel, type) { post('/api/x32/mute', { channel, type }); }
@@ -58,7 +69,8 @@ function sendFader(inflight, key, url, body) {
   if (prev) prev.abort();
   const ctrl = new AbortController();
   inflight.set(key, ctrl);
-  return fetch(url, {
+  const fullUrl = basePath + url;
+  return fetch(fullUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -66,10 +78,10 @@ function sendFader(inflight, key, url, body) {
   })
     .then((res) => {
       inflight.delete(key);
-      if (!res.ok) res.text().then((t) => console.error(`POST ${url} failed (${res.status}):`, t));
+      if (!res.ok) res.text().then((t) => console.error(`POST ${fullUrl} failed (${res.status}):`, t));
     })
     .catch((err) => {
-      if (err.name !== 'AbortError') console.error(`POST ${url} error:`, err);
+      if (err.name !== 'AbortError') console.error(`POST ${fullUrl} error:`, err);
       // AbortError is expected when a newer drag value supersedes this one.
     });
 }
