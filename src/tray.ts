@@ -97,6 +97,16 @@ $openItem.add_Click({
 })
 $null = $menu.Items.Add($openItem)
 
+$updateItem = New-Object System.Windows.Forms.ToolStripMenuItem
+$updateItem.Text = 'Update Available — Click to Install'
+$updateItem.ForeColor = [System.Drawing.Color]::FromArgb(0, 120, 212)
+$updateItem.Visible = $false
+$updateItem.add_Click({
+    [Console]::Out.WriteLine('{"event":"update"}')
+    [Console]::Out.Flush()
+})
+$null = $menu.Items.Add($updateItem)
+
 $null = $menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 
 $exitItem = New-Object System.Windows.Forms.ToolStripMenuItem
@@ -121,7 +131,7 @@ $tray.add_DoubleClick({
 # Read stdin commands on a background thread so the message pump stays responsive
 $stdin = [Console]::In
 $scriptBlock = {
-    param($stdin, $statusItem, $tray, $menu)
+    param($stdin, $statusItem, $tray, $menu, $updateItem)
     [Console]::Error.WriteLine('[Tray] stdin reader thread started')
     while ($true) {
         $line = $stdin.ReadLine()
@@ -138,6 +148,15 @@ $scriptBlock = {
             $tray.ContextMenuStrip.Invoke([Action]{
                 $statusItem.Text = $msg.text
                 $tray.Text = "service-remote — $($msg.text)"
+            })
+        } elseif ($msg.cmd -eq 'update-available') {
+            $tray.ContextMenuStrip.Invoke([Action]{
+                $updateItem.Visible = $true
+                $tray.ShowBalloonTip(8000, 'service-remote', 'A new update is available. Click the tray icon to install.', [System.Windows.Forms.ToolTipIcon]::Info)
+            })
+        } elseif ($msg.cmd -eq 'update-clear') {
+            $tray.ContextMenuStrip.Invoke([Action]{
+                $updateItem.Visible = $false
             })
         } elseif ($msg.cmd -eq 'exit') {
             $tray.Visible = $false
@@ -157,7 +176,7 @@ $rs.ApartmentState = 'MTA'
 $rs.Open()
 $ps = [System.Management.Automation.PowerShell]::Create()
 $ps.Runspace = $rs
-$null = $ps.AddScript($scriptBlock).AddArgument($stdin).AddArgument($statusItem).AddArgument($tray).AddArgument($menu)
+$null = $ps.AddScript($scriptBlock).AddArgument($stdin).AddArgument($statusItem).AddArgument($tray).AddArgument($menu).AddArgument($updateItem)
 $null = $ps.BeginInvoke()
 
 [Console]::Error.WriteLine('[Tray] Starting Windows Forms message loop')
@@ -168,17 +187,23 @@ $tray.Dispose()
 [Console]::Error.WriteLine('[Tray] Message loop exited — script done')
 `;
 
+export interface TrayHandle {
+  sendUpdateAvailable(): void;
+  sendUpdateClear(): void;
+}
+
 function startTray(
   port: number,
   version: string,
   state: { on: (event: 'change', listener: (ev: ChangeEvent) => void) => void },
-  shutdown: () => void
-): void {
+  shutdown: () => void,
+  onUpdate: () => void,
+): TrayHandle | null {
   logger.log(`[Tray] startTray called (platform: ${process.platform})`);
 
   if (process.platform !== 'win32') {
     logger.log('[Tray] Not Windows — skipping system tray');
-    return;
+    return null;
   }
 
   // Encode the embedded script as UTF-16LE base64 for PowerShell -EncodedCommand.
@@ -245,6 +270,9 @@ function startTray(
       } else if (msg.event === 'exit') {
         logger.log('[Tray] Exit requested from tray — shutting down');
         shutdown();
+      } else if (msg.event === 'update') {
+        logger.log('[Tray] Update install requested from tray');
+        onUpdate();
       } else {
         logger.warn('[Tray] Unknown event from tray:', trimmed);
       }
@@ -275,6 +303,11 @@ function startTray(
   process.on('exit', () => {
     if (!child.killed) send({ cmd: 'exit' });
   });
+
+  return {
+    sendUpdateAvailable: () => send({ cmd: 'update-available' }),
+    sendUpdateClear:     () => send({ cmd: 'update-clear' }),
+  };
 }
 
 export { startTray };

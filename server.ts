@@ -25,6 +25,8 @@ import * as x32 from './src/connections/x32';
 import * as proclaim from './src/connections/proclaim';
 import * as ptz from './src/connections/ptz';
 import * as youtube from './src/connections/youtube';
+import updater from './src/updater';
+import type { UpdateInfo } from './src/updater';
 
 // ── Crash / unexpected-shutdown logging ──────────────────────────────────────
 
@@ -114,12 +116,44 @@ const url = `http://localhost:${server.port}`;
 logger.log(`[Server] Service Remote v${version} running at ${url}`);
 
 
-startTray(port, version, state, () => shutdown('tray'));
+// ── Update checker ────────────────────────────────────────────────────────────
+
+let pendingUpdate: UpdateInfo | null = null;
+
+async function applyUpdate(info: UpdateInfo, tray: import('./src/tray').TrayHandle | null): Promise<void> {
+  try {
+    const os = await import('os');
+    const { spawnSync } = await import('child_process');
+    const exePath = await updater.download(info, os.tmpdir());
+    logger.log(`[Server] Running installer: ${exePath} --install-service`);
+    spawnSync(exePath, ['--install-service'], { stdio: 'inherit' });
+  } catch (err) {
+    logger.warn('[Server] Update failed:', err instanceof Error ? err.message : String(err));
+    // Re-show the menu item so the user can retry
+    tray?.sendUpdateAvailable();
+  }
+}
+
+const tray = startTray(port, version, state, () => shutdown('tray'), () => {
+  if (!pendingUpdate) return;
+  const info = pendingUpdate;
+  pendingUpdate = null;
+  tray?.sendUpdateClear();
+  void applyUpdate(info, tray);
+});
+
+updater.on('update-available', (info: UpdateInfo) => {
+  pendingUpdate = info;
+  tray?.sendUpdateAvailable();
+});
+
+updater.start();
 
 // ── Shutdown ──────────────────────────────────────────────────────────────────
 
 function shutdown(signal: string): void {
   logger.log(`[Server] Received ${signal}, shutting down...`);
+  updater.stop();
   obs.disconnect();
   x32.disconnect();
   proclaim.disconnect();
