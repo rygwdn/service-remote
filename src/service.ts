@@ -7,6 +7,54 @@ const SERVICE_NAME = 'ServiceRemote';
 const SERVICE_DISPLAY = 'Service Remote';
 const SERVICE_DESC = 'Church service AV control panel (OBS, X32, Proclaim)';
 
+// PowerShell wrapper that handles the SCM handshake via inline C#.
+// Registered as the service binPath so SCM gets a proper SERVICE_RUNNING signal.
+// The actual exe is passed as the first argument and launched as a child process.
+// SCM stop → child is killed → SERVICE_STOPPED signalled.
+const WRAPPER_PS1 = `
+param([string]$ExePath)
+
+Add-Type -TypeDefinition @'
+using System;
+using System.Diagnostics;
+using System.ServiceProcess;
+using System.Threading;
+
+public class ServiceRemoteHost : ServiceBase {
+    private Process _child;
+    private string  _exePath;
+
+    public ServiceRemoteHost(string exePath) {
+        ServiceName = "ServiceRemote";
+        _exePath    = exePath;
+    }
+
+    protected override void OnStart(string[] args) {
+        var psi = new ProcessStartInfo(_exePath) {
+            UseShellExecute        = false,
+            CreateNoWindow         = true,
+        };
+        _child = Process.Start(psi);
+    }
+
+    protected override void OnStop() {
+        try {
+            if (_child != null && !_child.HasExited) {
+                _child.Kill();
+                _child.WaitForExit(5000);
+            }
+        } catch {}
+    }
+
+    public static void Main(string[] exePath) {
+        ServiceBase.Run(new ServiceRemoteHost(exePath[0]));
+    }
+}
+'@ -ReferencedAssemblies System.ServiceProcess
+
+[ServiceRemoteHost]::Main(@($ExePath))
+`;
+
 // Stable install location — %LOCALAPPDATA%\ServiceRemote\service-remote.exe.
 // Writable without elevation; the running exe is never the install target so
 // there is no file-lock conflict when upgrading.
@@ -46,18 +94,24 @@ function psEscape(p: string): string {
 export function installService(exePath: string): void {
   logger.log(`[Service] Installing Windows service "${SERVICE_NAME}" …`);
 
-  const installPath = getInstallPath();
-  const installDir  = path.dirname(installPath);
+  const installPath  = getInstallPath();
+  const installDir   = path.dirname(installPath);
+  const wrapperPath  = path.join(installDir, 'wrapper.ps1');
 
-  // Copy the exe to its stable location before elevating — no file lock on the
-  // destination yet, and LOCALAPPDATA is writable without admin rights.
+  // Both files are writable without elevation (LOCALAPPDATA).
+  // Copy before elevating so the running exe is never the install target.
   logger.log(`[Service] Copying exe to ${installPath} …`);
   fs.mkdirSync(installDir, { recursive: true });
   fs.copyFileSync(exePath, installPath);
-  logger.log('[Service] Copy complete.');
+  fs.writeFileSync(wrapperPath, WRAPPER_PS1, 'utf8');
+  logger.log('[Service] Files written.');
 
   const safeInstallPath = psEscape(installPath);
+  const safeWrapperPath = psEscape(wrapperPath);
 
+  // The service binPath runs PowerShell with the wrapper script.
+  // PowerShell's inline C# handles the SCM handshake (SERVICE_RUNNING/STOPPED)
+  // and launches the real exe as a child process.
   const script = `
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
@@ -70,8 +124,10 @@ if (-not $isAdmin) {
 $name    = "${SERVICE_NAME}"
 $display = "${SERVICE_DISPLAY}"
 $desc    = "${SERVICE_DESC}"
-$stable  = "${safeInstallPath}"
-$bin     = '"' + $stable + '" --service'
+$exe     = "${safeInstallPath}"
+$wrapper = "${safeWrapperPath}"
+$ps      = (Get-Command powershell.exe).Source
+$bin     = '"' + $ps + '" -NonInteractive -ExecutionPolicy Bypass -File "' + $wrapper + '" -ExePath "' + $exe + '"'
 
 $existing = & sc.exe query $name 2>&1
 $exists = $LASTEXITCODE -eq 0
@@ -92,8 +148,9 @@ if ($exists) {
 Write-Host "Starting service …"
 & sc.exe start $name 2>&1
 Write-Host ""
-Write-Host "Done. Service '$name' installed at:"
-Write-Host "  $stable"
+Write-Host "Done. Service '$name' installed."
+Write-Host "  exe:     $exe"
+Write-Host "  wrapper: $wrapper"
 Write-Host "To remove it: service-remote.exe --uninstall-service"
 Start-Sleep -Seconds 2
 `;
