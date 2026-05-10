@@ -7,52 +7,66 @@ const SERVICE_NAME = 'ServiceRemote';
 const SERVICE_DISPLAY = 'Service Remote';
 const SERVICE_DESC = 'Church service AV control panel (OBS, X32, Proclaim)';
 
-// PowerShell wrapper that handles the SCM handshake via inline C#.
-// Registered as the service binPath so SCM gets a proper SERVICE_RUNNING signal.
-// The actual exe is passed as the first argument and launched as a child process.
-// SCM stop → child is killed → SERVICE_STOPPED signalled.
-const WRAPPER_PS1 = `
-param([string]$ExePath)
-
-Add-Type -TypeDefinition @'
+// C# source for the service host compiled to an exe at install time.
+// Compiled once with Add-Type -OutputAssembly so SCM starts a native exe
+// with no runtime compilation delay — eliminating the 1053 startup timeout.
+const SERVICE_HOST_CS = `
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.ServiceProcess;
-using System.Threading;
 
 public class ServiceRemoteHost : ServiceBase {
     private Process _child;
-    private string  _exePath;
+    private readonly string _exePath;
+    private readonly string _logPath;
 
-    public ServiceRemoteHost(string exePath) {
+    public ServiceRemoteHost(string exePath, string logPath) {
         ServiceName = "ServiceRemote";
         _exePath    = exePath;
+        _logPath    = logPath;
+    }
+
+    private void Log(string msg) {
+        try {
+            var entry = "[" + DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss") + "] " + msg;
+            File.AppendAllText(_logPath, entry + Environment.NewLine);
+        } catch {}
     }
 
     protected override void OnStart(string[] args) {
-        var psi = new ProcessStartInfo(_exePath) {
-            UseShellExecute        = false,
-            CreateNoWindow         = true,
-        };
-        _child = Process.Start(psi);
+        Log("OnStart: launching " + _exePath);
+        try {
+            var psi = new ProcessStartInfo(_exePath) {
+                UseShellExecute = false,
+                CreateNoWindow  = true,
+            };
+            _child = Process.Start(psi);
+            Log("OnStart: child pid " + (_child != null ? _child.Id.ToString() : "null"));
+        } catch (Exception ex) {
+            Log("OnStart error: " + ex.Message);
+            throw;
+        }
     }
 
     protected override void OnStop() {
+        Log("OnStop: killing child");
         try {
             if (_child != null && !_child.HasExited) {
                 _child.Kill();
                 _child.WaitForExit(5000);
             }
-        } catch {}
+        } catch (Exception ex) {
+            Log("OnStop error: " + ex.Message);
+        }
+        Log("OnStop: done");
     }
 
-    public static void Main(string[] exePath) {
-        ServiceBase.Run(new ServiceRemoteHost(exePath[0]));
+    public static void Main(string[] args) {
+        if (args.Length < 2) return;
+        ServiceBase.Run(new ServiceRemoteHost(args[0], args[1]));
     }
 }
-'@ -ReferencedAssemblies System.ServiceProcess
-
-[ServiceRemoteHost]::Main(@($ExePath))
 `;
 
 // Stable install location — %LOCALAPPDATA%\ServiceRemote\
@@ -105,23 +119,25 @@ function psEscape(p: string): string {
 export function installService(exePath: string, port = 3000): void {
   logger.log(`[Service] Installing Windows service "${SERVICE_NAME}" …`);
 
-  const installDir   = getInstallDir();
-  const installPath  = getInstallPath();
-  const wrapperPath  = path.join(installDir, 'wrapper.ps1');
-  const logPath      = getLogPath();
+  const installDir    = getInstallDir();
+  const installPath   = getInstallPath();
+  const hostSrcPath   = path.join(installDir, 'service-host.cs');
+  const hostExePath   = path.join(installDir, 'service-host.exe');
+  const logPath       = getLogPath();
 
-  // Both files are writable without elevation (LOCALAPPDATA).
-  // Copy before elevating so the running exe is never the install target.
+  // All writable without elevation (LOCALAPPDATA).
+  // Copy/write before elevating so the running exe is never the install target.
   fs.mkdirSync(installDir, { recursive: true });
   appendLog(logPath, `--- install started (source: ${exePath}) ---`);
   appendLog(logPath, `Copying exe to ${installPath} …`);
   fs.copyFileSync(exePath, installPath);
-  appendLog(logPath, 'Writing wrapper.ps1 …');
-  fs.writeFileSync(wrapperPath, WRAPPER_PS1, 'utf8');
+  appendLog(logPath, 'Writing service-host.cs …');
+  fs.writeFileSync(hostSrcPath, SERVICE_HOST_CS, 'utf8');
   appendLog(logPath, 'Files written. Requesting elevation …');
 
   const safeInstallPath = psEscape(installPath);
-  const safeWrapperPath = psEscape(wrapperPath);
+  const safeHostSrcPath = psEscape(hostSrcPath);
+  const safeHostExePath = psEscape(hostExePath);
   const safeLogPath     = psEscape(logPath);
 
   // Helper embedded in the script so both the non-elevated and elevated
@@ -136,9 +152,9 @@ function Write-Log {
 }
 `;
 
-  // The service binPath runs PowerShell with the wrapper script.
-  // PowerShell's inline C# handles the SCM handshake (SERVICE_RUNNING/STOPPED)
-  // and launches the real exe as a child process.
+  // Compile the C# service host to a native exe, then register that directly.
+  // Compiling at install time (not at service start) eliminates the Add-Type
+  // runtime compilation delay that caused the SCM 1053 startup timeout.
   const script = `
 ${logFn}
 
@@ -156,9 +172,24 @@ $name    = "${SERVICE_NAME}"
 $display = "${SERVICE_DISPLAY}"
 $desc    = "${SERVICE_DESC}"
 $exe     = "${safeInstallPath}"
-$wrapper = "${safeWrapperPath}"
-$ps      = (Get-Command powershell.exe).Source
-$bin     = '"' + $ps + '" -NonInteractive -ExecutionPolicy Bypass -File "' + $wrapper + '" -ExePath "' + $exe + '"'
+$hostSrc = "${safeHostSrcPath}"
+$hostExe = "${safeHostExePath}"
+$log     = "${safeLogPath}"
+
+# Compile the service host C# into a native exe (done once at install time,
+# not on every service start — avoids the SCM 1053 startup timeout).
+Write-Log "Compiling service-host.exe …"
+try {
+    Add-Type -Path $hostSrc -OutputAssembly $hostExe -OutputType ConsoleApplication -ReferencedAssemblies System.ServiceProcess 2>&1 | ForEach-Object { Write-Log $_ }
+    Write-Log "Compiled OK → $hostExe"
+} catch {
+    Write-Log "Compile error: $_"
+    Write-Host "ERROR: failed to compile service host. See $log"
+    Start-Sleep -Seconds 5
+    exit 1
+}
+
+$bin = '"' + $hostExe + '" "' + $exe + '" "' + $log + '"'
 
 $existing = & sc.exe query $name 2>&1
 $exists = $LASTEXITCODE -eq 0
@@ -197,8 +228,6 @@ Write-Log "Control panel URL: $url"
 Write-Log "Install log: ${safeLogPath}"
 Write-Log "--- install complete ---"
 
-# Open a visible summary window so the user sees the result even though
-# the original (non-elevated) console is gone.
 $summary = @"
 ==============================================
   Service Remote — install complete
