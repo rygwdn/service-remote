@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { applyLiveStatus, dbToMul, extractObsPeak, mulToDb } from '../../src/connections/obs';
+import { applyLiveStatus, dbToMul, extractObsPeak, mulToDb } from '../../src/connections/obs-helpers';
 
 describe('OBS conversion helpers', () => {
   test('extractObsPeak returns the largest peak channel value', () => {
