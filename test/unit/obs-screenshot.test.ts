@@ -58,8 +58,16 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 
 describe('OBS screenshot capture', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     obsConnection.disconnect();
+    if (!FakeOBSWebSocket.instance) {
+      // Dynamic import is the point: we are probing which class the live
+      // 'obs-websocket-js' module binding resolved to after mock.module().
+      const wsModule = (await import('obs-websocket-js')) as unknown as { default: unknown };
+      throw new Error(
+        `[obs-screenshot] fake never constructed: mock applied=${wsModule.default === FakeOBSWebSocket}`,
+      );
+    }
     FakeOBSWebSocket.instance.screenshotCalls.length = 0;
     FakeOBSWebSocket.instance.screenshotResults.length = 0;
     screenshotWs.setPublisher(() => {});
