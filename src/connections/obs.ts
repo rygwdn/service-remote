@@ -4,6 +4,7 @@ import state from '../state';
 import * as logger from '../logger';
 import * as screenshotWs from '../screenshot-ws';
 import * as levelsWs from '../levels-ws';
+import { applyLiveStatus, dbToMul, extractObsPeak, mulToDb } from './obs-helpers';
 
 const obs = new OBSWebSocket();
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -321,35 +322,6 @@ async function refreshState(generation = connectionGeneration): Promise<void> {
     }
   }
 
-}
-export function extractObsPeak(levels: number[][]): number {
-  if (!levels || levels.length === 0) return 0;
-  let peak = 0;
-  for (const channel of levels) {
-    const value = channel[1];
-    if (value != null && value > peak) peak = value;
-  }
-  return peak;
-}
-
-export function applyLiveStatus<T extends { name: string; live: boolean; level: number }>(
-  sources: T[],
-  liveSourceNames: ReadonlySet<string>,
-): T[] {
-  return sources.map((source) => ({
-    ...source,
-    live: liveSourceNames.has(source.name),
-    level: liveSourceNames.has(source.name) ? source.level : 0,
-  }));
-}
-
-export function mulToDb(mul: number): number {
-  if (mul === 0) return -Infinity;
-  return 20 * Math.log10(mul);
-}
-
-export function dbToMul(db: number): number {
-  return Math.pow(10, db / 20);
 }
 function disconnect(): void {
   wantConnected = false;
