@@ -11,6 +11,14 @@ function req(server: ReturnType<typeof createTestApp>['server'], method: string,
   }
   return fetch(url, init);
 }
+function rawReq(server: ReturnType<typeof createTestApp>['server'], path: string, body: string, contentType = 'application/json'): Promise<Response> {
+  return fetch(`http://localhost:${server.port}${path}`, {
+    method: 'POST',
+    body,
+    headers: { 'Content-Type': contentType },
+  });
+}
+
 
 describe('API routes', () => {
   let server: ReturnType<typeof createTestApp>['server'];
@@ -525,6 +533,111 @@ describe('API routes', () => {
     test('returns 400 when url param is missing', async () => {
       const res = await req(server, 'GET', '/api/server/qr');
       assert.equal(res.status, 400);
+    });
+  });
+  describe('request validation and secret boundaries', () => {
+    test('GET /api/config exposes configuration status without secret values', async () => {
+      const res = await req(server, 'GET', '/api/config');
+      assert.equal(res.status, 200);
+      const body = await res.json() as {
+        obs: { password?: unknown; passwordConfigured?: unknown };
+        proclaim: { password?: unknown; passwordConfigured?: unknown };
+        youtube: {
+          apiKey?: unknown;
+          apiKeyConfigured?: unknown;
+          oauth: { clientId?: unknown; clientSecret?: unknown; refreshToken?: unknown };
+        };
+      };
+      assert.equal(body.obs.password, undefined);
+      assert.equal(body.proclaim.password, undefined);
+      assert.equal(body.youtube.apiKey, undefined);
+      assert.equal(body.youtube.oauth.clientId, undefined);
+      assert.equal(body.youtube.oauth.clientSecret, undefined);
+      assert.equal(body.youtube.oauth.refreshToken, undefined);
+      assert.equal(typeof body.obs.passwordConfigured, 'boolean');
+      assert.equal(typeof body.proclaim.passwordConfigured, 'boolean');
+      assert.equal(typeof body.youtube.apiKeyConfigured, 'boolean');
+    });
+
+    test('rejects JSON mutation routes without an application/json content type', async () => {
+      resetCalls();
+      const res = await rawReq(server, '/api/obs/scene', JSON.stringify({ scene: 'Ignored' }), 'text/plain');
+      assert.equal(res.status, 400);
+      assert.equal(calls.obs.setScene, undefined);
+    });
+
+    test('rejects invalid and non-finite OBS volume values before calling OBS', async () => {
+      for (const body of ['{"input":"Mic","volumeDb":-61}', '{"input":"Mic","volumeDb":7}', '{"input":"Mic","volumeDb":null}', '{"input":"Mic","volumeDb":"Infinity"}', '{"input":"Mic","volumeDb":1e999}']) {
+        resetCalls();
+        const res = await rawReq(server, '/api/obs/volume', body);
+        assert.equal(res.status, 400);
+        assert.equal(calls.obs.setInputVolume, undefined);
+      }
+    });
+
+    test('rejects invalid X32 command ranges before calling the mixer', async () => {
+      for (const [path, body] of [
+        ['/api/x32/fader', { channel: 1, value: -0.01 }],
+        ['/api/x32/fader', { channel: 1, value: 1.01 }],
+        ['/api/x32/fader', { channel: 0, value: 0.5 }],
+        ['/api/x32/mute', { channel: 33 }],
+        ['/api/x32/bus-send', { channel: 1, busIndex: 17, value: 0.5 }],
+        ['/api/x32/bus-send', { channel: 1, busIndex: 1, value: NaN }],
+      ] as Array<[string, Record<string, unknown>]>) {
+        resetCalls();
+        delete calls.x32.setBusSend;
+        const res = await req(server, 'POST', path, body);
+        assert.equal(res.status, 400);
+        assert.equal(calls.x32.setFader, undefined);
+        assert.equal(calls.x32.toggleMute, undefined);
+        assert.equal(calls.x32.setBusSend, undefined);
+      }
+      resetCalls();
+      delete calls.x32.setBusSend;
+      const nonFinite = await rawReq(server, '/api/x32/bus-send', '{"channel":1,"busIndex":1,"value":1e999}');
+      assert.equal(nonFinite.status, 400);
+      assert.equal(calls.x32.setBusSend, undefined);
+    });
+
+    test('rejects invalid Proclaim actions and indexes before sending commands', async () => {
+      for (const body of [
+        { action: 'NotACommand' },
+        { action: 'GoToSlide' },
+        { action: 'GoToServiceItem', index: 0 },
+        { action: 'GoToServiceItem', index: 10001 },
+        { action: 'NextSlide', index: Infinity },
+      ]) {
+        resetCalls();
+        const res = await req(server, 'POST', '/api/proclaim/action', body);
+        assert.equal(res.status, 400);
+        assert.equal(calls.proclaim.sendAction, undefined);
+      }
+      resetCalls();
+      const nonFinite = await rawReq(server, '/api/proclaim/action', '{"action":"NextSlide","index":1e999}');
+      assert.equal(nonFinite.status, 400);
+      assert.equal(calls.proclaim.sendAction, undefined);
+    });
+
+    test('rejects poisoned configuration payloads without writing or reconnecting', async () => {
+      resetCalls();
+      const before = {
+        obsConnect: calls.obs.connect,
+        obsDisconnect: calls.obs.disconnect,
+        x32Connect: calls.x32.connect,
+        x32Disconnect: calls.x32.disconnect,
+        proclaimConnect: calls.proclaim.connect,
+        proclaimDisconnect: calls.proclaim.disconnect,
+      };
+      const res = await rawReq(server, '/api/config', '{"server":{"port":3000,"openBrowser":true},"obs":{"address":"ws://localhost:4455","password":""},"x32":{"address":"192.168.1.100","port":10023},"proclaim":{"host":"127.0.0.1","port":52195},"ptz":{"cameras":[]},"youtube":{},"ui":{"hiddenObs":[],"hiddenX32":[]},"__proto__":{"obs":{"address":"ws://evil"}}}');
+      assert.equal(res.status, 400);
+      assert.deepEqual({
+        obsConnect: calls.obs.connect,
+        obsDisconnect: calls.obs.disconnect,
+        x32Connect: calls.x32.connect,
+        x32Disconnect: calls.x32.disconnect,
+        proclaimConnect: calls.proclaim.connect,
+        proclaimDisconnect: calls.proclaim.disconnect,
+      }, before);
     });
   });
 });

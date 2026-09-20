@@ -1,77 +1,125 @@
-import assert from 'node:assert/strict';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import * as screenshotWs from '../../src/screenshot-ws';
 
-// Unit tests for the OBS screenshot push logic.
-// These test the pure helper functions that will be extracted/used by obs.ts.
+type ScreenshotResult = { imageData: string };
 
-describe('OBS screenshot push logic', () => {
-  // Simulates the captureAndPushScreenshot logic:
-  // - calls obs.call('GetSourceScreenshot', ...) with correct params
-  // - pushes imageData as obs.screenshot via state.update
-  test('screenshot is captured with correct parameters', async () => {
-    const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
-    const stateUpdates: Array<{ section: string; patch: Record<string, unknown> }> = [];
+class FakeOBSWebSocket {
+  static instance: FakeOBSWebSocket;
+  readonly screenshotCalls: Array<Record<string, unknown>> = [];
+  readonly screenshotResults: Array<Promise<ScreenshotResult>> = [];
+  private readonly screenshotStartResolvers: Array<() => void> = [];
+  private readonly handlers = new Map<string, Array<(payload?: unknown) => void>>();
 
-    const mockObs = {
-      call: async (method: string, params: Record<string, unknown>) => {
-        calls.push({ method, params });
-        return { imageData: 'data:image/jpeg;base64,/9j/fakedata' };
-      },
-    };
+  constructor() {
+    FakeOBSWebSocket.instance = this;
+  }
 
-    const mockState = {
-      update: (section: string, patch: Record<string, unknown>) => {
-        stateUpdates.push({ section, patch });
-      },
-    };
+  waitForScreenshotStart(): Promise<void> {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    this.screenshotStartResolvers.push(resolve);
+    return promise;
+  }
 
-    const sourceName = 'Test Scene';
+  on(event: string, handler: (payload?: unknown) => void): void {
+    const handlers = this.handlers.get(event) ?? [];
+    handlers.push(handler);
+    this.handlers.set(event, handlers);
+  }
 
-    // Simulate what captureAndPushScreenshot does
-    const result = await mockObs.call('GetSourceScreenshot', {
-      sourceName,
+  async connect(): Promise<void> {}
+
+  disconnect(): void {
+    for (const handler of this.handlers.get('ConnectionClosed') ?? []) handler();
+  }
+
+  async call(method: string, params?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (method === 'GetSceneList') return { scenes: [{ sceneName: 'Main' }], currentProgramSceneName: 'Main' };
+    if (method === 'GetStreamStatus' || method === 'GetRecordStatus') return { outputActive: false };
+    if (method === 'GetSceneItemList' || method === 'GetGroupSceneItemList') return { sceneItems: [] };
+    if (method === 'GetInputList') return { inputs: [] };
+    if (method === 'GetSourceScreenshot') {
+      this.screenshotStartResolvers.shift()?.();
+      this.screenshotCalls.push(params ?? {});
+      const result = this.screenshotResults.shift();
+      if (!result) return { imageData: 'data:image/jpeg;base64,ZmFrZQ==' };
+      return result;
+    }
+    if (method === 'GetSourcePrivateSettings') return { sourcePrivateSettings: {} };
+    return {};
+  }
+}
+
+mock.module('obs-websocket-js', () => ({ default: FakeOBSWebSocket }));
+const { default: obsConnection } = await import('../../src/connections/obs');
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  return Promise.withResolvers<T>();
+}
+
+
+describe('OBS screenshot capture', () => {
+  beforeEach(() => {
+    obsConnection.disconnect();
+    FakeOBSWebSocket.instance.screenshotCalls.length = 0;
+    FakeOBSWebSocket.instance.screenshotResults.length = 0;
+    screenshotWs.setPublisher(() => {});
+  });
+
+  afterAll(() => {
+    obsConnection.disconnect();
+    screenshotWs.setPublisher(() => {});
+    mock.restore();
+  });
+
+  test('getSceneScreenshot uses OBS and decodes the returned JPEG', async () => {
+    const fake = FakeOBSWebSocket.instance;
+    const image = Buffer.from('jpeg bytes');
+    fake.screenshotResults.push(Promise.resolve({ imageData: `data:image/jpeg;base64,${image.toString('base64')}` }));
+
+    const result = await obsConnection.getSceneScreenshot('Main');
+
+    expect(result).toEqual(image);
+    expect(fake.screenshotCalls[0]).toEqual({
+      sourceName: 'Main',
       imageFormat: 'jpeg',
       imageWidth: 320,
       imageCompressionQuality: 50,
     });
-    mockState.update('obs', { screenshot: result.imageData });
-
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].method, 'GetSourceScreenshot');
-    assert.deepEqual(calls[0].params, {
-      sourceName: 'Test Scene',
-      imageFormat: 'jpeg',
-      imageWidth: 320,
-      imageCompressionQuality: 50,
-    });
-
-    assert.equal(stateUpdates.length, 1);
-    assert.equal(stateUpdates[0].section, 'obs');
-    assert.equal(stateUpdates[0].patch.screenshot, 'data:image/jpeg;base64,/9j/fakedata');
   });
 
-  test('screenshot is a data URL (starts with data:image/jpeg;base64,)', async () => {
-    const dataUrl = 'data:image/jpeg;base64,/9j/somebase64data==';
-    assert.ok(dataUrl.startsWith('data:image/jpeg;base64,'), 'screenshot must be a data URL');
+  test('does not start a second screenshot while the first is pending', async () => {
+    const fake = FakeOBSWebSocket.instance;
+    const first = deferred<ScreenshotResult>();
+    const started = fake.waitForScreenshotStart();
+    fake.screenshotResults.push(first.promise);
+    await obsConnection.connect();
+    await started;
+
+    expect(fake.screenshotCalls).toHaveLength(1);
+    await Promise.resolve();
+    expect(fake.screenshotCalls).toHaveLength(1);
+    obsConnection.disconnect();
+    first.resolve({ imageData: 'data:image/jpeg;base64,ZmFrZQ==' });
+    await first.promise;
   });
 
-  test('screenshot push interval is 250ms (config-independent default)', () => {
-    // The interval used for screenshot pushing should be 250ms
-    const SCREENSHOT_PUSH_INTERVAL_MS = 250;
-    assert.equal(SCREENSHOT_PUSH_INTERVAL_MS, 250);
-  });
+  test('disconnect suppresses publication from a screenshot that completes later', async () => {
+    const fake = FakeOBSWebSocket.instance;
+    const pending = deferred<ScreenshotResult>();
+    const started = fake.waitForScreenshotStart();
+    fake.screenshotResults.push(pending.promise);
+    const frames: Buffer[] = [];
+    screenshotWs.setPublisher((frame) => frames.push(frame));
 
-  test('screenshot is cleared when OBS disconnects', () => {
-    const stateUpdates: Array<{ section: string; patch: Record<string, unknown> }> = [];
-    const mockState = {
-      update: (section: string, patch: Record<string, unknown>) => {
-        stateUpdates.push({ section, patch });
-      },
-    };
+    await obsConnection.connect();
+    await started;
+    expect(fake.screenshotCalls).toHaveLength(1);
 
-    // Simulate disconnect clearing the screenshot
-    mockState.update('obs', { connected: false, screenshot: undefined });
+    obsConnection.disconnect();
+    pending.resolve({ imageData: 'data:image/jpeg;base64,ZmFrZQ==' });
+    await pending.promise;
+    await Promise.resolve();
 
-    assert.equal(stateUpdates.length, 1);
-    assert.equal(stateUpdates[0].patch.screenshot, undefined);
+    expect(frames).toHaveLength(0);
   });
 });

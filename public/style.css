@@ -15,6 +15,9 @@
   --green: #4caf50;
   --red: #e94560;
   --yellow: #ffc107;
+  --radius-control: 8px;
+  --radius-small: 6px;
+  --touch-target: 44px;
 }
 
 html, body {
@@ -113,7 +116,7 @@ main {
   font-size: 1.2rem;
   background: rgba(0, 0, 0, 0.6);
   padding: 16px 28px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   border: 1px solid rgba(255,255,255,0.2);
 }
 
@@ -130,7 +133,7 @@ main {
 .btn {
   padding: 12px 20px;
   border: 1px solid var(--accent);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--text);
   font-size: 14px;
@@ -184,7 +187,7 @@ main {
   aspect-ratio: 16 / 9;
   background: var(--surface);
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   overflow: hidden;
   opacity: 0.5;
 }
@@ -326,7 +329,7 @@ main {
   width: 100%;
   padding: 12px 16px;
   border: 1px solid var(--accent);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--text);
   font-size: 13px;
@@ -401,7 +404,7 @@ main {
   padding: 4px 12px;
   font-size: 12px;
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   background: var(--surface);
   color: var(--text-dim);
   cursor: pointer;
@@ -430,11 +433,6 @@ main {
   flex: 1 1 100%;
 }
 
-.channel-strip .fader-visibility-label {
-  flex: none;
-  justify-content: center;
-  width: 100%;
-}
 
 /* OBS */
 .obs-section {
@@ -458,7 +456,7 @@ main {
 .scene-btn {
   padding: 14px 12px;
   border: 1px solid var(--accent);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--text);
   font-size: 13px;
@@ -492,7 +490,7 @@ main {
   gap: 10px;
   padding: 8px 12px;
   background: var(--surface);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--accent);
 }
 
@@ -533,10 +531,10 @@ main {
 }
 
 .mute-btn {
-  width: 36px;
-  height: 36px;
+  width: var(--touch-target);
+  height: var(--touch-target);
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   background: var(--surface-light);
   color: var(--text);
   font-size: 16px;
@@ -606,7 +604,7 @@ main {
   padding: 8px 10px;
   background: var(--surface);
   border: 1px solid var(--accent);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 
 .channel-row-h .ch-label {
@@ -671,9 +669,10 @@ main {
 
 .channel-row-h .ch-mute {
   flex: 0 0 54px;
+  min-height: var(--touch-target);
   padding: 8px 4px;
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   background: var(--surface-light);
   color: var(--text);
   font-size: 11px;
@@ -710,7 +709,7 @@ main {
 .ov-cell {
   background: var(--surface);
   border: 1px solid var(--accent);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 5px 10px;
   display: flex;
   flex-direction: column;
@@ -790,7 +789,7 @@ main {
   width: 100%;
   aspect-ratio: 16 / 9;
   background: #000;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   overflow: hidden;
   margin-bottom: 10px;
 }
@@ -892,23 +891,7 @@ main {
   transition: width 0.05s;
 }
 
-.ov-ch-mute {
-  flex: 0 0 44px;
-  padding: 6px 4px;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  background: var(--surface-light);
-  color: var(--text);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: center;
-}
 
-.ov-ch-mute.muted {
-  background: var(--red);
-  border-color: var(--red);
-}
 
 .ov-status-row {
   display: flex;
@@ -972,7 +955,7 @@ main {
   padding: 8px 10px;
   background: var(--bg);
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   color: var(--text);
   font-size: 14px;
   outline: none;
@@ -1025,6 +1008,11 @@ main {
 }
 
 .qr-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
   font-size: 18px;
   cursor: pointer;
   user-select: none;
@@ -1039,7 +1027,7 @@ main {
   height: 180px;
   background: #fff;
   border: 2px solid var(--accent);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 4px;
   z-index: 100;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
@@ -1049,32 +1037,6 @@ main {
   display: block;
 }
 
-.channel-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.ch-index-input {
-  width: 56px;
-  padding: 6px 8px;
-  background: var(--bg);
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 13px;
-}
-
-.ch-label-input {
-  flex: 1;
-  padding: 6px 8px;
-  background: var(--bg);
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 13px;
-}
 
 .settings-footer {
   display: flex;
@@ -1092,7 +1054,7 @@ main {
 .log-output {
   background: var(--bg);
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   padding: 10px;
   font-size: 11px;
   font-family: monospace;
@@ -1131,13 +1093,13 @@ main {
   font-size: 0.9em;
   padding: 6px 12px;
   border: 1px solid var(--red, #e05c5c);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
 }
 
 .ptz-obs-preview {
   width: 100%;
   max-width: 480px;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   display: block;
 }
 
@@ -1161,7 +1123,7 @@ main {
   background: var(--bg-raised, #2a2a2a);
   color: var(--text, #eee);
   border: 1px solid var(--accent, #444);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   cursor: pointer;
   display: flex;
   align-items: center;

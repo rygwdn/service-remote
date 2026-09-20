@@ -20,6 +20,7 @@ document.addEventListener('alpine:init', () => {
 
     setTab(tab) {
       this.tab = tab;
+      updateScreenshotSubscription(tab);
     },
     toggleEditMode(panel) {
       this.editMode[panel] = !this.editMode[panel];
@@ -41,14 +42,23 @@ document.addEventListener('alpine:init', () => {
     },
   });
 
-  // X32 vertical fader — tracks touch so server updates don't jump the slider
+  // X32 fader — shared controller preserves local drags while snapshots arrive.
   Alpine.data('x32Fader', x32FaderComponent);
 
-  // OBS audio row (placeholder — no special touch state needed for horizontal sliders)
-  Alpine.data('obsFader', () => ({}));
+  // OBS fader — the input binding calls setObsVolume; the shared instance is
+  // looked up by source name and provides bounded, trailing writes.
+  Alpine.data('obsFader', createFaderComponent({
+    key: (src) => src && `obs/${src.name}`,
+    url: '/api/obs/volume',
+    min: -60,
+    max: 0,
+    getValue: (src) => src?.volume,
+    applyLocal: (src, value) => { if (src) src.volume = value; },
+    buildBody: (src, value) => ({ input: src.name, volumeDb: value }),
+    releaseOnWrite: true,
+  }));
 
-  // Start WebSocket connections after stores are ready so onopen/onclose can
-  // safely call Alpine.store() without racing against Alpine's own load.
+  // Start after stores are ready so callbacks can safely update Alpine.
   connectWs();
 
   // Settings panel state
@@ -193,58 +203,107 @@ document.addEventListener('alpine:init', () => {
 });
 
 // --- Unified WebSocket (/ws) ---
-// Subscribes to: state, levels, screenshot
-let ws;
-let reconnectDelay = 1000;
+// State and levels are always needed. Screenshots are added only while a tab
+// that displays a preview is active.
+let ws = null;
+let wsController = null;
 let currentScreenshotUrl = null;
 
-function connectWs() {
-  if (ws && ws.readyState < WebSocket.CLOSING) return;
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}${basePath}/ws`);
-  ws.binaryType = 'blob';
+const PREVIEW_TABS = new Set(['overview', 'obs', 'camera']);
 
-  ws.onopen = () => {
-    reconnectDelay = 1000;
-    ws.send(JSON.stringify({ type: 'subscribe', channels: ['levels', 'screenshot'] }));
-    if (window.Alpine) Alpine.store('ui').serverConnected = true;
-  };
-
-  ws.onmessage = (e) => {
-    if (e.data instanceof Blob) {
-      // Binary frame = screenshot JPEG
-      const newUrl = URL.createObjectURL(e.data);
-      const p1 = document.getElementById('obs-preview');
-      const p2 = document.getElementById('ov-obs-preview');
-      const p3 = document.getElementById('ptz-obs-preview');
-      if (p1) p1.src = newUrl;
-      if (p2) p2.src = newUrl;
-      if (p3) p3.src = newUrl;
-      if (currentScreenshotUrl) URL.revokeObjectURL(currentScreenshotUrl);
-      currentScreenshotUrl = newUrl;
-      return;
-    }
-    const msg = JSON.parse(e.data);
-    if (msg.type === 'state' && window.Alpine) {
-      const store = Alpine.store('state');
-      store.obs = msg.data.obs;
-      store.x32 = msg.data.x32;
-      store.proclaim = msg.data.proclaim;
-      if (msg.data.ptz) store.ptz = msg.data.ptz;
-      if (msg.data.youtube) store.youtube = msg.data.youtube;
-    } else if (msg.type === 'levels') {
-      handleLevelsMessage(msg);
-    }
-  };
-
-  ws.onclose = () => {
-    if (window.Alpine) Alpine.store('ui').serverConnected = false;
-    if (document.hidden) return;
-    setTimeout(connectWs, reconnectDelay);
-    reconnectDelay = Math.min(reconnectDelay * 2, 10000);
-  };
+function updateScreenshotSubscription(tab = Alpine.store('ui')?.tab) {
+  if (!wsController) return;
+  if (PREVIEW_TABS.has(tab)) wsController.subscribe('screenshot');
+  else wsController.unsubscribe('screenshot');
 }
 
+function sameStateValue(a, b) {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== typeof b || a === null || b === null) return false;
+  if (typeof a !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) return a.length === b.length && a.every((item, i) => sameStateValue(item, b[i]));
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((key) => Object.prototype.hasOwnProperty.call(b, key) && sameStateValue(a[key], b[key]));
+}
+
+function applyStateSnapshot(data) {
+  if (!window.Alpine || !data || typeof data !== 'object') return;
+  const store = Alpine.store('state');
+  for (const section of ['obs', 'x32', 'proclaim', 'ptz', 'youtube']) {
+    if (!Object.prototype.hasOwnProperty.call(data, section)) continue;
+    if (!sameStateValue(store[section], data[section])) store[section] = data[section];
+  }
+
+  // Let active faders retain their local value until the server echoes it.
+  for (const ch of data.x32?.channels ?? []) {
+    window.reconcileManagedFader?.(`${ch.type}-${ch.index}`, ch, ch.fader);
+  }
+  for (const source of data.obs?.audioSources ?? []) {
+    window.reconcileManagedFader?.(`obs/${source.name}`, source, source.volume);
+  }
+}
+
+function updateScreenshotFrame(data) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: 'image/jpeg' });
+  const newUrl = URL.createObjectURL(blob);
+  const tab = Alpine.store('ui')?.tab;
+  const ids = tab === 'overview' ? ['ov-obs-preview']
+    : tab === 'obs' ? ['obs-preview']
+      : tab === 'camera' ? ['ptz-obs-preview'] : [];
+  if (ids.length === 0) {
+    URL.revokeObjectURL(newUrl);
+    return;
+  }
+  for (const id of ids) {
+    const element = document.getElementById(id);
+    if (element) element.src = newUrl;
+  }
+  if (currentScreenshotUrl) URL.revokeObjectURL(currentScreenshotUrl);
+  currentScreenshotUrl = newUrl;
+}
+
+function connectWs() {
+  if (wsController) {
+    updateScreenshotSubscription();
+    return wsController;
+  }
+  wsController = createManagedWebSocket({
+    subscriptions: ['state', 'levels'],
+    // Three missed ten-second server heartbeats is long enough to avoid
+    // reconnecting during a busy render or a short mobile background pause.
+    heartbeatIntervalMs: 10000,
+    missedHeartbeats: 3,
+    onOpen: (socket) => {
+      ws = socket;
+      if (window.Alpine) Alpine.store('ui').serverConnected = true;
+      updateScreenshotSubscription();
+    },
+    onMessage: (event) => {
+      if (event.data instanceof Blob || event.data instanceof ArrayBuffer || ArrayBuffer.isView(event.data)) {
+        updateScreenshotFrame(event.data);
+        return;
+      }
+      if (typeof event.data !== 'string') return;
+      let msg;
+      try { msg = JSON.parse(event.data); } catch (_) { return; }
+      if (msg.type === 'state') applyStateSnapshot(msg.data);
+      else if (msg.type === 'levels') handleLevelsMessage(msg);
+    },
+    onClose: () => {
+      ws = null;
+      if (window.Alpine) Alpine.store('ui').serverConnected = false;
+      if (currentScreenshotUrl) {
+        URL.revokeObjectURL(currentScreenshotUrl);
+        currentScreenshotUrl = null;
+      }
+    },
+  });
+  updateScreenshotSubscription();
+  return wsController;
+}
 // Sort X32 channels for display: main L/R first, then bus, then ch, then mtx.
 const X32_TYPE_ORDER = { main: 0, bus: 1, ch: 2, mtx: 3 };
 function sortedX32Channels(channels) {
@@ -255,12 +314,6 @@ function sortedX32Channels(channels) {
     return a.index - b.index;
   });
 }
-
-registerManagedWs({
-  getWs: () => ws,
-  reconnect: connectWs,
-  resetDelay: () => { reconnectDelay = 1000; },
-});
 
 // --- API helpers ---
 function sendAction(action, index) {
@@ -275,9 +328,13 @@ function gotoItem(itemId) {
 
 function startYouTubeBroadcast()        { post('/api/youtube/start', {}); }
 function stopYouTubeBroadcast()         { post('/api/youtube/stop', {}); }
+function setObsVolume(input, volumeDb) {
+  const fader = window.findManagedFader?.(`obs/${input}`);
+  if (fader) fader.setFaderValue(volumeDb);
+  else post('/api/obs/volume', { input, volumeDb });
+}
 function setScene(scene)                { post('/api/obs/scene', { scene }); }
 function toggleObsMute(input)           { post('/api/obs/mute', { input }); }
-function setObsVolume(input, volumeDb)  { post('/api/obs/volume', { input, volumeDb }); }
 function toggleStream()                 { post('/api/obs/stream', {}); }
 function toggleRecord()                 { post('/api/obs/record', {}); }
 
@@ -361,11 +418,10 @@ let currentConfig = null;
 
 // --- Template helpers (called from x-html / x-for expressions) ---
 
-let thumbRevision = 0;
 
 function thumbUrl(itemId, slideIndex) {
-  const p = Alpine.store('proclaim');
-  const localRevision = p?.slideRevisions?.[itemId]?.[String(slideIndex)] ?? thumbRevision;
+  const p = Alpine.store('state')?.proclaim;
+  const localRevision = p?.slideRevisions?.[itemId]?.[String(slideIndex)] ?? 0;
   return `${basePath}/api/proclaim/thumb?itemId=${encodeURIComponent(itemId)}&slideIndex=${encodeURIComponent(slideIndex)}&localRevision=${encodeURIComponent(localRevision)}`;
 }
 

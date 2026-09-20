@@ -46,6 +46,16 @@ function waitForClose(ws: WebSocket): Promise<void> {
   });
 }
 
+function noMessageFor(ws: WebSocket, durationMs = 40): Promise<boolean> {
+  const { promise, resolve } = Promise.withResolvers<boolean>();
+  const handler = () => { ws.removeEventListener('message', handler); resolve(false); };
+  ws.addEventListener('message', handler);
+  // Negative assertions need a bounded integration wait because the server has no event for ignored topics.
+  setTimeout(() => { ws.removeEventListener('message', handler); resolve(true); }, durationMs);
+  return promise;
+}
+
+
 describe('Bus WebSocket (unified /ws + subscribe)', () => {
   let server: TestServer;
   let state: ReturnType<typeof createTestApp>['state'];
@@ -58,6 +68,7 @@ describe('Bus WebSocket (unified /ws + subscribe)', () => {
   afterAll(() => server.stop(true));
 
   test('subscribing to bus:8 receives immediate bus-state message', async () => {
+    state.update('x32', { connected: true });
     const { ws } = await connectWs(server);
     const data = await subscribeToBus(ws, 8);
     ws.close();
@@ -65,8 +76,16 @@ describe('Bus WebSocket (unified /ws + subscribe)', () => {
     const msg = data as Record<string, unknown>;
     assert.equal(msg.type, 'bus-state');
     assert.equal(msg.busIndex, 8);
+    assert.equal(msg.connected, true);
     assert.ok('busChannel' in msg);
     assert.ok(Array.isArray(msg.channels));
+  });
+
+  test('invalid bus indexes are ignored without a bus-state response', async () => {
+    const { ws } = await connectWs(server);
+    ws.send(JSON.stringify({ type: 'subscribe', channels: ['bus:0', 'bus:17'] }));
+    assert.equal(await noMessageFor(ws), true);
+    ws.close();
   });
 
   test('state update triggers broadcast to bus subscriber', async () => {

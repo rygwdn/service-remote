@@ -28,3 +28,4 @@ fail() {
 output=$(bun run typecheck 2>&1) || fail "typecheck" "$output"
 output=$(bun run lint 2>&1)     || fail "lint (stray console.* calls)" "$output"
 output=$(bun test test/unit test/e2e 2>&1) || fail "unit/e2e tests" "$output"
+output=$(bun run test:ui 2>&1)      || fail "UI tests" "$output"

@@ -15,11 +15,8 @@ import assert from 'node:assert/strict';
 import { applyBusSendPatchWithPending } from '../../src/connections/x32';
 
 describe('x32 pending bus-send mechanism', () => {
-  describe('applyBusSendPatchWithPending()', () => {
-    test('is exported', () => {
-      assert.equal(typeof applyBusSendPatchWithPending, 'function');
-    });
 
+  describe('applyBusSendPatchWithPending()', () => {
     test('applies level patch normally when no pending entry', () => {
       const pending = new Map<string, { level: number; sentAt: number }>();
       const result = applyBusSendPatchWithPending('ch1-bus8', { level: 0.8 }, pending);

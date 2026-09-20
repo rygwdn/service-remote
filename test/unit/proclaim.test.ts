@@ -1,83 +1,73 @@
 import assert from 'node:assert/strict';
-import { State } from '../../src/state';
+import type { ServiceItem } from '../../src/types';
 import * as logger from '../../src/logger';
 
 // Save native fetch so afterEach cleanup restores it instead of deleting it.
-// Deleting globalThis.fetch removes the native binding permanently across tests.
 const _nativeFetch = globalThis.fetch;
-function restoreFetch() { (globalThis as any).fetch = _nativeFetch; }
+type FetchImplementation = (...args: Parameters<typeof globalThis.fetch>) => Promise<Response>;
 
-// Test the goToItem logic
-describe('proclaim.goToItem', () => {
-  test('only sends sectionCommand for non-Service items (no GoToServiceItem)', () => {
-    type SectionName = 'Pre-Service' | 'Warmup' | 'Service' | 'Post-Service';
-    const sentActions: Array<{ action: string; index?: number }> = [];
-
-    function simulateGoToItem(section: SectionName, sectionIndex: number) {
-      sentActions.length = 0;
-      if (section === 'Service') {
-        sentActions.push({ action: 'GoToServiceItem', index: sectionIndex });
-      } else {
-        const sectionCommand = `Start${section.replace('-', '').replace(' ', '')}`;
-        sentActions.push({ action: sectionCommand });
-      }
-    }
-
-    simulateGoToItem('Service', 3);
-    assert.equal(sentActions.length, 1);
-    assert.equal(sentActions[0].action, 'GoToServiceItem');
-    assert.equal(sentActions[0].index, 3);
-
-    simulateGoToItem('Pre-Service', 1);
-    assert.equal(sentActions.length, 1);
-    assert.equal(sentActions[0].action, 'StartPreService');
-
-    simulateGoToItem('Warmup', 2);
-    assert.equal(sentActions.length, 1);
-    assert.equal(sentActions[0].action, 'StartWarmup');
-
-    simulateGoToItem('Post-Service', 1);
-    assert.equal(sentActions.length, 1);
-    assert.equal(sentActions[0].action, 'StartPostService');
+function installFetch(fetchImplementation: FetchImplementation): void {
+  globalThis.fetch = Object.assign(fetchImplementation, {
+    preconnect: _nativeFetch.preconnect,
   });
+}
 
-  test('goToItem sends GoToServiceItem only for Service section', async () => {
-    const s = new State();
+function restoreFetch(): void { globalThis.fetch = _nativeFetch; }
 
-    const serviceItems = [
-      { id: 'pre1', title: 'Prelude', kind: 'Slide', slideCount: 1, index: 1, sectionIndex: 1, sectionCommand: 'StartPreService', section: 'Pre-Service', group: null },
-      { id: 'svc1', title: 'Welcome', kind: 'Slide', slideCount: 1, index: 3, sectionIndex: 1, sectionCommand: 'StartService', section: 'Service', group: null },
-      { id: 'svc2', title: 'Sermon', kind: 'Slide', slideCount: 1, index: 4, sectionIndex: 2, sectionCommand: 'StartService', section: 'Service', group: null },
-      { id: 'post1', title: 'Postlude', kind: 'Slide', slideCount: 1, index: 6, sectionIndex: 1, sectionCommand: 'StartPostService', section: 'Post-Service', group: null },
-    ];
-    s.update('proclaim', { connected: true, onAir: true, currentItemId: 'svc1', currentItemTitle: 'Welcome', currentItemType: 'Slide', slideIndex: 0, serviceItems });
-
-    async function goToItem(itemId: string, getItems: () => typeof serviceItems): Promise<string[]> {
-      const item = getItems().find((i) => i.id === itemId);
-      if (!item) return [];
-      if (item.section === 'Service') {
-        return [`GoToServiceItem:${item.sectionIndex}`];
-      }
-      return [item.sectionCommand];
-    }
-
-    assert.deepEqual(await goToItem('pre1', () => serviceItems), ['StartPreService']);
-    assert.deepEqual(await goToItem('svc2', () => serviceItems), ['GoToServiceItem:2']);
-    assert.deepEqual(await goToItem('post1', () => serviceItems), ['StartPostService']);
-  });
-});
-
-// We need to isolate the module for each test to reset module-level state.
-// We do this by deleting from require cache after each test.
-function freshProclaim() {
-  // Clear cached modules so module-level vars are reset
+function clearProclaimModules(): void {
   for (const key of Object.keys(require.cache)) {
     if (key.includes('connections/proclaim') || key.includes('src/config') || key.includes('src/state')) {
       delete require.cache[key];
     }
   }
+}
+
+function freshProclaim() {
+  clearProclaimModules();
   return require('../../src/connections/proclaim');
 }
+
+describe('proclaim.goToItem', () => {
+  afterEach(() => {
+    restoreFetch();
+    clearProclaimModules();
+  });
+
+  test('sends production navigation commands for each service section', async () => {
+    const performCalls: string[] = [];
+    (globalThis as any).fetch = async (url: string) => {
+      if (url.includes('authenticate')) return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok' }), text: async () => '' };
+      if (url.includes('onair/session')) return { ok: true, status: 200, json: async () => null, text: async () => '' };
+      if (url.includes('perform')) {
+        performCalls.push(url);
+        return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+      }
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+    };
+
+    const proclaim = freshProclaim();
+    const state = require('../../src/state').default;
+    const serviceItems: ServiceItem[] = [
+      { id: 'pre1', title: 'Prelude', kind: 'Slide', slideCount: 1, index: 1, sectionIndex: 1, sectionCommand: 'StartPreService', section: 'Pre-Service', group: null },
+      { id: 'svc2', title: 'Sermon', kind: 'Slide', slideCount: 1, index: 4, sectionIndex: 2, sectionCommand: 'StartService', section: 'Service', group: null },
+      { id: 'post1', title: 'Postlude', kind: 'Slide', slideCount: 1, index: 6, sectionIndex: 1, sectionCommand: 'StartPostService', section: 'Post-Service', group: null },
+    ];
+    await proclaim.connect();
+    state.update('proclaim', { serviceItems });
+
+    assert.equal(await proclaim.goToItem('pre1'), true);
+    assert.equal(await proclaim.goToItem('svc2'), true);
+    assert.equal(await proclaim.goToItem('post1'), true);
+    assert.equal(await proclaim.goToItem('missing'), false);
+    assert.deepEqual(performCalls.map((url) => new URL(url).search), [
+      '?appCommandName=StartPreService',
+      '?appCommandName=GoToServiceItem&index=2',
+      '?appCommandName=StartPostService',
+    ]);
+    proclaim.disconnect();
+  });
+});
+
 
 interface MockResponse {
   status?: number;
@@ -87,18 +77,14 @@ interface MockResponse {
 
 function mockFetch(responses: MockResponse[]): void {
   let callIndex = 0;
-  (globalThis as any).fetch = async (_url: string, _opts?: unknown) => {
+  installFetch(async (_url: Parameters<FetchImplementation>[0], _opts?: RequestInit) => {
     const resp = responses[callIndex] || responses[responses.length - 1];
     callIndex++;
     if (resp.throws) throw new Error(resp.throws);
-    return {
-      ok: (resp.status ?? 200) >= 200 && (resp.status ?? 200) < 300,
-      status: resp.status || 200,
-      json: async () => resp.body,
-      text: async () => (typeof resp.body === 'string' ? resp.body : JSON.stringify(resp.body)),
-      arrayBuffer: async () => Buffer.from(''),
-    };
-  };
+    const status = resp.status ?? 200;
+    const body = typeof resp.body === 'string' ? resp.body : JSON.stringify(resp.body);
+    return new Response(body, { status });
+  });
 }
 
 describe('proclaim._authenticateAppCommand', () => {
@@ -476,5 +462,60 @@ describe('proclaim._pollStatus', () => {
     assert.equal(proclaim.getToken(), 'tok');
     await proclaim.sendAction('NextSlide');
     assert.equal(proclaim.getToken(), null);
+  });
+  test('does not overlap a pending status poll and aborts it on disconnect', async () => {
+    let statusCalls = 0;
+    let requestSignal: AbortSignal | undefined;
+    const started = Promise.withResolvers<void>();
+    const pending = Promise.withResolvers<Response>();
+    (globalThis as any).fetch = async (url: string, opts?: RequestInit) => {
+      if (url.includes('authenticate')) return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok' }), text: async () => '' };
+      if (url.includes('onair/session')) {
+        statusCalls++;
+        requestSignal = opts?.signal ?? undefined;
+        started.resolve();
+        return pending.promise;
+      }
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+    };
+
+    const proclaim = freshProclaim();
+    await proclaim.connect();
+    await started.promise;
+    await Promise.resolve();
+    assert.equal(statusCalls, 1);
+    proclaim.disconnect();
+    assert.equal(requestSignal?.aborted, true);
+    pending.resolve({ ok: true, status: 200, text: async () => '' } as Response);
+    await pending.promise;
+  });
+
+  test('ignores a stale poll completion after disconnect', async () => {
+    const started = Promise.withResolvers<void>();
+    const pending = Promise.withResolvers<Response>();
+    (globalThis as any).fetch = async (url: string) => {
+      if (url.includes('authenticate')) return { ok: true, status: 200, json: async () => ({ proclaimAuthToken: 'tok' }), text: async () => '' };
+      if (url.includes('onair/session')) {
+        started.resolve();
+        return pending.promise;
+      }
+      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+    };
+
+    const proclaim = freshProclaim();
+    const state = require('../../src/state').default;
+    const connectedUpdates: boolean[] = [];
+    state.on('change', ({ section, state: current }: { section: string; state: { proclaim: { connected: boolean } } }) => {
+      if (section === 'proclaim') connectedUpdates.push(current.proclaim.connected);
+    });
+    await proclaim.connect();
+    await started.promise;
+    proclaim.disconnect();
+    state.update('proclaim', { connected: false });
+    const updatesAtDisconnect = connectedUpdates.length;
+    pending.resolve({ ok: true, status: 200, text: async () => '' } as Response);
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(connectedUpdates.slice(updatesAtDisconnect).includes(true), false);
   });
 });

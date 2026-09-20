@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import type { Server } from 'bun';
 import { createTestApp } from '../helpers/app';
+import { setupWebSocket } from '../../src/ws';
+import { State } from '../../src/state';
+import type { SocketData } from '../../src/ws';
+
 
 type TestServer = ReturnType<typeof createTestApp>['server'];
 
@@ -232,5 +237,138 @@ describe('WebSocket connection lifecycle', () => {
     assert.equal(calls.proclaim.disconnect, 0);
     await waitForClose(ws2);
     s.stop(true);
+  });
+});
+
+function openWs(server: TestServer, suffix: string): Promise<WebSocket> {
+  const { promise, resolve, reject } = Promise.withResolvers<WebSocket>();
+  const ws = new WebSocket(`ws://localhost:${server.port}/ws${suffix}`);
+  ws.addEventListener('open', () => resolve(ws), { once: true });
+  ws.addEventListener('error', () => reject(new Error('WebSocket error')), { once: true });
+  return promise;
+}
+
+function messagesFor(ws: WebSocket, durationMs = 50): Promise<Record<string, unknown>[]> {
+  const { promise, resolve } = Promise.withResolvers<Record<string, unknown>[]>();
+  const messages: Record<string, unknown>[] = [];
+  const handler = (event: MessageEvent) => {
+    try { messages.push(JSON.parse(event.data as string) as Record<string, unknown>); } catch { /* ignore non-JSON */ }
+  };
+  ws.addEventListener('message', handler);
+  // A timeout is required here because the contract under test is that no message arrives.
+  setTimeout(() => { ws.removeEventListener('message', handler); resolve(messages); }, durationMs);
+  return promise;
+}
+
+type UpgradeOptions = { headers?: HeadersInit; data: SocketData };
+
+function fakeServer(upgrade: (request: Request, options: UpgradeOptions) => boolean): Server<SocketData> {
+  let server!: Server<SocketData>;
+  server = {
+    stop: async () => {},
+    reload: <R extends string>(_options: Bun.Serve.Options<SocketData, R>) => server,
+    fetch: () => new Response(),
+    upgrade,
+    publish: () => 0,
+    subscriberCount: () => 0,
+    requestIP: () => null,
+    timeout: () => {},
+    ref: () => {},
+    unref: () => {},
+    pendingRequests: 0,
+    pendingWebSockets: 0,
+    url: new URL('http://localhost'),
+    port: 0,
+    hostname: 'localhost',
+    protocol: 'http',
+    development: false,
+    id: 'test',
+    [Symbol.dispose]: () => {},
+  };
+  return server;
+}
+
+describe('WebSocket security and bounded topic protocol', () => {
+  test('setupWebSocket rejects failed security checks before attempting upgrade', () => {
+    const state = new State();
+    let upgrades = 0;
+    const setup = setupWebSocket(state, undefined, {
+      security: {
+        checkHost: () => new Response('Forbidden', { status: 403 }),
+        authenticate: () => { throw new Error('must not authenticate rejected host'); },
+        bootstrap: () => null,
+        requireAuth: () => null,
+      },
+    });
+    const fake = fakeServer(() => { upgrades++; return true; });
+    assert.equal(setup.upgrade(new Request('http://localhost/ws'), fake), false);
+    assert.equal(upgrades, 0);
+  });
+
+  test('setupWebSocket accepts authenticated requests and injects bounded topic data', () => {
+    let captured: unknown;
+    const setup = setupWebSocket(new State(), undefined, {
+      security: {
+        checkHost: () => null,
+        authenticate: () => true,
+        bootstrap: () => null,
+        requireAuth: () => null,
+      },
+    });
+    const fake = fakeServer((_req, options) => { captured = options.data; return true; });
+    assert.equal(setup.upgrade(new Request('http://localhost/ws?topics=levels,bus:8,bus:9,bus:10,bus:11,bus:12,bus:13,unknown'), fake), true);
+    const data = captured as { defaultTopics?: unknown };
+    assert.deepEqual(data.defaultTopics, ['levels', 'bus:8', 'bus:9', 'bus:10', 'bus:11']);
+  });
+
+  test('topics=levels,bus:N sends bus state without an unwanted full state', async () => {
+    const { server } = createTestApp();
+    const ws = await openWs(server, '?topics=levels,bus:8');
+    const messages = await messagesFor(ws);
+    ws.close(); server.stop(true);
+    assert.equal(messages.some((message) => message.type === 'state'), false);
+    const bus = messages.find((message) => message.type === 'bus-state');
+    assert.ok(bus);
+    assert.equal(bus.busIndex, 8);
+  });
+
+  test('bus topic reports the current X32 connected flag', async () => {
+    const { server, state } = createTestApp();
+    state.update('x32', { connected: true });
+    const ws = await openWs(server, '?topics=bus:3');
+    const messages = await messagesFor(ws);
+    ws.close(); server.stop(true);
+    const bus = messages.find((message) => message.type === 'bus-state');
+    assert.ok(bus);
+    assert.equal(bus.connected, true);
+  });
+
+  test('invalid bus topics and unknown topics produce no snapshots', async () => {
+    const { server } = createTestApp();
+    for (const suffix of ['?topics=bus:0', '?topics=bus:17', '?topics=not-a-topic']) {
+      const ws = await openWs(server, suffix);
+      const messages = await messagesFor(ws);
+      ws.close();
+      assert.deepEqual(messages, []);
+    }
+    server.stop(true);
+  });
+
+  test('per-socket bus topic cap limits initial snapshots to four buses', async () => {
+    const { server } = createTestApp();
+    const ws = await openWs(server, '?topics=bus:1,bus:2,bus:3,bus:4,bus:5,bus:6,bus:7,bus:8,bus:9');
+    const messages = await messagesFor(ws);
+    ws.close(); server.stop(true);
+    assert.equal(messages.filter((message) => message.type === 'bus-state').length, 4);
+    assert.equal(messages.some((message) => message.type === 'state'), false);
+  });
+
+  test('oversized messages are ignored without creating a subscription', async () => {
+    const { server } = createTestApp();
+    const ws = await openWs(server, '?topics=');
+    ws.send('x'.repeat(8193));
+    const messages = await messagesFor(ws);
+    ws.close(); server.stop(true);
+    assert.deepEqual(messages, []);
   });
 });

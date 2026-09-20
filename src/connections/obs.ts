@@ -182,11 +182,7 @@ obs.on('InputVolumeMeters', ({ inputs }) => {
     // Use peak (index 1). inputPeak (index 2) is near 1.0 for any active source — do not use.
     const levels = input.inputLevelsMul as number[][];
     if (!levels || levels.length === 0) continue;
-    let peak = 0;
-    for (const ch of levels) {
-      if (ch[1] != null && ch[1] > peak) peak = ch[1];
-    }
-    obsLevels[input.inputName as string] = Math.round(peak * 1000) / 1000;
+    obsLevels[input.inputName as string] = Math.round(extractObsPeak(levels) * 1000) / 1000;
   }
   // Broadcast level-only updates directly to /ws/levels — do NOT call state.update
   // so the main WebSocket doesn't re-render all Alpine x-for elements on every meter tick.
@@ -261,12 +257,7 @@ async function refreshLiveStatus(sceneName: string, generation = connectionGener
     const liveSourceNames = await getSceneSourceNames(sceneName);
     if (!isCurrentConnection(generation)) return;
     const prevSources = state.get().obs.audioSources;
-    const sources = prevSources.map((s) => ({
-      ...s,
-      live: liveSourceNames.has(s.name),
-      // Reset the displayed level when a source goes offline so meters don't stay lit
-      level: liveSourceNames.has(s.name) ? s.level : 0,
-    }));
+    const sources = applyLiveStatus(prevSources, liveSourceNames);
     state.update('obs', { audioSources: sources });
   } catch (err) {
     if (isCurrentConnection(generation)) {
@@ -331,12 +322,33 @@ async function refreshState(generation = connectionGeneration): Promise<void> {
   }
 
 }
-function mulToDb(mul: number): number {
+export function extractObsPeak(levels: number[][]): number {
+  if (!levels || levels.length === 0) return 0;
+  let peak = 0;
+  for (const channel of levels) {
+    const value = channel[1];
+    if (value != null && value > peak) peak = value;
+  }
+  return peak;
+}
+
+export function applyLiveStatus<T extends { name: string; live: boolean; level: number }>(
+  sources: T[],
+  liveSourceNames: ReadonlySet<string>,
+): T[] {
+  return sources.map((source) => ({
+    ...source,
+    live: liveSourceNames.has(source.name),
+    level: liveSourceNames.has(source.name) ? source.level : 0,
+  }));
+}
+
+export function mulToDb(mul: number): number {
   if (mul === 0) return -Infinity;
   return 20 * Math.log10(mul);
 }
 
-function dbToMul(db: number): number {
+export function dbToMul(db: number): number {
   return Math.pow(10, db / 20);
 }
 function disconnect(): void {

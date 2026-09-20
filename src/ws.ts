@@ -15,6 +15,9 @@ interface SocketData {
   // Which channels this socket is subscribed to.
   // Topics: 'state' | 'levels' | 'screenshot' | `bus:${number}`
   topics: Set<string>;
+  // Topics requested in the WebSocket URL's `topics` query parameter. When
+  // absent, the legacy default is ['state'] for the main control panel.
+  defaultTopics?: string[];
 }
 
 // Shape of messages the client sends
@@ -37,6 +40,31 @@ function busIndexForTopic(topic: string): number | null {
 function isAllowedTopic(topic: string): boolean {
   return FIXED_TOPICS[topic] === true || busIndexForTopic(topic) !== null;
 }
+// Parse and bound a topic selection before it is installed on a socket. This
+// keeps URL defaults and their open-time subscriptions under the same
+// allowlist and per-socket limits.
+function normalizeTopics(values: readonly unknown[]): string[] {
+  const topics: string[] = [];
+  let busTopicCount = 0;
+  for (const value of values.slice(0, MAX_CHANNELS_PER_MESSAGE)) {
+    if (typeof value !== 'string' || !isAllowedTopic(value) || topics.includes(value)) continue;
+    if (topics.length >= MAX_TOPICS_PER_SOCKET) break;
+    const busIndex = busIndexForTopic(value);
+    if (busIndex !== null && busTopicCount >= MAX_BUS_TOPICS_PER_SOCKET) continue;
+    topics.push(value);
+    if (busIndex !== null) busTopicCount++;
+  }
+  return topics;
+}
+
+function defaultTopicsForUrl(url: URL): string[] {
+  const raw = url.searchParams.get('topics');
+  // Preserve the original main-panel contract when no selection is given.
+  if (raw === null) return ['state'];
+  // An explicitly empty selection intentionally subscribes to no topics.
+  return normalizeTopics(raw ? raw.split(',').map((topic) => topic.trim()) : []);
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function stripLevels(state: AppState): AppState {
@@ -53,13 +81,13 @@ function stripLevels(state: AppState): AppState {
   };
 }
 
-function buildBusState(busIndex: number, appState: AppState): { type: string; busIndex: number; busChannel: Channel | null; channels: Channel[] } {
+function buildBusState(busIndex: number, appState: AppState): { type: string; busIndex: number; connected: boolean; busChannel: Channel | null; channels: Channel[] } {
   const allChannels = appState.x32.channels;
   const busChannel = allChannels.find((c) => c.type === 'bus' && c.index === busIndex) ?? null;
   const channels = allChannels.filter(
     (c) => c.type === 'ch' && c.busSends?.some((s) => s.busIndex === busIndex && s.on),
   );
-  return { type: 'bus-state', busIndex, busChannel, channels };
+  return { type: 'bus-state', busIndex, connected: appState.x32.connected, busChannel, channels };
 }
 
 // ── Setup ────────────────────────────────────────────────────────────────────
@@ -97,6 +125,13 @@ function setupWebSocket(
 
   function openClientCount(): number {
     return openSockets.size;
+  }
+
+  function hasTopicSubscribers(topic: string): boolean {
+    for (const ws of openSockets) {
+      if (ws.data.topics.has(topic)) return true;
+    }
+    return false;
   }
 
   function startBusTracking(x32: X32Connection, busIndex: number): void {
@@ -147,9 +182,13 @@ function setupWebSocket(
     pendingFlush = null;
     if (!latestState || !server) return;
 
-    // Publish full state to 'state' topic
-    const stateMsg = JSON.stringify({ type: 'state', data: stripLevels(latestState) });
-    server.publish('state', stateMsg);
+    // Avoid serializing a full snapshot when no socket currently subscribes
+    // to it. Bun's topic publication already filters recipients, but does not
+    // avoid the caller's serialization work.
+    if (hasTopicSubscribers('state')) {
+      const stateMsg = JSON.stringify({ type: 'state', data: stripLevels(latestState) });
+      server.publish('state', stateMsg);
+    }
 
     // Publish bus state to each active bus topic
     for (const busIndex of busSendRefCounts.keys()) {
@@ -203,14 +242,27 @@ function setupWebSocket(
       // Start device connections on first client
       startConnections();
 
-      // Subscribe to 'state' by default; client can add more via subscribe messages
-      ws.subscribe('state');
-      ws.data.topics.add('state');
+      const initialTopics = normalizeTopics(ws.data.defaultTopics ?? ['state']);
+      ws.data.defaultTopics = initialTopics;
+      for (const topic of initialTopics) {
+        ws.subscribe(topic);
+        ws.data.topics.add(topic);
+        const busIndex = busIndexForTopic(topic);
+        if (busIndex !== null && connections?.x32) {
+          startBusTracking(connections.x32, busIndex);
+        }
+      }
 
-      // Send full current state immediately
+      // Send current snapshots only for the topics selected for this socket.
       const currentState = state.get();
       latestState = currentState;
-      ws.sendText(JSON.stringify({ type: 'state', data: stripLevels(currentState) }));
+      if (ws.data.topics.has('state')) {
+        ws.sendText(JSON.stringify({ type: 'state', data: stripLevels(currentState) }));
+      }
+      for (const topic of ws.data.topics) {
+        const busIndex = busIndexForTopic(topic);
+        if (busIndex !== null) ws.sendText(JSON.stringify(buildBusState(busIndex, currentState)));
+      }
 
       // Start heartbeat on first client
       if (openSockets.size === 1 && !heartbeatTimer) {
@@ -293,7 +345,12 @@ function setupWebSocket(
     if (security && (security.checkHost(req) || !security.authenticate(req))) return false;
     // Capture server reference only after the request has passed all gates.
     if (!server) server = srv;
-    const upgraded = srv.upgrade(req, { data: { topics: new Set<string>() } });
+    const upgraded = srv.upgrade(req, {
+      data: {
+        topics: new Set<string>(),
+        defaultTopics: defaultTopicsForUrl(url),
+      },
+    });
     return upgraded;
   }
 

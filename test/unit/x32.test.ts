@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { parseOscMessage, parseMeterBlob, buildMeterRequests, parseBusSendMessage } from '../../src/connections/x32';
+import { parseOscMessage, parseMeterBlob, buildMeterRequests, parseBusSendMessage, connect, disconnect, isActive, setFader, setBusSend } from '../../src/connections/x32';
+import state from '../../src/state';
 
 describe('x32 parseOscMessage()', () => {
   describe('fader messages (/ch/XX/mix/fader)', () => {
@@ -445,6 +446,87 @@ describe('x32 buildMeterRequests()', () => {
       const timeFactor = req.args[1].value;
       assert.ok(typeof timeFactor === 'number' && Number.isInteger(timeFactor) && timeFactor > 0,
         `time_factor must be a positive integer, got ${timeFactor}`);
+    }
+  });
+});
+
+async function allowX32SocketCallbacks(): Promise<void> {
+  const next = Promise.withResolvers<void>();
+  setImmediate(next.resolve);
+  await next.promise;
+}
+
+describe('x32 connection state and lifecycle', () => {
+  test('setFader resolves after its optimistic update and preserves the prior snapshot', async () => {
+    disconnect();
+    connect();
+    await allowX32SocketCallbacks();
+    const before = state.get().x32;
+    const beforeChannel = before.channels.find((channel) => channel.type === 'ch' && channel.index === 1);
+    assert.ok(beforeChannel);
+    const changes: unknown[] = [];
+    const listener = (event: { section: string; state: typeof state.data }) => {
+      if (event.section === 'x32') changes.push(event.state.x32);
+    };
+    state.on('change', listener);
+    try {
+      await setFader(1, 0.73);
+      const after = state.get().x32;
+      const afterChannel = after.channels.find((channel) => channel.type === 'ch' && channel.index === 1);
+      assert.notStrictEqual(after, before);
+      assert.notStrictEqual(after.channels, before.channels);
+      assert.equal(beforeChannel.fader, 0);
+      assert.equal(afterChannel?.fader, 0.73);
+      assert.equal(changes.length, 1, 'the write itself must publish one consumer-visible update');
+    } finally {
+      await allowX32SocketCallbacks();
+      disconnect();
+    }
+  });
+
+  test('setBusSend replaces the channel and nested send without mutating a prior snapshot', async () => {
+    disconnect();
+    connect();
+    await allowX32SocketCallbacks();
+    const before = state.get().x32;
+    const beforeChannel = before.channels.find((channel) => channel.type === 'ch' && channel.index === 1);
+    assert.ok(beforeChannel);
+    const firstWrite = setBusSend(1, 2, 0.64);
+    await firstWrite;
+    const afterFirst = state.get().x32;
+    const afterFirstChannel = afterFirst.channels.find((channel) => channel.type === 'ch' && channel.index === 1);
+    assert.ok(afterFirstChannel?.busSends);
+    assert.equal(afterFirstChannel.busSends.find((send) => send.busIndex === 2)?.level, 0.64);
+    assert.equal(beforeChannel.busSends, undefined);
+
+    await setBusSend(1, 2, 0.21);
+    const afterSecond = state.get().x32;
+    const afterSecondChannel = afterSecond.channels.find((channel) => channel.type === 'ch' && channel.index === 1);
+    assert.notStrictEqual(afterFirst, afterSecond);
+    assert.notStrictEqual(afterFirst.channels, afterSecond.channels);
+    assert.notStrictEqual(afterFirstChannel, afterSecondChannel);
+    assert.equal(afterFirstChannel.busSends?.find((send) => send.busIndex === 2)?.level, 0.64);
+    await allowX32SocketCallbacks();
+    disconnect();
+  });
+
+  test('explicit disconnect deactivates the connection and a later connect starts a fresh lifecycle', async () => {
+    disconnect();
+    connect();
+    await allowX32SocketCallbacks();
+    assert.equal(isActive(), true);
+    await allowX32SocketCallbacks();
+    disconnect();
+    assert.equal(isActive(), false);
+    connect();
+    await allowX32SocketCallbacks();
+    try {
+      assert.equal(isActive(), true);
+      await setFader(2, 0.42);
+      assert.equal(state.get().x32.channels.find((channel) => channel.type === 'ch' && channel.index === 2)?.fader, 0.42);
+    } finally {
+      await allowX32SocketCallbacks();
+      disconnect();
     }
   });
 });

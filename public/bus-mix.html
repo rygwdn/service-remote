@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="color-scheme" content="dark">
   <title>Bus Mix</title>
   <link rel="stylesheet" href="style.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script defer src="alpine.min.js"></script>
 </head>
 <body x-data>
 
@@ -17,6 +17,8 @@
     <div class="status-dots">
       <span class="dot" :class="{ connected: $store.bus.connected }" title="X32"></span>
       <span class="dot-label">X32</span>
+      <span class="dot" :class="{ connected: $store.bus.serverConnected }" title="Server"></span>
+      <span class="dot-label">Server</span>
     </div>
   </header>
 
@@ -28,6 +30,7 @@
          :style="x32ChStyle($store.bus.busChannel || {})"
          x-data="x32FaderComponent()">
       <button class="ch-mute" :class="{ muted: $store.bus.busChannel && $store.bus.busChannel.muted }"
+              :aria-label="'Toggle mute for ' + ($store.bus.busChannel ? $store.bus.busChannel.label : 'bus')" title="Toggle mute"
               @click="$store.bus.busChannel && toggleX32Mute($store.bus.busChannel.index, 'bus')"
               x-text="$store.bus.busChannel && $store.bus.busChannel.muted ? 'MUTED' : 'ON'"></button>
       <span class="ch-label" x-text="$store.bus.busChannel ? $store.bus.busChannel.label : ''"></span>
@@ -54,6 +57,7 @@
            :style="x32ChStyle(ch)"
            x-data="busSendFaderComponent($store.bus.busIndex)">
         <span class="ch-mute" :class="{ muted: ch.muted }"
+              :aria-label="'Mute status for ' + ch.label" title="Mute status"
               style="flex:0 0 54px;padding:8px 4px;font-size:10px;font-weight:700;text-align:center;border:1px solid var(--surface-light);border-radius:4px;"
               x-text="ch.muted ? 'MUTED' : 'ON'"></span>
         <span class="ch-label" x-text="ch.label"></span>
@@ -86,64 +90,6 @@
   </main>
 
   <script src="shared.js"></script>
-  <script>
-    // Parse bus index from URL query string
-    const _busIndex = parseInt(new URLSearchParams(location.search).get('bus') || '0', 10);
-
-    document.addEventListener('alpine:init', () => {
-      Alpine.store('bus', {
-        busIndex: _busIndex,
-        connected: false,
-        busChannel: null,
-        channels: [],
-      });
-
-      Alpine.data('x32FaderComponent', x32FaderComponent);
-      Alpine.data('busSendFaderComponent', busSendFaderComponent);
-
-      connectBusWs(_busIndex);
-    });
-
-    // --- Unified WebSocket (/ws) — subscribes to bus:N and levels ---
-    let busWs;
-    let busReconnectDelay = 1000;
-
-    function connectBusWs(busIndex) {
-      if (busWs && busWs.readyState < WebSocket.CLOSING) return;
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      busWs = new WebSocket(`${proto}://${location.host}${basePath}/ws`);
-
-      busWs.onopen = () => {
-        busReconnectDelay = 1000;
-        busWs.send(JSON.stringify({ type: 'subscribe', channels: [`bus:${busIndex}`, 'levels'] }));
-      };
-
-      busWs.onmessage = (e) => {
-        if (!window.Alpine) return;
-        const msg = JSON.parse(e.data);
-        if (msg.type === 'bus-state') {
-          const store = Alpine.store('bus');
-          store.connected = true;
-          store.busChannel = msg.busChannel;
-          store.channels = msg.channels;
-        } else if (msg.type === 'levels') {
-          handleLevelsMessage(msg);
-        }
-      };
-
-      busWs.onclose = () => {
-        if (window.Alpine) Alpine.store('bus').connected = false;
-        if (document.hidden) return;
-        setTimeout(() => connectBusWs(busIndex), busReconnectDelay);
-        busReconnectDelay = Math.min(busReconnectDelay * 2, 10000);
-      };
-    }
-
-    registerManagedWs({
-      getWs: () => busWs,
-      reconnect: () => connectBusWs(_busIndex),
-      resetDelay: () => { busReconnectDelay = 1000; },
-    });
-  </script>
+  <script src="bus-mix.js"></script>
 </body>
 </html>

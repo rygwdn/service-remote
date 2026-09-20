@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="color-scheme" content="dark">
   <title>Service Remote</title>
   <link rel="stylesheet" href="style.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script defer src="alpine.min.js"></script>
 </head>
 <body x-data>
   <header>
@@ -115,11 +115,11 @@
                   x-text="$store.state.proclaim.onAir ? 'On Air' : 'Go On Air'"></button>
         </div>
         <div class="control-row proclaim-av-controls" x-show="$store.state.proclaim.currentItemType === 'Video'">
-          <button class="btn" @click="sendAction('VideoPause')">⏸</button>
-          <button class="btn" @click="sendAction('VideoPlay')">▶</button>
-          <button class="btn" @click="sendAction('VideoRewind')">⏪</button>
-          <button class="btn" @click="sendAction('VideoFastForward')">⏩</button>
-          <button class="btn" @click="sendAction('VideoRestart')">⏮</button>
+          <button class="btn" aria-label="Pause video" title="Pause video" @click="sendAction('VideoPause')">⏸</button>
+          <button class="btn" aria-label="Play video" title="Play video" @click="sendAction('VideoPlay')">▶</button>
+          <button class="btn" aria-label="Rewind video" title="Rewind video" @click="sendAction('VideoRewind')">⏪</button>
+          <button class="btn" aria-label="Fast-forward video" title="Fast-forward video" @click="sendAction('VideoFastForward')">⏩</button>
+          <button class="btn" aria-label="Restart video" title="Restart video" @click="sendAction('VideoRestart')">⏮</button>
         </div>
         <div class="control-row proclaim-av-controls" x-show="$store.state.proclaim.currentItemType !== 'Video'">
           <button class="btn" @click="sendAction('NextAudioItem')">Audio &#9654;&#9654;</button>
@@ -131,6 +131,7 @@
         <template x-for="(lines, idx) in songLyricsSlides($store.state.proclaim)" :key="idx">
           <button class="song-slide"
                   :class="{ active: idx === $store.state.proclaim.slideIndex }"
+                  :aria-label="'Go to slide ' + (idx + 1)" title="Go to slide"
                   @click="sendAction('GoToSlide', idx + 1)">
             <template x-for="(line, li) in lines" :key="li">
               <span class="song-line" x-text="line"></span>
@@ -144,6 +145,7 @@
         <template x-for="i in slideGridItems($store.state.proclaim)" :key="i">
           <button class="slide-thumb-btn"
                   :class="{ active: i === $store.state.proclaim.slideIndex }"
+                  :aria-label="'Go to slide ' + (i + 1)" title="Go to slide"
                   @click="sendAction('GoToSlide', i + 1)">
             <img :src="thumbUrl($store.state.proclaim.currentItemId, i)" alt="">
           </button>
@@ -231,6 +233,7 @@
                      :value="src.volume != null && isFinite(src.volume) ? src.volume.toFixed(1) : -60"
                      @input="setObsVolume(src.name, parseFloat($event.target.value))">
               <button class="mute-btn" :class="{ muted: src.muted }"
+                      :aria-label="'Toggle mute for ' + src.name" title="Toggle mute"
                       @click="toggleObsMute(src.name)"
                       x-text="src.muted ? 'M' : '🔊'"></button>
               <div class="obs-meter"><div class="obs-meter-fill" :data-level-obs="src.name" :style="'width:'+mulToDisplayPct(src.level).toFixed(1)+'%'"></div></div>
@@ -270,6 +273,7 @@
                x-show="$store.ui.editMode.x32 || !$store.ui.isHiddenX32(ch.type+'/'+ch.index)"
                x-data="x32Fader(ch)">
             <button class="ch-mute" :class="{ muted: ch.muted }"
+                    :aria-label="'Toggle mute for ' + ch.label" title="Toggle mute"
                     :disabled="!$store.ui.faderEnabled.x32"
                     @click="toggleX32Mute(ch.index, ch.type)"
                     x-text="ch.muted ? 'MUTED' : 'ON'"></button>
@@ -321,53 +325,67 @@
           <img id="ptz-obs-preview" class="ptz-obs-preview" alt="Camera preview"
                x-show="$store.state.obs.connected" />
 
-          <!-- D-pad: Pan / Tilt — each press is a discrete go-to step; held = repeat -->
           <div class="ptz-dpad">
-            <button class="ptz-btn ptz-up"
-                    @pointerdown.prevent="ptzStartRepeat(() => ptzPanTilt(camIdx, 0, 1))"
-                    @pointerup="ptzStopRepeat()"
+            <button class="ptz-btn ptz-up" aria-label="Move camera up" title="Move camera up"
+                    @pointerdown.prevent="ptzStartRepeat(() => ptzPanTilt(camIdx, 0, 1)); $event.currentTarget.setPointerCapture($event.pointerId)"
+                    @pointerup="ptzStopRepeat(); $event.currentTarget.hasPointerCapture($event.pointerId) && $event.currentTarget.releasePointerCapture($event.pointerId)"
+                    @pointercancel="ptzStopRepeat()"
+                    @lostpointercapture="ptzStopRepeat()"
                     @pointerleave="ptzStopRepeat()">&#9650;</button>
             <div class="ptz-middle-row">
-              <button class="ptz-btn ptz-left"
-                      @pointerdown.prevent="ptzStartRepeat(() => ptzPanTilt(camIdx, -1, 0))"
-                      @pointerup="ptzStopRepeat()"
+              <button class="ptz-btn ptz-left" aria-label="Move camera left" title="Move camera left"
+                      @pointerdown.prevent="ptzStartRepeat(() => ptzPanTilt(camIdx, -1, 0)); $event.currentTarget.setPointerCapture($event.pointerId)"
+                      @pointerup="ptzStopRepeat(); $event.currentTarget.hasPointerCapture($event.pointerId) && $event.currentTarget.releasePointerCapture($event.pointerId)"
+                      @pointercancel="ptzStopRepeat()"
+                      @lostpointercapture="ptzStopRepeat()"
                       @pointerleave="ptzStopRepeat()">&#9664;</button>
-              <button class="ptz-btn ptz-home" @click="ptzHome(camIdx)" title="Home">&#8962;</button>
-              <button class="ptz-btn ptz-right"
-                      @pointerdown.prevent="ptzStartRepeat(() => ptzPanTilt(camIdx, 1, 0))"
-                      @pointerup="ptzStopRepeat()"
+              <button class="ptz-btn ptz-home" aria-label="Return camera to home position" title="Home" @click="ptzHome(camIdx)">&#8962;</button>
+              <button class="ptz-btn ptz-right" aria-label="Move camera right" title="Move camera right"
+                      @pointerdown.prevent="ptzStartRepeat(() => ptzPanTilt(camIdx, 1, 0)); $event.currentTarget.setPointerCapture($event.pointerId)"
+                      @pointerup="ptzStopRepeat(); $event.currentTarget.hasPointerCapture($event.pointerId) && $event.currentTarget.releasePointerCapture($event.pointerId)"
+                      @pointercancel="ptzStopRepeat()"
+                      @lostpointercapture="ptzStopRepeat()"
                       @pointerleave="ptzStopRepeat()">&#9654;</button>
             </div>
-            <button class="ptz-btn ptz-down"
-                    @pointerdown.prevent="ptzStartRepeat(() => ptzPanTilt(camIdx, 0, -1))"
-                    @pointerup="ptzStopRepeat()"
+            <button class="ptz-btn ptz-down" aria-label="Move camera down" title="Move camera down"
+                    @pointerdown.prevent="ptzStartRepeat(() => ptzPanTilt(camIdx, 0, -1)); $event.currentTarget.setPointerCapture($event.pointerId)"
+                    @pointerup="ptzStopRepeat(); $event.currentTarget.hasPointerCapture($event.pointerId) && $event.currentTarget.releasePointerCapture($event.pointerId)"
+                    @pointercancel="ptzStopRepeat()"
+                    @lostpointercapture="ptzStopRepeat()"
                     @pointerleave="ptzStopRepeat()">&#9660;</button>
-          </div>
 
           <!-- Zoom — go-to steps, no stop command needed -->
           <div class="ptz-zoom-row">
             <span class="ptz-label">Zoom</span>
-            <button class="ptz-btn ptz-zoom-out"
-                    @pointerdown.prevent="ptzStartRepeat(() => ptzZoom(camIdx, 'out'))"
-                    @pointerup="ptzStopRepeat()"
+            <button class="ptz-btn ptz-zoom-out" aria-label="Zoom out" title="Zoom out"
+                    @pointerdown.prevent="ptzStartRepeat(() => ptzZoom(camIdx, 'out')); $event.currentTarget.setPointerCapture($event.pointerId)"
+                    @pointerup="ptzStopRepeat(); $event.currentTarget.hasPointerCapture($event.pointerId) && $event.currentTarget.releasePointerCapture($event.pointerId)"
+                    @pointercancel="ptzStopRepeat()"
+                    @lostpointercapture="ptzStopRepeat()"
                     @pointerleave="ptzStopRepeat()">W&minus;</button>
-            <button class="ptz-btn ptz-zoom-in"
-                    @pointerdown.prevent="ptzStartRepeat(() => ptzZoom(camIdx, 'in'))"
-                    @pointerup="ptzStopRepeat()"
+            <button class="ptz-btn ptz-zoom-in" aria-label="Zoom in" title="Zoom in"
+                    @pointerdown.prevent="ptzStartRepeat(() => ptzZoom(camIdx, 'in')); $event.currentTarget.setPointerCapture($event.pointerId)"
+                    @pointerup="ptzStopRepeat(); $event.currentTarget.hasPointerCapture($event.pointerId) && $event.currentTarget.releasePointerCapture($event.pointerId)"
+                    @pointercancel="ptzStopRepeat()"
+                    @lostpointercapture="ptzStopRepeat()"
                     @pointerleave="ptzStopRepeat()">T+</button>
           </div>
 
           <!-- Focus — server auto-stops drive after 500 ms; no stop button needed -->
           <div class="ptz-focus-row">
             <span class="ptz-label">Focus</span>
-            <button class="ptz-btn" @click="ptzFocus(camIdx, 'auto')">Auto</button>
-            <button class="ptz-btn"
-                    @pointerdown.prevent="ptzStartRepeat(() => ptzFocus(camIdx, 'near'))"
-                    @pointerup="ptzStopRepeat()"
+            <button class="ptz-btn" aria-label="Auto focus" title="Auto focus" @click="ptzFocus(camIdx, 'auto')">Auto</button>
+            <button class="ptz-btn" aria-label="Focus nearer" title="Focus nearer"
+                    @pointerdown.prevent="ptzStartRepeat(() => ptzFocus(camIdx, 'near')); $event.currentTarget.setPointerCapture($event.pointerId)"
+                    @pointerup="ptzStopRepeat(); $event.currentTarget.hasPointerCapture($event.pointerId) && $event.currentTarget.releasePointerCapture($event.pointerId)"
+                    @pointercancel="ptzStopRepeat()"
+                    @lostpointercapture="ptzStopRepeat()"
                     @pointerleave="ptzStopRepeat()">Near</button>
-            <button class="ptz-btn"
-                    @pointerdown.prevent="ptzStartRepeat(() => ptzFocus(camIdx, 'far'))"
-                    @pointerup="ptzStopRepeat()"
+            <button class="ptz-btn" aria-label="Focus farther" title="Focus farther"
+                    @pointerdown.prevent="ptzStartRepeat(() => ptzFocus(camIdx, 'far')); $event.currentTarget.setPointerCapture($event.pointerId)"
+                    @pointerup="ptzStopRepeat(); $event.currentTarget.hasPointerCapture($event.pointerId) && $event.currentTarget.releasePointerCapture($event.pointerId)"
+                    @pointercancel="ptzStopRepeat()"
+                    @lostpointercapture="ptzStopRepeat()"
                     @pointerleave="ptzStopRepeat()">Far</button>
           </div>
 

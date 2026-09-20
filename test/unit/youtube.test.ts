@@ -1,6 +1,24 @@
-import { test, expect, describe, mock, beforeEach, spyOn } from 'bun:test';
-import { parseApiResponse, parseIni, extractCredsFromIni, seedAccessToken, getAccessTokenForTesting, parseBroadcastsResponse } from '../../src/connections/youtube';
+import { test, expect, describe } from 'bun:test';
+import {
+  connect,
+  disconnect,
+  parseApiResponse,
+  parseBroadcastsResponse,
+  parseIni,
+  extractCredsFromIni,
+  seedAccessToken,
+  getAccessTokenForTesting,
+} from '../../src/connections/youtube';
+import config from '../../src/config';
+import state from '../../src/state';
 
+type FetchImplementation = (...args: Parameters<typeof globalThis.fetch>) => Promise<Response>;
+
+function installFetch(fetchImplementation: FetchImplementation): void {
+  globalThis.fetch = Object.assign(fetchImplementation, {
+    preconnect: globalThis.fetch.preconnect,
+  });
+}
 describe('parseApiResponse', () => {
   test('returns nulls when items array is empty', () => {
     const result = parseApiResponse({ items: [] });
@@ -209,6 +227,7 @@ describe('parseBroadcastsResponse', () => {
       ],
     };
     const result = parseBroadcastsResponse(data);
+
     expect(result).toHaveLength(2);
   });
 
@@ -218,5 +237,51 @@ describe('parseBroadcastsResponse', () => {
     };
     const result = parseBroadcastsResponse(data);
     expect(result[0].scheduledStartTime).toBeUndefined();
+  });
+});
+describe('YouTube polling lifecycle', () => {
+  test('serializes polls, aborts owned requests, and ignores stale completion', async () => {
+    disconnect();
+    const originalBroadcastId = config.youtube.broadcastId;
+    const originalPollInterval = config.youtube.pollInterval;
+    const nativeFetch = globalThis.fetch;
+    const started = Promise.withResolvers<void>();
+    const pending = Promise.withResolvers<Response>();
+    let videoCalls = 0;
+    let requestSignal: AbortSignal | undefined;
+    try {
+      config.youtube.broadcastId = 'broadcast-1';
+      config.youtube.pollInterval = 1;
+      seedAccessToken('poll-token', Date.now() + 3600_000);
+      installFetch(async (url: Parameters<FetchImplementation>[0], init?: RequestInit) => {
+        const urlString = String(url);
+        if (urlString.includes('/videos?')) {
+          videoCalls++;
+          requestSignal = init?.signal ?? undefined;
+          started.resolve();
+          return pending.promise;
+        }
+        return { ok: true, status: 200, json: async () => ({ items: [] }), text: async () => '' } as Response;
+      });
+
+      connect();
+      await started.promise;
+      await Promise.resolve();
+      expect(videoCalls).toBe(1);
+      disconnect();
+      expect(requestSignal?.aborted).toBe(true);
+      expect(state.get().youtube.connected).toBe(false);
+
+      pending.resolve({ ok: true, status: 200, json: async () => ({ items: [] }), text: async () => '' } as Response);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(videoCalls).toBe(1);
+      expect(state.get().youtube.connected).toBe(false);
+    } finally {
+      disconnect();
+      globalThis.fetch = nativeFetch;
+      config.youtube.broadcastId = originalBroadcastId;
+      config.youtube.pollInterval = originalPollInterval;
+    }
   });
 });

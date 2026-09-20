@@ -621,7 +621,7 @@ function handleMessage(address: string, args: OscArg[]): void {
       if (channel.type === type && channel.index === evenIndex) return { ...channel, linkedToNext: false };
       return channel;
     });
-    publishState(true);
+    publishState(connected);
     return;
   }
 
@@ -736,7 +736,7 @@ function updateChannel(index: number, type: 'ch' | 'bus' | 'main' | 'mtx', patch
   channels = channels.map((candidate) => candidate === channel
     ? { ...candidate, ...effectivePatch, ...(candidate.busSends ? { busSends: candidate.busSends.map((send) => ({ ...send })) } : {}) }
     : candidate);
-  publishState(true);
+  publishState(connected);
 }
 
 function subscribeToChanges(): void {
@@ -786,9 +786,10 @@ function disconnect(): void {
     return withoutBusSends;
   });
   publishState(false);
+  logger.log('[X32] Disconnected');
 }
 function setPendingFader(type: 'ch' | 'bus' | 'main' | 'mtx', index: number, value: number): void {
-  if (!isChannelType(type) || !validChannelIndex(index, type) || !Number.isFinite(value)) {
+  if (!isChannelType(type) || !validChannelIndex(index, type) || !Number.isFinite(value) || value < 0 || value > 1) {
     throw new Error('Invalid X32 pending fader');
   }
   pendingFaders.set(`${type}-${index}`, { value, sentAt: Date.now() });
@@ -833,6 +834,9 @@ function setSpill(channelIndex: number, type: 'ch' | 'bus', assigned: boolean): 
   if ((type !== 'ch' && type !== 'bus') || !validChannelIndex(channelIndex, type) || typeof assigned !== 'boolean') {
     throw new Error('Invalid X32 spill');
   }
+  if (!channels.some((channel) => channel.index === channelIndex && channel.type === type)) {
+    throw new Error('Unknown X32 channel');
+  }
   const key = `${type}-${channelIndex}`;
   const currentBitmask = dcaGroupsMap.get(key) ?? 0;
   const newBitmask = assigned ? (currentBitmask | 128) : (currentBitmask & ~128);
@@ -853,7 +857,7 @@ function updateBusSend(channelIndex: number, busIndex: number, patch: Partial<Bu
   if (existing) Object.assign(existing, effectivePatch);
   else busSends.push({ busIndex, level: 0, on: false, ...effectivePatch });
   channels = channels.map((candidate) => candidate === channel ? { ...candidate, busSends } : candidate);
-  publishState(true);
+  publishState(connected);
 }
 
 function requestBusSendUpdates(busIndex: number): void {

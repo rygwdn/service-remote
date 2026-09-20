@@ -16,31 +16,10 @@
  * - Non-fader fields (muted, label) are always applied regardless of pending state.
  */
 import assert from 'node:assert/strict';
-import { parseOscMessage, setPendingFader, applyOscPatchWithPending } from '../../src/connections/x32';
-
-// applyOscPatchWithPending is the pure testable function that applies an OSC-parsed
-// patch to a channel object, respecting the pending fader map.
-// Signature: applyOscPatchWithPending(channel, patch, pendingFaders) => Partial<Channel>
-// Returns the patch that should actually be applied (may have 'fader' removed).
-
+import { applyOscPatchWithPending } from '../../src/connections/x32';
 describe('x32 pending fader mechanism', () => {
-  describe('setPendingFader()', () => {
-    test('setPendingFader is exported', () => {
-      assert.equal(typeof setPendingFader, 'function');
-    });
-
-    test('setPendingFader does not throw for valid inputs', () => {
-      assert.doesNotThrow(() => setPendingFader('ch', 1, 0.75));
-      assert.doesNotThrow(() => setPendingFader('bus', 3, 0.5));
-      assert.doesNotThrow(() => setPendingFader('main', 1, 0.9));
-    });
-  });
 
   describe('applyOscPatchWithPending()', () => {
-    test('applyOscPatchWithPending is exported', () => {
-      assert.equal(typeof applyOscPatchWithPending, 'function');
-    });
-
     test('applies fader patch normally when no pending entry exists', () => {
       const pendingFaders = new Map<string, { value: number; sentAt: number }>();
       const result = applyOscPatchWithPending({ type: 'ch', index: 1 }, { fader: 0.8 }, pendingFaders);

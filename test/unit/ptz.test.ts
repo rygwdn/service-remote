@@ -1,6 +1,10 @@
 import { strict as assert } from 'node:assert';
 import { describe, test } from 'bun:test';
-import { buildViscaPacket, encodePos, decodePos, absPanTiltCommand, absZoomCommand, panTiltInquiry, zoomInquiry, focusCommand, presetCommand, homeCommand } from '../../src/connections/ptz';
+import dgram from 'dgram';
+import { buildViscaPacket, encodePos, decodePos, absPanTiltCommand, absZoomCommand, panTiltInquiry, zoomInquiry, focusCommand, presetCommand, homeCommand, connect, disconnect } from '../../src/connections/ptz';
+import config from '../../src/config';
+import state from '../../src/state';
+import type { ChangeEvent, PtzCameraState } from '../../src/types';
 
 describe('VISCA command building', () => {
   describe('buildViscaPacket', () => {
@@ -167,5 +171,145 @@ describe('VISCA command building', () => {
     test('returns home command bytes', () => {
       assert.deepEqual(homeCommand(1), [0x81, 0x01, 0x06, 0x04, 0xFF]);
     });
+  });
+});
+
+interface FakeRequest { msg: Buffer; port: number; address: string }
+
+async function createFakeCamera(onRequest: (request: FakeRequest, socket: dgram.Socket) => void) {
+  const socket = dgram.createSocket('udp4');
+  const requests: FakeRequest[] = [];
+  const waiters: Array<() => void> = [];
+  socket.on('message', (msg, rinfo) => {
+    requests.push({ msg: Buffer.from(msg), port: rinfo.port, address: rinfo.address });
+    onRequest(requests[requests.length - 1], socket);
+    while (waiters.length && requests.length >= 2) waiters.shift()!();
+  });
+  const bound = Promise.withResolvers<void>();
+  socket.bind(0, '127.0.0.1', bound.resolve);
+  await bound.promise;
+  return {
+    socket,
+    requests,
+    waitForTwoRequests: () => requests.length >= 2
+      ? Promise.resolve()
+      : (() => {
+        const waiting = Promise.withResolvers<void>();
+        waiters.push(waiting.resolve);
+        return waiting.promise;
+      })(),
+    close: () => {
+      const closed = Promise.withResolvers<void>();
+      socket.close(() => closed.resolve());
+      return closed.promise;
+    },
+  };
+}
+function socketPort(socket: dgram.Socket): number {
+  const address: ReturnType<typeof socket.address> = socket.address();
+  if (typeof address === 'string') throw new Error('Expected bound UDP socket address');
+  return address.port;
+}
+
+
+function inquiryResponse(seq: number, payload: number[]): Buffer {
+  const packet = buildViscaPacket(seq, payload);
+  packet[1] = 0x11;
+  return packet;
+}
+
+function replyToInquiry(socket: dgram.Socket, request: FakeRequest, payload: number[]): Promise<void> {
+  const sequence = request.msg.readUInt32BE(4);
+  const sent = Promise.withResolvers<void>();
+  socket.send(inquiryResponse(sequence, payload), request.port, request.address, () => sent.resolve());
+  return sent.promise;
+}
+
+
+const testCamera = {
+  name: 'test-camera',
+  enabled: true,
+  address: '127.0.0.1',
+  port: 0,
+  cameraId: 1,
+  numPresets: 3,
+  panStep: 100,
+  tiltStep: 70,
+  zoomStep: 1000,
+  panRange: [-1700, 1700] as [number, number],
+  tiltRange: [-300, 900] as [number, number],
+  zoomRange: [0, 16384] as [number, number],
+};
+
+async function waitForPtz(predicate: (camera: PtzCameraState) => boolean): Promise<void> {
+  if (predicate(state.get().ptz.cameras[0])) return;
+  const waiting = Promise.withResolvers<void>();
+  const listener = (event: ChangeEvent) => {
+    if (event.section === 'ptz' && predicate(state.get().ptz.cameras[0])) {
+      state.off('change', listener);
+      waiting.resolve();
+    }
+  };
+  state.on('change', listener);
+  await waiting.promise;
+}
+describe('PTZ inquiry state publication', () => {
+  test('publishes decoded pan, tilt, and zoom responses to shared state', async () => {
+    const originalCameras = config.ptz.cameras;
+    const fake = await createFakeCamera((request, socket) => {
+      const payload = request.msg.subarray(8);
+      if (payload[2] === 0x06 && payload[3] === 0x12) {
+        void replyToInquiry(socket, request, [0x90, 0x50, ...encodePos(880), ...encodePos(-300), 0xff]);
+      } else if (payload[2] === 0x04 && payload[3] === 0x47) {
+        void replyToInquiry(socket, request, [0x90, 0x50, ...encodePos(6400), 0xff]);
+      }
+    });
+    config.ptz.cameras = [{ ...testCamera, port: socketPort(fake.socket) }];
+    disconnect();
+    try {
+      connect();
+      await waitForPtz((camera) => camera.pan === 880 && camera.tilt === -300 && camera.zoom === 6400);
+      const camera = state.get().ptz.cameras[0];
+      assert.equal(camera.pan, 880);
+      assert.equal(camera.tilt, -300);
+      assert.equal(camera.zoom, 6400);
+    } finally {
+      disconnect();
+      config.ptz.cameras = originalCameras;
+      await fake.close();
+    }
+  });
+
+  test('does not publish a delayed inquiry response after disconnect', async () => {
+    const originalCameras = config.ptz.cameras;
+    const fake = await createFakeCamera(() => {});
+    config.ptz.cameras = [{ ...testCamera, port: socketPort(fake.socket) }];
+    disconnect();
+    const events: unknown[] = [];
+    const listener = (event: ChangeEvent) => {
+      if (event.section === 'ptz') events.push(event.state);
+    };
+    state.on('change', listener);
+    try {
+      connect();
+      await fake.waitForTwoRequests();
+      const pendingRequests = fake.requests.slice();
+      disconnect();
+      const eventsAfterDisconnect = events.length;
+      await Promise.all(pendingRequests.map((request) =>
+        replyToInquiry(fake.socket, request, [0x90, 0x50, ...encodePos(999), ...encodePos(111), 0xff]),
+      ));
+      const camera = state.get().ptz.cameras[0];
+      assert.equal(camera.connected, false);
+      assert.equal(camera.pan, null);
+      assert.equal(camera.tilt, null);
+      assert.equal(camera.zoom, null);
+      assert.equal(events.length, eventsAfterDisconnect, 'stale response must not republish after disconnect');
+    } finally {
+      state.off('change', listener);
+      disconnect();
+      config.ptz.cameras = originalCameras;
+      await fake.close();
+    }
   });
 });
