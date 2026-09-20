@@ -20,21 +20,33 @@ let keepAliveInterval: ReturnType<typeof setInterval> | null = null;
 let subscribeInterval: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let meterInterval: ReturnType<typeof setInterval> | null = null;
+let livenessInterval: ReturnType<typeof setInterval> | null = null;
+let sendTimer: ReturnType<typeof setInterval> | null = null;
+let sendQueue: QueuedPacket[] = [];
 let metersActive = false;
+let lastValidResponseAt = 0;
+let connectionGeneration = 0;
 // Reference counts for per-bus send tracking: busIndex → number of active subscribers
 const busSendRefCounts = new Map<number, number>();
 // Renewal intervals per bus: busIndex → interval handle
 const busSendIntervals = new Map<number, ReturnType<typeof setInterval>>();
-let loggedNoResponse = false;
 let lastMeterSubscribeLogTime = 0;
 let lastMeterReceiveLogTime = 0;
 const loggedMeterChannels = new Set<string>();
+let loggedNoResponse = false;
 
-// Send queue: throttle outgoing messages to avoid flooding the mixer.
-// The X32 can silently drop packets if commands arrive faster than it can process them.
-const SEND_INTERVAL_MS = 20; // 20 ms between packets ≈ 50 msg/s max
-let sendQueue: Buffer[] = [];
-let sendTimer: ReturnType<typeof setInterval> | null = null;
+const SEND_INTERVAL_MS = 20;
+const MAX_QUEUED_READS = 256;
+const HANDSHAKE_TIMEOUT_MS = 3000;
+const RESPONSE_TIMEOUT_MS = 15000;
+const LIVENESS_CHECK_INTERVAL_MS = 1000;
+
+type QueueKind = 'read' | 'write';
+interface QueuedPacket {
+  buf: Buffer;
+  kind: QueueKind;
+  key?: string;
+}
 
 interface OscArg {
   value: unknown;
@@ -75,25 +87,108 @@ const MTX_COUNT = 6;
 // main type: index 1 = stereo L/R, index 2 = mono/center
 const MAIN_LABELS: Record<number, string> = { 1: 'Main L/R', 2: 'Main M/C' };
 
+function isChannelType(value: unknown): value is OscResult['type'] {
+  return value === 'ch' || value === 'bus' || value === 'main' || value === 'mtx';
+}
+
+function validChannelIndex(index: unknown, type: OscResult['type']): index is number {
+  if (typeof index !== 'number' || !Number.isInteger(index)) return false;
+  if (type === 'ch') return index >= 1 && index <= CH_COUNT;
+  if (type === 'bus') return index >= 1 && index <= BUS_COUNT;
+  if (type === 'mtx') return index >= 1 && index <= MTX_COUNT;
+  return index === 1 || index === 2;
+}
+
+function validBusIndex(index: unknown): index is number {
+  return typeof index === 'number' && Number.isInteger(index) && index >= 1 && index <= BUS_COUNT;
+}
+
+function cloneChannel(channel: Channel): Channel {
+  return {
+    ...channel,
+    ...(channel.busSends ? { busSends: channel.busSends.map((send) => ({ ...send })) } : {}),
+  };
+}
+
+function snapshotChannels(): Channel[] {
+  return channels.map(cloneChannel);
+}
+
+function publishState(isConnected = connected): void {
+  state.update('x32', { connected: isConnected, channels: snapshotChannels() });
+}
+
+function clearIntervalHandle(handle: ReturnType<typeof setInterval> | null): null {
+  if (handle) clearInterval(handle);
+  return null;
+}
+
+function clearBusTrackingIntervals(): void {
+  for (const interval of busSendIntervals.values()) clearInterval(interval);
+  busSendIntervals.clear();
+}
+
+function clearConnectionResources(preserveWrites = false): void {
+  keepAliveInterval = clearIntervalHandle(keepAliveInterval);
+  subscribeInterval = clearIntervalHandle(subscribeInterval);
+  meterInterval = clearIntervalHandle(meterInterval);
+  livenessInterval = clearIntervalHandle(livenessInterval);
+  sendTimer = clearIntervalHandle(sendTimer);
+  clearBusTrackingIntervals();
+  sendQueue = preserveWrites ? sendQueue.filter((packet) => packet.kind === 'write') : [];
+}
+
+function closeSocket(socket: dgram.Socket | null): void {
+  if (!socket) return;
+  try { socket.close(); } catch { /* ignore if already closed */ }
+}
+
+function scheduleReconnect(): void {
+  if (!wantConnected || reconnectTimer) return;
+  logger.log('[X32] Scheduling reconnect in 5s');
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (wantConnected) connect();
+  }, 5000);
+}
+
+function markDisconnected(generation: number, reason: string): void {
+  if (generation !== connectionGeneration || !wantConnected) return;
+  if (!sock && !connected) {
+    scheduleReconnect();
+    return;
+  }
+  const wasConnected = connected;
+  connected = false;
+  lastValidResponseAt = 0;
+  clearConnectionResources(true);
+  const staleSocket = sock;
+  sock = null;
+  closeSocket(staleSocket);
+  publishState(false);
+  if (wasConnected) logger.warn(`[X32] Mixer unavailable (${reason}); reconnecting`);
+  else if (!loggedNoResponse) {
+    logger.log(`[X32] No mixer response (${reason}); will retry...`);
+    loggedNoResponse = true;
+  }
+  scheduleReconnect();
+}
+
 function connect(): void {
   logger.log('[X32] Attempting to connect to', config.x32.address, 'port', config.x32.port);
   wantConnected = true;
-  if (reconnectTimer) clearTimeout(reconnectTimer);
-  if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
-  if (subscribeInterval) { clearInterval(subscribeInterval); subscribeInterval = null; }
-  if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
-  if (sendTimer) { clearInterval(sendTimer); sendTimer = null; }
-  sendQueue = [];
-
-  if (sock) {
-    logger.log('[X32] Closing existing socket');
-    try { sock.close(); } catch (_) { /* ignore if already closed */ }
-    sock = null;
-  }
-
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  connectionGeneration += 1;
+  const generation = connectionGeneration;
+  clearConnectionResources(true);
+  closeSocket(sock);
+  sock = null;
   connected = false;
+  lastValidResponseAt = 0;
+  loggedNoResponse = false;
   loggedMeterChannels.clear();
-  // Pre-populate all channels in sorted order with default labels
+
+  // Pre-populate all channels in sorted order with default labels.
   channels = [];
   dcaGroupsMap.clear();
   for (let i = 1; i <= CH_COUNT; i++) {
@@ -108,65 +203,60 @@ function connect(): void {
   for (const [idx, lbl] of Object.entries(MAIN_LABELS)) {
     channels.push({ index: Number(idx), type: 'main', label: lbl, fader: 0, muted: false, level: 0, source: 1, linkedToNext: false, spill: false, color: 0 });
   }
+  publishState(false);
 
   // Bind to 0.0.0.0 so the OS accepts inbound packets on any local network
-  // interface (LAN, loopback, etc.) and picks an ephemeral source port.
-  // The X32 will reply to that same ephemeral port because it echoes back
-  // to the source address/port of each UDP packet it receives.
-  sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
-
-  sock.on('error', (err) => {
+  // interface and picks an ephemeral source port.
+  const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+  sock = socket;
+  socket.on('error', (err) => {
+    if (generation !== connectionGeneration) return;
     logger.warn('[X32] Socket error:', err.message);
+    markDisconnected(generation, 'socket error');
   });
-
-  sock.on('message', (raw: Buffer) => {
+  socket.on('close', () => {
+    if (generation === connectionGeneration && wantConnected && connected) {
+      markDisconnected(generation, 'socket closed');
+    }
+  });
+  socket.on('message', (raw: Buffer) => {
+    if (generation !== connectionGeneration || socket !== sock) return;
     let address: string;
     let args: OscArg[];
     try {
-      const decoded = oscDecode(raw) as { address: string; args: { value: unknown }[] };
+      const decoded = oscDecode(raw) as { address?: unknown; args?: unknown };
+      if (typeof decoded.address !== 'string') return;
       address = decoded.address;
-      args = decoded.args;
+      args = Array.isArray(decoded.args) ? decoded.args as OscArg[] : [];
     } catch (e) {
       logger.warn('[X32] Failed to decode OSC packet:', (e as Error).message);
       return;
     }
+    lastValidResponseAt = Date.now();
     handleMessage(address, args);
-    // Immediately send the next queued request on any incoming reply to
-    // pipeline discovery messages rather than waiting for the timer tick.
+    // Immediately send the next queued request on any incoming reply.
     flushSendQueue();
   });
 
-  sock.bind(0, '0.0.0.0', () => {
-    const port = sock!.address().port;
+  socket.bind(0, '0.0.0.0', () => {
+    if (generation !== connectionGeneration || socket !== sock) return;
+    const port = socket.address().port;
     logger.log(`[X32] Socket bound on ephemeral port ${port}`);
-
-    // Start the throttled send queue pump
     sendTimer = setInterval(flushSendQueue, SEND_INTERVAL_MS);
-
-    // Validate connection like the C tools: send /info and wait for a /info reply.
-    // Bypass the queue so this goes immediately.
+    livenessInterval = setInterval(() => {
+      if (generation !== connectionGeneration || !wantConnected) return;
+      const elapsed = Date.now() - lastValidResponseAt;
+      if (!connected && elapsed >= HANDSHAKE_TIMEOUT_MS) {
+        markDisconnected(generation, 'no /info reply');
+      } else if (connected && elapsed >= RESPONSE_TIMEOUT_MS) {
+        markDisconnected(generation, 'reply timeout');
+      }
+    }, LIVENESS_CHECK_INTERVAL_MS);
     logger.log('[X32] Sending /info to validate connection');
     sendImmediate('/info');
-
-    setTimeout(() => {
-      if (wantConnected && !connected) {
-        if (!loggedNoResponse) {
-          logger.log('[X32] No /info reply after 3s, will retry...');
-          loggedNoResponse = true;
-        }
-        state.update('x32', { connected: false, channels });
-        scheduleReconnect();
-      }
-    }, 3000);
   });
 }
 
-function scheduleReconnect(): void {
-  if (!wantConnected) return;
-  if (reconnectTimer) clearTimeout(reconnectTimer);
-  logger.log('[X32] Scheduling reconnect in 5s');
-  reconnectTimer = setTimeout(connect, 5000);
-}
 
 function channelPrefix(index: number, type: 'ch' | 'bus' | 'main' | 'mtx'): string {
   if (type === 'main') {
@@ -185,30 +275,54 @@ function buildOscBuffer(address: string, args?: OscArg[]): Buffer {
   }
   return oscEncode(msg) as Buffer;
 }
-
 // Send immediately, bypassing the queue — used for connection handshake only.
 function sendImmediate(address: string, args?: OscArg[]): void {
-  if (!sock) return;
+  const socket = sock;
+  if (!socket) return;
+  const generation = connectionGeneration;
   const buf = buildOscBuffer(address, args);
-  sock.send(buf, 0, buf.length, config.x32.port, config.x32.address, (err) => {
-    if (err) logger.warn('[X32] Send error:', err.message);
+  socket.send(buf, 0, buf.length, config.x32.port, config.x32.address, (err) => {
+    if (err && generation === connectionGeneration && wantConnected) logger.warn('[X32] Send error:', err.message);
   });
+}
+
+function queueKey(address: string, args?: OscArg[]): string {
+  let encodedArgs: string;
+  try {
+    encodedArgs = JSON.stringify(args?.map((arg) => arg.value)) ?? '';
+  } catch {
+    encodedArgs = String(args);
+  }
+  return `${address}\u0000${encodedArgs}`;
 }
 
 function flushSendQueue(): void {
-  if (!sock || sendQueue.length === 0) return;
-  const buf = sendQueue.shift()!;
-  sock.send(buf, 0, buf.length, config.x32.port, config.x32.address, (err) => {
-    if (err) logger.warn('[X32] Send error:', err.message);
+  const socket = sock;
+  if (!socket || sendQueue.length === 0) return;
+  const packet = sendQueue.shift()!;
+  const generation = connectionGeneration;
+  socket.send(packet.buf, 0, packet.buf.length, config.x32.port, config.x32.address, (err) => {
+    if (err && generation === connectionGeneration && wantConnected) logger.warn('[X32] Send error:', err.message);
   });
 }
 
-function sendOsc(address: string, args?: OscArg[]): void {
+function sendOsc(address: string, args?: OscArg[], kind: QueueKind = 'read'): void {
   if (!sock) {
-    logger.warn('[X32] sendOsc called but no socket:', address);
+    if (kind === 'write' && wantConnected) sendQueue.push({ buf: buildOscBuffer(address, args), kind });
+    else logger.warn('[X32] sendOsc called but no socket:', address);
     return;
   }
-  sendQueue.push(buildOscBuffer(address, args));
+  const key = kind === 'read' ? queueKey(address, args) : undefined;
+  if (key && sendQueue.some((packet) => packet.kind === 'read' && packet.key === key)) return;
+  if (kind === 'read') {
+    let readCount = 0;
+    for (const packet of sendQueue) if (packet.kind === 'read') readCount += 1;
+    if (readCount >= MAX_QUEUED_READS) {
+      const staleIndex = sendQueue.findIndex((packet) => packet.kind === 'read');
+      if (staleIndex >= 0) sendQueue.splice(staleIndex, 1);
+    }
+  }
+  sendQueue.push({ buf: buildOscBuffer(address, args), kind, key });
 }
 
 // Parse a meter blob into an array of float32 values.
@@ -218,13 +332,13 @@ function sendOsc(address: string, args?: OscArg[]): void {
 // We skip that 4-byte count and read the rest as packed little-endian float32
 // values (linear peak level 0.0–1.0, 1.0 = 0 dBFS).
 function parseMeterBlob(blob: Buffer): number[] {
-  if (blob.length < 8) return []; // need at least 4-byte count + 1 float
-  const data = blob.subarray(4); // skip the embedded count prefix
+  if (blob.length < 8) return [];
+  const data = blob.subarray(4);
   const count = Math.floor(data.length / 4);
   const values: number[] = [];
   for (let i = 0; i < count; i++) {
-    const offset = i * 4;
-    values.push(Math.round(data.readFloatLE(offset) * 1000) / 1000);
+    const value = data.readFloatLE(i * 4);
+    values.push(Number.isFinite(value) ? Math.round(value * 1000) / 1000 : 0);
   }
   return values;
 }
@@ -271,40 +385,35 @@ function handleMeterMessage(address: string, args: OscArg[]): void {
     lastMeterReceiveLogTime = now;
   }
   let updated = false;
-  for (const ch of channels) {
+  channels = channels.map((ch) => {
     let level: number | undefined;
     if (address === '/meters/0') {
-      // Bank 0: pos 0–31=ch 1–32, pos 48–63=bus 1–16, pos 64–69=mtx 1–6
       if (ch.type === 'ch') level = values[ch.index - 1];
       else if (ch.type === 'bus') level = values[48 + ch.index - 1];
       else if (ch.type === 'mtx') level = values[64 + ch.index - 1];
     } else if (address === '/meters/2') {
-      // Bank 2: pos 0–15=bus 1–16, pos 16–21=mtx 1–6, pos 22–23=main L/R, pos 24=main M/C
       if (ch.type === 'bus') level = values[ch.index - 1];
       else if (ch.type === 'mtx') level = values[16 + ch.index - 1];
       else if (ch.type === 'main') {
-        // Use the higher of L and R for stereo main (index 1); mono M/C is index 2
         if (ch.index === 1) level = Math.max(values[22] ?? 0, values[23] ?? 0);
         else if (ch.index === 2) level = values[24];
       }
     }
-    if (level !== undefined && isFinite(level)) {
-      const key = `${ch.type}-${ch.index}`;
-      if (!loggedMeterChannels.has(key)) {
-        loggedMeterChannels.add(key);
-        logger.log(`[X32] First meter data for ${key} (${ch.label}): level=${level} via ${address}`);
-      }
-      ch.level = level;
-      updated = true;
+    if (level === undefined || !Number.isFinite(level)) return ch;
+    const key = `${ch.type}-${ch.index}`;
+    if (!loggedMeterChannels.has(key)) {
+      loggedMeterChannels.add(key);
+      logger.log(`[X32] First meter data for ${key} (${ch.label}): level=${level} via ${address}`);
     }
-  }
+    if (ch.level === level) return ch;
+    updated = true;
+    return { ...ch, level };
+  });
   if (updated) {
-    // Broadcast level-only updates directly to /ws/levels — do NOT call state.update
-    // so the main WebSocket doesn't re-render all Alpine x-for elements on every meter tick.
+    // Broadcast level-only updates directly to /ws/levels; meter ticks do not
+    // need to re-render all main WebSocket channel elements.
     const x32Levels: Record<string, number> = {};
-    for (const ch of channels) {
-      x32Levels[`${ch.type}-${ch.index}`] = ch.level;
-    }
+    for (const ch of channels) x32Levels[`${ch.type}-${ch.index}`] = ch.level;
     levelsWs.broadcast({ x32: x32Levels, obs: {} });
   }
 }
@@ -319,32 +428,42 @@ interface OscPattern {
   patch: OscPatchFn;
 }
 
-function faderPatch(args: OscArg[]): Partial<Channel> {
-  return { fader: (args?.[0]?.value as number) ?? 0 };
+function faderPatch(args: OscArg[]): Partial<Channel> | null {
+  const raw = args?.[0]?.value;
+  const value = raw === undefined ? 0 : raw;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1 ? { fader: value } : null;
 }
 
-function mutePatch(args: OscArg[]): Partial<Channel> {
-  return { muted: ((args?.[0]?.value as number) ?? 1) === 0 };
+function mutePatch(args: OscArg[]): Partial<Channel> | null {
+  const raw = args?.[0]?.value;
+  const value = raw === undefined ? 1 : raw;
+  return typeof value === 'number' && Number.isFinite(value) && (value === 0 || value === 1)
+    ? { muted: value === 0 }
+    : null;
 }
 
 function namePatch(args: OscArg[]): Partial<Channel> | null {
-  const name = args?.[0]?.value as string | undefined;
-  return name ? { label: name } : null;
+  const name = args?.[0]?.value;
+  return typeof name === 'string' && name.length > 0 ? { label: name } : null;
 }
 
-function sourcePatch(args: OscArg[]): Partial<Channel> {
-  return { source: (args?.[0]?.value as number) ?? 0 };
+function sourcePatch(args: OscArg[]): Partial<Channel> | null {
+  const raw = args?.[0]?.value;
+  const value = raw === undefined ? 0 : raw;
+  return typeof value === 'number' && Number.isFinite(value) ? { source: value } : null;
 }
 
-function colorPatch(args: OscArg[]): Partial<Channel> {
-  return { color: (args?.[0]?.value as number) ?? 0 };
+function colorPatch(args: OscArg[]): Partial<Channel> | null {
+  const raw = args?.[0]?.value;
+  const value = raw === undefined ? 0 : raw;
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 15 ? { color: value } : null;
 }
 
 // DCA group bitmask: bit 7 (value 128) = DCA group 8.
-// Returns { spill: true } when bit 7 is set, { spill: false } otherwise.
-function dcaPatch(args: OscArg[]): Partial<Channel> {
-  const value = (args?.[0]?.value as number) ?? 0;
-  return { spill: (value & 128) !== 0 };
+function dcaPatch(args: OscArg[]): Partial<Channel> | null {
+  const raw = args?.[0]?.value;
+  const value = raw === undefined ? 0 : raw;
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? { spill: (value & 128) !== 0 } : null;
 }
 
 const OSC_PATTERNS: OscPattern[] = [
@@ -379,37 +498,38 @@ interface BusSendResult {
   busIndex: number;
   patch: Partial<BusSend>;
 }
-
 // Pure function: parse an OSC address + args for channel-to-bus send messages.
 // Handles /ch/NN/mix/BB/level and /ch/NN/mix/BB/on.
 // Returns { channelIndex, busIndex, patch } or null if not a bus send message.
 function parseBusSendMessage(address: string, args: OscArg[]): BusSendResult | null {
+  if (typeof address !== 'string' || !Array.isArray(args)) return null;
   const levelMatch = address.match(/^\/ch\/(\d+)\/mix\/(\d+)\/level$/);
-  if (levelMatch) {
-    return {
-      channelIndex: parseInt(levelMatch[1], 10),
-      busIndex: parseInt(levelMatch[2], 10),
-      patch: { level: (args?.[0]?.value as number) ?? 0 },
-    };
-  }
   const onMatch = address.match(/^\/ch\/(\d+)\/mix\/(\d+)\/on$/);
-  if (onMatch) {
-    return {
-      channelIndex: parseInt(onMatch[1], 10),
-      busIndex: parseInt(onMatch[2], 10),
-      patch: { on: ((args?.[0]?.value as number) ?? 0) === 1 },
-    };
+  const match = levelMatch ?? onMatch;
+  if (!match) return null;
+  const channelIndex = Number.parseInt(match[1], 10);
+  const busIndex = Number.parseInt(match[2], 10);
+  if (!validChannelIndex(channelIndex, 'ch') || !validBusIndex(busIndex)) return null;
+  const raw = args?.[0]?.value;
+  if (levelMatch) {
+    const value = raw === undefined ? 0 : raw;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) return null;
+    return { channelIndex, busIndex, patch: { level: value } };
   }
-  return null;
+  const value = raw === undefined ? 0 : raw;
+  if (typeof value !== 'number' || !Number.isFinite(value) || (value !== 0 && value !== 1)) return null;
+  return { channelIndex, busIndex, patch: { on: value === 1 } };
 }
 
 // Pure function: parse an OSC address + args into a channel state patch.
 // Returns { index, type, patch } or null if the message isn't a recognised channel message.
 function parseOscMessage(address: string, args: OscArg[]): OscResult | null {
+  if (typeof address !== 'string' || !Array.isArray(args)) return null;
   for (const pattern of OSC_PATTERNS) {
-    const m = address.match(pattern.re);
-    if (!m) continue;
-    const index = pattern.indexGroup !== null ? parseInt(m[pattern.indexGroup], 10) : pattern.fixedIndex!;
+    const match = address.match(pattern.re);
+    if (!match) continue;
+    const index = pattern.indexGroup !== null ? Number.parseInt(match[pattern.indexGroup], 10) : pattern.fixedIndex!;
+    if (!isChannelType(pattern.type) || !validChannelIndex(index, pattern.type)) return null;
     const patch = pattern.patch(args);
     if (!patch) return null;
     return { index, type: pattern.type, patch };
@@ -422,15 +542,17 @@ function handleMessage(address: string, args: OscArg[]): void {
   if (address === '/info' && !connected) {
     connected = true;
     loggedNoResponse = false;
+    publishState(true);
     logger.log('[X32] /info reply — connection confirmed, starting discovery');
 
-    // X32 requires /xremote every <10s to stay subscribed to updates
+    // These guards keep duplicate /info packets from creating duplicate loops.
+    keepAliveInterval = clearIntervalHandle(keepAliveInterval);
+    subscribeInterval = clearIntervalHandle(subscribeInterval);
     sendOsc('/xremote');
     keepAliveInterval = setInterval(() => {
       logger.debug('[X32] keepalive /xremote');
       sendOsc('/xremote');
     }, 8000);
-    // Subscriptions expire after ~10s; renew periodically
     subscribeInterval = setInterval(subscribeToChanges, 8000);
 
     // Request names, sources, and link state for all channels.
@@ -471,13 +593,11 @@ function handleMessage(address: string, args: OscArg[]): void {
 
     if (metersActive) {
       logger.log('[X32] Restarting meter updates after reconnect');
+      meterInterval = clearIntervalHandle(meterInterval);
       requestMeterUpdates();
       meterInterval = setInterval(requestMeterUpdates, 1500);
     }
-    for (const [busIndex] of busSendRefCounts) {
-      logger.log(`[X32] Restarting bus send tracking for bus ${busIndex} after reconnect`);
-      requestBusSendUpdates(busIndex);
-    }
+    restartBusSendTracking();
     return;
   }
 
@@ -490,24 +610,31 @@ function handleMessage(address: string, args: OscArg[]): void {
   const linkMatch = address.match(/^\/config\/(ch|bus|mtx)link\/(\d+)-(\d+)$/);
   if (linkMatch) {
     const type = linkMatch[1] as 'ch' | 'bus' | 'mtx';
-    const oddIndex = parseInt(linkMatch[2], 10);
-    const linked = ((args?.[0]?.value as number) ?? 0) === 1;
-    const oddCh = channels.find((c) => c.index === oddIndex && c.type === type);
-    const evenCh = channels.find((c) => c.index === oddIndex + 1 && c.type === type);
-    if (oddCh) oddCh.linkedToNext = linked;
-    if (evenCh) evenCh.linkedToNext = false; // even channel is always the follower
-    state.update('x32', { connected: true, channels: [...channels] });
+    const oddIndex = Number.parseInt(linkMatch[2], 10);
+    const evenIndex = Number.parseInt(linkMatch[3], 10);
+    const raw = args?.[0]?.value;
+    const linked = raw === undefined ? false : raw;
+    if (!validChannelIndex(oddIndex, type) || !validChannelIndex(evenIndex, type) ||
+      typeof linked !== 'number' || !Number.isFinite(linked) || (linked !== 0 && linked !== 1)) return;
+    channels = channels.map((channel) => {
+      if (channel.type === type && channel.index === oddIndex) return { ...channel, linkedToNext: linked === 1 };
+      if (channel.type === type && channel.index === evenIndex) return { ...channel, linkedToNext: false };
+      return channel;
+    });
+    publishState(true);
     return;
   }
 
   // Intercept DCA group messages to store the full bitmask for read-modify-write.
-  // The parseOscMessage call below will also extract the spill boolean for the channel patch.
   const dcaMatch = address.match(new RegExp(`^/(ch|bus)/(\\d+)${DCA_GROUP_PATH}$`));
   if (dcaMatch) {
     const type = dcaMatch[1] as 'ch' | 'bus';
-    const index = parseInt(dcaMatch[2], 10);
-    const value = (args?.[0]?.value as number) ?? 0;
-    dcaGroupsMap.set(`${type}-${index}`, value);
+    const index = Number.parseInt(dcaMatch[2], 10);
+    const raw = args?.[0]?.value;
+    const value = raw === undefined ? 0 : raw;
+    if (validChannelIndex(index, type) && typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+      dcaGroupsMap.set(`${type}-${index}`, value);
+    }
   }
 
   // Bus send messages: /ch/NN/mix/BB/level and /ch/NN/mix/BB/on
@@ -600,14 +727,16 @@ function applyBusSendPatchWithPending(
 }
 
 function updateChannel(index: number, type: 'ch' | 'bus' | 'main' | 'mtx', patch: Partial<Channel>): void {
-  const ch = channels.find((c) => c.index === index && c.type === type);
-  if (!ch) {
+  const channel = channels.find((candidate) => candidate.index === index && candidate.type === type);
+  if (!channel) {
     logger.warn(`[X32] updateChannel: unknown ${type} ${index} — ignoring`);
     return;
   }
   const effectivePatch = applyOscPatchWithPending({ type, index }, patch, pendingFaders);
-  Object.assign(ch, effectivePatch);
-  state.update('x32', { connected: true, channels: [...channels] });
+  channels = channels.map((candidate) => candidate === channel
+    ? { ...candidate, ...effectivePatch, ...(candidate.busSends ? { busSends: candidate.busSends.map((send) => ({ ...send })) } : {}) }
+    : candidate);
+  publishState(true);
 }
 
 function subscribeToChanges(): void {
@@ -640,26 +769,29 @@ function subscribeToChanges(): void {
 function disconnect(): void {
   logger.log('[X32] Disconnecting');
   wantConnected = false;
-  if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
-  if (subscribeInterval) { clearInterval(subscribeInterval); subscribeInterval = null; }
-  if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
-  if (sendTimer) { clearInterval(sendTimer); sendTimer = null; }
+  connectionGeneration += 1;
+  clearConnectionResources();
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-  sendQueue = [];
-  if (sock) { try { sock.close(); } catch (_) { /* ignore */ } sock = null; }
+  closeSocket(sock);
+  sock = null;
   connected = false;
+  dcaGroupsMap.clear();
   metersActive = false;
-  logger.log('[X32] Disconnected');
+  busSendRefCounts.clear();
+  pendingFaders.clear();
+  pendingBusSends.clear();
+  channels = channels.map((channel) => {
+    if (!channel.busSends) return channel;
+    const { busSends: _busSends, ...withoutBusSends } = channel;
+    return withoutBusSends;
+  });
+  publishState(false);
 }
-
-/**
- * Record a pending fader value for the given channel.  Call this immediately
- * after sending a fader command so that stale OSC echoes are suppressed until
- * the X32 confirms the new value (or 2 s elapse).
- */
 function setPendingFader(type: 'ch' | 'bus' | 'main' | 'mtx', index: number, value: number): void {
-  const key = `${type}-${index}`;
-  pendingFaders.set(key, { value, sentAt: Date.now() });
+  if (!isChannelType(type) || !validChannelIndex(index, type) || !Number.isFinite(value)) {
+    throw new Error('Invalid X32 pending fader');
+  }
+  pendingFaders.set(`${type}-${index}`, { value, sentAt: Date.now() });
 }
 
 function isActive(): boolean {
@@ -671,70 +803,61 @@ function startMeterUpdates(): void {
   metersActive = true;
   if (!connected) return;
   requestMeterUpdates();
-  if (meterInterval) clearInterval(meterInterval);
+  meterInterval = clearIntervalHandle(meterInterval);
   meterInterval = setInterval(requestMeterUpdates, 1500);
 }
 
 function stopMeterUpdates(): void {
   logger.log('[X32] stopMeterUpdates');
   metersActive = false;
-  if (meterInterval) { clearInterval(meterInterval); meterInterval = null; }
+  meterInterval = clearIntervalHandle(meterInterval);
 }
 
-function waitForStateChange(): Promise<void> {
-  return new Promise<void>((resolve) => {
-    state.once('change', () => resolve());
-  });
-}
 
 function setFader(channelIndex: number, value: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): Promise<void> {
-  const clamped = Math.max(0, Math.min(1, value));
-  logger.log(`[X32] setFader ${type} ${channelIndex} = ${clamped}`);
-  // Record the pending fader before sending so that OSC echoes arriving during
-  // or immediately after the drag are suppressed until the X32 confirms.
-  const key = `${type}-${channelIndex}`;
-  pendingFaders.set(key, { value: clamped, sentAt: Date.now() });
-  sendOsc(`${channelPrefix(channelIndex, type)}/mix/fader`, [
-    { value: clamped },
-  ]);
-  // Apply the update optimistically in local state (bypassing pending check
-  // so our own setFader always writes through).
-  const ch = channels.find((c) => c.index === channelIndex && c.type === type);
-  if (ch) {
-    ch.fader = clamped;
-    const p = waitForStateChange();
-    state.update('x32', { connected: true, channels: [...channels] });
-    return p;
+  if (!isChannelType(type) || !validChannelIndex(channelIndex, type) || !Number.isFinite(value) || value < 0 || value > 1) {
+    return Promise.reject(new Error('Invalid X32 fader'));
   }
+  const clamped = value;
+  const channel = channels.find((candidate) => candidate.index === channelIndex && candidate.type === type);
+  if (!channel) return Promise.reject(new Error('Unknown X32 channel'));
+  logger.log(`[X32] setFader ${type} ${channelIndex} = ${clamped}`);
+  pendingFaders.set(`${type}-${channelIndex}`, { value: clamped, sentAt: Date.now() });
+  sendOsc(`${channelPrefix(channelIndex, type)}/mix/fader`, [{ value: clamped }], 'write');
+  channels = channels.map((candidate) => candidate === channel ? { ...candidate, fader: clamped } : candidate);
+  publishState(connected);
   return Promise.resolve();
 }
 
 function setSpill(channelIndex: number, type: 'ch' | 'bus', assigned: boolean): void {
+  if ((type !== 'ch' && type !== 'bus') || !validChannelIndex(channelIndex, type) || typeof assigned !== 'boolean') {
+    throw new Error('Invalid X32 spill');
+  }
   const key = `${type}-${channelIndex}`;
   const currentBitmask = dcaGroupsMap.get(key) ?? 0;
   const newBitmask = assigned ? (currentBitmask | 128) : (currentBitmask & ~128);
   dcaGroupsMap.set(key, newBitmask);
   logger.log(`[X32] setSpill ${type} ${channelIndex} = ${assigned} (bitmask ${newBitmask})`);
-  sendOsc(`${channelPrefix(channelIndex, type)}${DCA_GROUP_PATH}`, [{ value: newBitmask }]);
+  sendOsc(`${channelPrefix(channelIndex, type)}${DCA_GROUP_PATH}`, [{ value: newBitmask }], 'write');
   updateChannel(channelIndex, type, { spill: assigned });
 }
 
 function updateBusSend(channelIndex: number, busIndex: number, patch: Partial<BusSend>): void {
-  const ch = channels.find((c) => c.index === channelIndex && c.type === 'ch');
-  if (!ch) return;
-  if (!ch.busSends) ch.busSends = [];
+  if (!validChannelIndex(channelIndex, 'ch') || !validBusIndex(busIndex)) return;
+  const channel = channels.find((candidate) => candidate.index === channelIndex && candidate.type === 'ch');
+  if (!channel) return;
   const key = `ch${channelIndex}-bus${busIndex}`;
   const effectivePatch = applyBusSendPatchWithPending(key, patch, pendingBusSends);
-  const existing = ch.busSends.find((s) => s.busIndex === busIndex);
-  if (existing) {
-    Object.assign(existing, effectivePatch);
-  } else {
-    ch.busSends.push({ busIndex, level: 0, on: false, ...effectivePatch });
-  }
-  state.update('x32', { connected: true, channels: [...channels] });
+  const busSends = channel.busSends ? channel.busSends.map((send) => ({ ...send })) : [];
+  const existing = busSends.find((send) => send.busIndex === busIndex);
+  if (existing) Object.assign(existing, effectivePatch);
+  else busSends.push({ busIndex, level: 0, on: false, ...effectivePatch });
+  channels = channels.map((candidate) => candidate === channel ? { ...candidate, busSends } : candidate);
+  publishState(true);
 }
 
 function requestBusSendUpdates(busIndex: number): void {
+  if (!validBusIndex(busIndex)) return;
   logger.debug(`[X32] Requesting bus send data for bus ${busIndex}`);
   const padded = String(busIndex).padStart(2, '0');
   for (let i = 1; i <= CH_COUNT; i++) {
@@ -744,76 +867,86 @@ function requestBusSendUpdates(busIndex: number): void {
   }
 }
 
-function startBusSendTracking(busIndex: number): void {
-  const current = busSendRefCounts.get(busIndex) ?? 0;
-  busSendRefCounts.set(busIndex, current + 1);
-  if (current > 0) return; // already tracking
-
-  logger.log(`[X32] startBusSendTracking bus ${busIndex}`);
-  if (connected) requestBusSendUpdates(busIndex);
-  const interval = setInterval(() => {
-    if (connected) requestBusSendUpdates(busIndex);
-  }, 8000);
-  busSendIntervals.set(busIndex, interval);
+function ensureBusTrackingInterval(busIndex: number): void {
+  if (busSendIntervals.has(busIndex)) return;
+  busSendIntervals.set(busIndex, setInterval(() => {
+    if (connected && busSendRefCounts.has(busIndex)) requestBusSendUpdates(busIndex);
+  }, 8000));
 }
 
-function stopBusSendTracking(busIndex: number): void {
-  const current = busSendRefCounts.get(busIndex) ?? 0;
-  if (current <= 1) {
-    busSendRefCounts.delete(busIndex);
-    const interval = busSendIntervals.get(busIndex);
-    if (interval) { clearInterval(interval); busSendIntervals.delete(busIndex); }
-    // Clear busSends for this bus from all channels
-    for (const ch of channels) {
-      if (ch.busSends) {
-        ch.busSends = ch.busSends.filter((s) => s.busIndex !== busIndex);
-        if (ch.busSends.length === 0) delete ch.busSends;
-      }
-    }
-    logger.log(`[X32] stopBusSendTracking bus ${busIndex}`);
-    state.update('x32', { connected: true, channels: [...channels] });
-  } else {
-    busSendRefCounts.set(busIndex, current - 1);
+function restartBusSendTracking(): void {
+  for (const busIndex of busSendRefCounts.keys()) {
+    ensureBusTrackingInterval(busIndex);
+    if (connected) requestBusSendUpdates(busIndex);
   }
 }
 
+function startBusSendTracking(busIndex: number): void {
+  if (!validBusIndex(busIndex)) throw new Error('Invalid X32 bus index');
+  const current = busSendRefCounts.get(busIndex) ?? 0;
+  busSendRefCounts.set(busIndex, current + 1);
+  ensureBusTrackingInterval(busIndex);
+  if (current === 0) {
+    logger.log(`[X32] startBusSendTracking bus ${busIndex}`);
+    if (connected) requestBusSendUpdates(busIndex);
+  }
+}
+
+function stopBusSendTracking(busIndex: number): void {
+  if (!validBusIndex(busIndex)) throw new Error('Invalid X32 bus index');
+  const current = busSendRefCounts.get(busIndex) ?? 0;
+  if (current > 1) {
+    busSendRefCounts.set(busIndex, current - 1);
+    return;
+  }
+  busSendRefCounts.delete(busIndex);
+  const interval = busSendIntervals.get(busIndex);
+  if (interval) {
+    clearInterval(interval);
+    busSendIntervals.delete(busIndex);
+  }
+  channels = channels.map((channel) => {
+    if (!channel.busSends) return channel;
+    const busSends = channel.busSends.filter((send) => send.busIndex !== busIndex);
+    return busSends.length > 0 ? { ...channel, busSends } : (() => {
+      const { busSends: _removed, ...withoutBusSends } = channel;
+      return withoutBusSends;
+    })();
+  });
+  logger.log(`[X32] stopBusSendTracking bus ${busIndex}`);
+  publishState(connected);
+}
+
 function setBusSend(channelIndex: number, busIndex: number, value: number): Promise<void> {
-  const clamped = Math.max(0, Math.min(1, value));
+  if (!validChannelIndex(channelIndex, 'ch') || !validBusIndex(busIndex) || !Number.isFinite(value) || value < 0 || value > 1) {
+    return Promise.reject(new Error('Invalid X32 bus send'));
+  }
+  const channel = channels.find((candidate) => candidate.index === channelIndex && candidate.type === 'ch');
+  if (!channel) return Promise.reject(new Error('Unknown X32 channel'));
+  const clamped = value;
   logger.log(`[X32] setBusSend ch ${channelIndex} → bus ${busIndex} = ${clamped}`);
   const key = `ch${channelIndex}-bus${busIndex}`;
   pendingBusSends.set(key, { level: clamped, sentAt: Date.now() });
   const ch = String(channelIndex).padStart(2, '0');
   const bus = String(busIndex).padStart(2, '0');
-  sendOsc(`/ch/${ch}/mix/${bus}/level`, [{ value: clamped }]);
-  // Apply optimistically, bypassing the pending check (our own write always wins).
-  const channel = channels.find((c) => c.index === channelIndex && c.type === 'ch');
-  if (channel) {
-    if (!channel.busSends) channel.busSends = [];
-    const existing = channel.busSends.find((s) => s.busIndex === busIndex);
-    if (existing) {
-      existing.level = clamped;
-    } else {
-      channel.busSends.push({ busIndex, level: clamped, on: false });
-    }
-    const p = waitForStateChange();
-    state.update('x32', { connected: true, channels: [...channels] });
-    return p;
-  }
+  sendOsc(`/ch/${ch}/mix/${bus}/level`, [{ value: clamped }], 'write');
+  const busSends = channel.busSends ? channel.busSends.map((send) => ({ ...send })) : [];
+  const existing = busSends.find((send) => send.busIndex === busIndex);
+  if (existing) existing.level = clamped;
+  else busSends.push({ busIndex, level: clamped, on: false });
+  channels = channels.map((candidate) => candidate === channel ? { ...candidate, busSends } : candidate);
+  publishState(connected);
   return Promise.resolve();
 }
 
 function toggleMute(channelIndex: number, type: 'ch' | 'bus' | 'main' | 'mtx' = 'ch'): void {
-  const ch = channels.find((c) => c.index === channelIndex && c.type === type);
-  if (!ch) {
-    logger.warn(`[X32] toggleMute: ${type} ${channelIndex} not found`);
-    return;
-  }
-  const newState = ch.muted ? 1 : 0; // 1 = on (unmuted), 0 = off (muted)
-  logger.log(`[X32] toggleMute ${type} ${channelIndex}: muted=${ch.muted} → ${!ch.muted}`);
-  sendOsc(`${channelPrefix(channelIndex, type)}/mix/on`, [
-    { value: newState },
-  ]);
-  updateChannel(channelIndex, type, { muted: !ch.muted });
+  if (!isChannelType(type) || !validChannelIndex(channelIndex, type)) throw new Error('Invalid X32 channel');
+  const channel = channels.find((candidate) => candidate.index === channelIndex && candidate.type === type);
+  if (!channel) throw new Error('Unknown X32 channel');
+  const newState = channel.muted ? 1 : 0;
+  logger.log(`[X32] toggleMute ${type} ${channelIndex}: muted=${channel.muted} → ${!channel.muted}`);
+  sendOsc(`${channelPrefix(channelIndex, type)}/mix/on`, [{ value: newState }], 'write');
+  updateChannel(channelIndex, type, { muted: !channel.muted });
 }
 
 export {

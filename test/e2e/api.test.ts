@@ -301,9 +301,15 @@ describe('API routes', () => {
 
     test('saves and reconnects changed connections', async () => {
       resetCalls();
-      const cfgRes = await req(server, 'GET', '/api/config');
-      const cfg = await cfgRes.json() as { obs: { address: string; password: string }; x32: { address: string; port: number }; proclaim: { host: string; port: number; password: string } };
-      const newCfg = { ...cfg, obs: { ...cfg.obs, address: 'ws://localhost:9999' } };
+      const newCfg = {
+        server: { port: 3000, openBrowser: true },
+        obs: { address: 'ws://localhost:9999', password: '', screenshotInterval: 1000 },
+        x32: { address: '192.168.1.100', port: 10023 },
+        proclaim: { host: '127.0.0.1', port: 52195, password: '', pollInterval: 1000, presentationDbPath: '' },
+        ptz: { cameras: [{ name: 'AV-CM20-NDI', enabled: false, address: '192.168.1.101', port: 52381, cameraId: 1, numPresets: 9, panStep: 100, tiltStep: 70, zoomStep: 1000, panRange: [-1700, 1700], tiltRange: [-300, 900], zoomRange: [0, 16384] }] },
+        youtube: { broadcastId: '', pollInterval: 30000 },
+        ui: { hiddenObs: [], hiddenX32: [] },
+      };
       const res = await req(server, 'POST', '/api/config', newCfg);
       assert.equal(res.status, 200);
       assert.deepEqual(await res.json(), { ok: true });
@@ -319,11 +325,18 @@ describe('API routes', () => {
       calls.x32.disconnect = 0; calls.x32.connect = 0;
       calls.proclaim.disconnect = 0; calls.proclaim.connect = 0;
       calls.ptz.disconnect = 0; calls.ptz.connect = 0;
-      const cfgRes = await req(server, 'GET', '/api/config');
-      const cfg = await cfgRes.json() as { ptz: { cameras: object[] } };
-      const newCameras = [{ ...(cfg.ptz.cameras[0] ?? {}), address: '192.168.99.99' }];
-      const res = await req(server, 'POST', '/api/config', { ...cfg, ptz: { cameras: newCameras } });
+      const newCfg = {
+        server: { port: 3000, openBrowser: true },
+        obs: { address: 'ws://localhost:4455', password: '', screenshotInterval: 1000 },
+        x32: { address: '192.168.1.100', port: 10023 },
+        proclaim: { host: '127.0.0.1', port: 52195, password: '', pollInterval: 1000, presentationDbPath: '' },
+        ptz: { cameras: [{ name: 'AV-CM20-NDI', enabled: false, address: '192.168.99.99', port: 52381, cameraId: 1, numPresets: 9, panStep: 100, tiltStep: 70, zoomStep: 1000, panRange: [-1700, 1700], tiltRange: [-300, 900], zoomRange: [0, 16384] }] },
+        youtube: { broadcastId: '', pollInterval: 30000 },
+        ui: { hiddenObs: [], hiddenX32: [] },
+      };
+      const res = await req(server, 'POST', '/api/config', newCfg);
       assert.equal(res.status, 200);
+      assert.deepEqual(await res.json(), { ok: true });
       assert.ok(calls.ptz.disconnect >= 1);
       assert.ok(calls.ptz.connect >= 1);
       assert.equal(calls.obs.disconnect, 0);
@@ -331,6 +344,7 @@ describe('API routes', () => {
       assert.equal(calls.proclaim.disconnect, 0);
     });
   });
+
 
   describe('POST /api/youtube/start', () => {
     test('returns 500 with error message when OAuth not configured', async () => {
@@ -351,11 +365,16 @@ describe('API routes', () => {
   });
 
   describe('POST /api/youtube/import-obs-creds', () => {
-    test('returns found: false when OBS config not found', async () => {
-      const res = await req(server, 'POST', '/api/youtube/import-obs-creds', { obsConfigDir: '/nonexistent/path' });
+    test('rejects caller-supplied OBS config paths and uses the default path', async () => {
+      const rejected = await req(server, 'POST', '/api/youtube/import-obs-creds', { obsConfigDir: '/nonexistent/path' });
+      assert.equal(rejected.status, 400);
+      const rejectedBody = await rejected.json() as { error: string };
+      assert.match(rejectedBody.error, /Unexpected fields/);
+
+      const res = await req(server, 'POST', '/api/youtube/import-obs-creds', {});
       assert.equal(res.status, 200);
       const body = await res.json() as { found: boolean };
-      assert.equal(body.found, false);
+      assert.equal(typeof body.found, 'boolean');
     });
   });
 
@@ -370,7 +389,7 @@ describe('API routes', () => {
 
   describe('POST /api/discover/x32', () => {
     test('returns a result with found boolean', async () => {
-      const res = await req(server, 'POST', '/api/discover/x32');
+      const res = await req(server, 'POST', '/api/discover/x32', {});
       assert.equal(res.status, 200);
       const body = await res.json() as { found: boolean };
       assert.ok(typeof body.found === 'boolean');
@@ -379,7 +398,7 @@ describe('API routes', () => {
 
   describe('POST /api/discover/obs', () => {
     test('returns a result with found boolean', async () => {
-      const res = await req(server, 'POST', '/api/discover/obs');
+      const res = await req(server, 'POST', '/api/discover/obs', {});
       assert.equal(res.status, 200);
       const body = await res.json() as { found: boolean };
       assert.ok(typeof body.found === 'boolean');
@@ -388,7 +407,7 @@ describe('API routes', () => {
 
   describe('POST /api/discover/proclaim', () => {
     test('returns a result with found boolean', async () => {
-      const res = await req(server, 'POST', '/api/discover/proclaim');
+      const res = await req(server, 'POST', '/api/discover/proclaim', {});
       assert.equal(res.status, 200);
       const body = await res.json() as { found: boolean };
       assert.ok(typeof body.found === 'boolean');
@@ -445,8 +464,12 @@ describe('API routes', () => {
 
     test('passes explicit camera index', async () => {
       resetCalls();
-      await req(server, 'POST', '/api/ptz/pan-tilt', { camera: 1, panDir: -1, tiltDir: 1 });
+      const res = await req(server, 'POST', '/api/ptz/pan-tilt', { camera: 1, panDir: -1, tiltDir: 1 });
+      assert.equal(res.status, 200);
+      assert.deepEqual(await res.json(), { ok: true });
       assert.equal(calls.ptz.panTilt?.camera, 1);
+      assert.equal(calls.ptz.panTilt?.panDir, -1);
+      assert.equal(calls.ptz.panTilt?.tiltDir, 1);
     });
   });
 

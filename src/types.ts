@@ -62,6 +62,8 @@ export interface ProclaimState {
   serviceItems: ServiceItem[];
   /** Per-slide localRevision strings, keyed by itemId → slideIndex string → localRevision string */
   slideRevisions: Record<string, Record<string, string>>;
+  /** Lyric lines per slide for SongLyrics items, keyed by itemId; only when presentationDbPath is configured */
+  songLyrics: Record<string, string[][]>;
 }
 
 export interface PtzCameraState {
@@ -112,6 +114,8 @@ export interface Config {
     port: number;
     password: string;
     pollInterval: number;
+    /** Path to Proclaim's local PresentationManager.db for lyric text; empty = disabled */
+    presentationDbPath: string;
   };
   ptz: {
     cameras: Array<{

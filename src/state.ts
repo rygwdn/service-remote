@@ -28,6 +28,7 @@ class State extends EventEmitter {
         slideIndex: null,
         serviceItems: [],
         slideRevisions: {},
+        songLyrics: {},
       },
       ptz: {
         cameras: [],
@@ -44,9 +45,14 @@ class State extends EventEmitter {
 
   update<K extends keyof AppState>(section: K, patch: Partial<AppState[K]>): void {
     const current = this.data[section];
+    // A patch only changes the section when one of its own fields differs.
+    // Comparing the complete section would both serialize large state slices
+    // and miss mutations that happened before this call.
+    const changed = (Object.keys(patch) as Array<keyof AppState[K]>).some((key) =>
+      !Object.is(current[key], patch[key]),
+    );
+    if (!changed) return;
     const next = { ...current, ...patch } as AppState[K];
-    // Skip if nothing actually changed
-    if (JSON.stringify(current) === JSON.stringify(next)) return;
     this.data[section] = next;
     this.emit('change', { section, state: this.data });
   }

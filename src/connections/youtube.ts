@@ -5,6 +5,27 @@ import config from '../config';
 import state from '../state';
 import * as logger from '../logger';
 
+const FETCH_TIMEOUT_MS = 15_000;
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit = {},
+  timeoutMs = FETCH_TIMEOUT_MS,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const controller = new AbortController();
+  const onAbort = (): void => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener('abort', onAbort, { once: true });
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
 // ── Response parsing ─────────────────────────────────────────────────────────
 
 interface ParsedVideoInfo {
@@ -133,15 +154,13 @@ function defaultObsConfigDir(): string {
     default: return path.join(home, '.config', 'obs-studio');
   }
 }
-
 /**
  * Try to read YouTube OAuth credentials from OBS's config files.
  * OBS stores the RefreshToken and Token in the [YouTube] section of global.ini.
  * client_id/client_secret are baked into the OBS binary and are not on disk.
  */
-async function importObsCreds(obsConfigDir?: string): Promise<OAuthCreds | null> {
-  const dir = obsConfigDir ?? defaultObsConfigDir();
-  const iniPath = path.join(dir, 'global.ini');
+async function importObsCreds(): Promise<OAuthCreds | null> {
+  const iniPath = path.join(defaultObsConfigDir(), 'global.ini');
   try {
     const raw = fs.readFileSync(iniPath, 'utf-8');
     const creds = extractCredsFromIni(parseIni(raw));
@@ -152,11 +171,12 @@ async function importObsCreds(obsConfigDir?: string): Promise<OAuthCreds | null>
   return null;
 }
 
-// ── OAuth token management ────────────────────────────────────────────────────
-
 let cachedAccessToken: string | null = null;
 let tokenExpiry = 0;
-
+let tokenRefreshPromise: Promise<string> | null = null;
+let connectionGeneration = 0;
+let connectionAbortController: AbortController | null = null;
+let requestAbortController = new AbortController();
 /** Pre-seed the in-memory access token cache (e.g. from an imported OBS token). */
 function seedAccessToken(token: string, expiryMs: number): void {
   cachedAccessToken = token;
@@ -177,17 +197,30 @@ function getAccessTokenForTesting(): { token: string | null; expiry: number } {
  *    running its saved token will be fresh.
  * 3. Fall back to configured client_id + client_secret + refresh_token (legacy).
  */
-async function getAccessToken(): Promise<string> {
+async function getAccessToken(signal?: AbortSignal): Promise<string> {
   if (cachedAccessToken && Date.now() < tokenExpiry - 60_000) {
     return cachedAccessToken;
   }
+  const requestSignal = signal ?? requestAbortController.signal;
+  if (tokenRefreshPromise) return tokenRefreshPromise;
+  const refresh = refreshAccessToken(requestSignal, connectionGeneration);
+  tokenRefreshPromise = refresh;
+  try {
+    return await refresh;
+  } finally {
+    if (tokenRefreshPromise === refresh) tokenRefreshPromise = null;
+  }
+}
 
+async function refreshAccessToken(signal: AbortSignal | undefined, generation: number): Promise<string> {
   // Re-read OBS global.ini (OBS refreshes its own token and writes it back)
   const obsCreds = await importObsCreds();
   if (obsCreds?.accessToken && obsCreds.tokenExpiry && obsCreds.tokenExpiry > Date.now() + 60_000) {
-    cachedAccessToken = obsCreds.accessToken;
-    tokenExpiry = obsCreds.tokenExpiry;
-    return cachedAccessToken;
+    if (generation === connectionGeneration) {
+      cachedAccessToken = obsCreds.accessToken;
+      tokenExpiry = obsCreds.tokenExpiry;
+    }
+    return obsCreds.accessToken;
   }
 
   // Legacy: use configured OAuth credentials to refresh
@@ -195,7 +228,7 @@ async function getAccessToken(): Promise<string> {
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error('YouTube OAuth credentials not configured and no valid OBS token found');
   }
-  const res = await fetch('https://oauth2.googleapis.com/token', {
+  const res = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -204,24 +237,27 @@ async function getAccessToken(): Promise<string> {
       refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }).toString(),
-  });
+  }, FETCH_TIMEOUT_MS, signal);
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`Token refresh failed: ${res.status} - ${body}`);
   }
   const data = await res.json() as { access_token: string; expires_in?: number };
-  cachedAccessToken = data.access_token;
-  tokenExpiry = Date.now() + (data.expires_in ?? 3600) * 1000;
-  return cachedAccessToken;
+  const expiry = Date.now() + (data.expires_in ?? 3600) * 1000;
+  if (generation === connectionGeneration) {
+    cachedAccessToken = data.access_token;
+    tokenExpiry = expiry;
+  }
+  return data.access_token;
 }
 
 // ── Broadcast list ────────────────────────────────────────────────────────────
 
-/** Fetch all active/upcoming broadcasts for the authenticated account. */
 async function listBroadcasts(): Promise<BroadcastInfo[]> {
-  const token = await getAccessToken();
+  const signal = requestAbortController.signal;
+  const token = await getAccessToken(signal);
   const url = 'https://www.googleapis.com/youtube/v3/liveBroadcasts?part=snippet,status&broadcastStatus=all&mine=true&maxResults=20';
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${token}` } }, FETCH_TIMEOUT_MS, signal);
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`YouTube API error: ${res.status} - ${body}`);
@@ -235,13 +271,15 @@ async function listBroadcasts(): Promise<BroadcastInfo[]> {
 async function startBroadcast(): Promise<void> {
   const broadcastId = config.youtube.broadcastId;
   if (!broadcastId) throw new Error('YouTube broadcastId not configured');
-  const token = await getAccessToken();
+  const signal = requestAbortController.signal;
+  const token = await getAccessToken(signal);
   const url = `https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=live&id=${encodeURIComponent(broadcastId)}&part=status`;
-  const res = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetchWithTimeout(url, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }, FETCH_TIMEOUT_MS, signal);
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`YouTube API error: ${res.status} - ${body}`);
   }
+  if (signal.aborted) return;
   state.update('youtube', { broadcastStatus: 'live' });
   logger.log('[YouTube] Broadcast started (live)');
 }
@@ -250,78 +288,131 @@ async function startBroadcast(): Promise<void> {
 async function stopBroadcast(): Promise<void> {
   const broadcastId = config.youtube.broadcastId;
   if (!broadcastId) throw new Error('YouTube broadcastId not configured');
-  const token = await getAccessToken();
+  const signal = requestAbortController.signal;
+  const token = await getAccessToken(signal);
   const url = `https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=complete&id=${encodeURIComponent(broadcastId)}&part=status`;
-  const res = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetchWithTimeout(url, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }, FETCH_TIMEOUT_MS, signal);
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`YouTube API error: ${res.status} - ${body}`);
   }
+  if (signal.aborted) return;
   state.update('youtube', { broadcastStatus: 'complete' });
   logger.log('[YouTube] Broadcast stopped (complete)');
 }
 
 // ── Polling ───────────────────────────────────────────────────────────────────
 
-let pollTimer: ReturnType<typeof setInterval> | null = null;
+let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
-async function poll(): Promise<void> {
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError';
+}
+
+async function poll(generation: number, signal: AbortSignal): Promise<void> {
   const { broadcastId } = config.youtube;
   if (!broadcastId) {
-    state.update('youtube', { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null, broadcastStatus: null });
+    if (connectionGeneration === generation && !signal.aborted) {
+      state.update('youtube', { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null, broadcastStatus: null });
+    }
     return;
   }
 
   try {
-    const token = await getAccessToken();
+    const token = await getAccessToken(signal);
+    if (signal.aborted || connectionGeneration !== generation) return;
     const url = `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails,snippet&id=${encodeURIComponent(broadcastId)}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
+    const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${token}` } }, FETCH_TIMEOUT_MS, signal);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json() as unknown;
+    if (signal.aborted || connectionGeneration !== generation) return;
     const { viewerCount, broadcastTitle, broadcastStatus } = parseApiResponse(data);
     state.update('youtube', { connected: true, viewerCount, broadcastTitle, broadcastStatus, broadcastId });
   } catch (err) {
+    if (signal.aborted || connectionGeneration !== generation || isAbortError(err)) return;
     // Fallback: try API key if configured (legacy)
     const { apiKey } = config.youtube;
     if (apiKey) {
       try {
         const url = `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails,snippet&id=${encodeURIComponent(broadcastId)}&key=${encodeURIComponent(apiKey)}`;
-        const res = await fetch(url);
+        const res = await fetchWithTimeout(url, {}, FETCH_TIMEOUT_MS, signal);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json() as unknown;
+        if (signal.aborted || connectionGeneration !== generation) return;
         const { viewerCount, broadcastTitle, broadcastStatus } = parseApiResponse(data);
         state.update('youtube', { connected: true, viewerCount, broadcastTitle, broadcastStatus, broadcastId });
         return;
-      } catch {
-        // fall through to error state
+      } catch (fallbackErr) {
+        if (signal.aborted || connectionGeneration !== generation || isAbortError(fallbackErr)) return;
       }
     }
     logger.error('[YouTube] Poll failed:', (err as Error).message);
-    state.update('youtube', { connected: false });
+    if (connectionGeneration === generation && !signal.aborted) state.update('youtube', { connected: false });
+  }
+}
+
+function waitForPoll(delayMs: number, signal: AbortSignal): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  let settled = false;
+  const finish = (): void => {
+    if (settled) return;
+    settled = true;
+    signal.removeEventListener('abort', finish);
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+    resolve();
+  };
+  if (signal.aborted) {
+    finish();
+  } else {
+    pollTimer = setTimeout(finish, delayMs);
+    signal.addEventListener('abort', finish, { once: true });
+  }
+  return promise;
+}
+
+async function pollLoop(generation: number, controller: AbortController): Promise<void> {
+  while (connectionGeneration === generation && connectionAbortController === controller && !controller.signal.aborted) {
+    await poll(generation, controller.signal);
+    if (connectionGeneration !== generation || controller.signal.aborted) return;
+    await waitForPoll(config.youtube.pollInterval ?? 30000, controller.signal);
   }
 }
 
 function connect(): void {
-  if (pollTimer) clearInterval(pollTimer);
+  if (connectionAbortController && !connectionAbortController.signal.aborted) return;
+  const controller = new AbortController();
+  const generation = ++connectionGeneration;
+  connectionAbortController = controller;
+  requestAbortController = controller;
   // Auto-seed token from OBS at startup
   void importObsCreds().then((creds) => {
+    if (connectionGeneration !== generation || connectionAbortController !== controller || controller.signal.aborted) return;
     if (creds?.accessToken && creds.tokenExpiry && creds.tokenExpiry > Date.now() + 60_000) {
       seedAccessToken(creds.accessToken, creds.tokenExpiry);
       logger.log('[YouTube] Access token loaded from OBS');
     }
   });
-  void poll();
-  pollTimer = setInterval(() => { void poll(); }, config.youtube.pollInterval ?? 30000);
+  void pollLoop(generation, controller).catch((err: unknown) => {
+    if (!controller.signal.aborted && connectionGeneration === generation) {
+      logger.error('[YouTube] Poll loop failed:', (err as Error).message);
+    }
+  });
   logger.log('[YouTube] Polling started');
 }
 
 function disconnect(): void {
+  connectionGeneration++;
   if (pollTimer) {
-    clearInterval(pollTimer);
+    clearTimeout(pollTimer);
     pollTimer = null;
   }
+  connectionAbortController?.abort();
+  requestAbortController.abort();
+  connectionAbortController = null;
+  requestAbortController = new AbortController();
   cachedAccessToken = null;
   tokenExpiry = 0;
   state.update('youtube', { connected: false });

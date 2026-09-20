@@ -111,9 +111,10 @@ function runPs1(script: string): void {
   if (result.error) throw result.error;
 }
 
-// Escape a Windows path for embedding in a PowerShell double-quoted string.
-function psEscape(p: string): string {
-  return p.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+// Quote a Windows path as a literal PowerShell string. Single-quoted strings
+// treat backslashes, dollar signs, double quotes, and backticks literally.
+function psSingleQuote(p: string): string {
+  return "'" + p.replace(/'/g, "''") + "'";
 }
 
 export function installService(exePath: string, port = 3000): void {
@@ -135,10 +136,10 @@ export function installService(exePath: string, port = 3000): void {
   fs.writeFileSync(hostSrcPath, SERVICE_HOST_CS, 'utf8');
   appendLog(logPath, 'Files written. Requesting elevation …');
 
-  const safeInstallPath = psEscape(installPath);
-  const safeHostSrcPath = psEscape(hostSrcPath);
-  const safeHostExePath = psEscape(hostExePath);
-  const safeLogPath     = psEscape(logPath);
+  const safeInstallPath = psSingleQuote(installPath);
+  const safeHostSrcPath = psSingleQuote(hostSrcPath);
+  const safeHostExePath = psSingleQuote(hostExePath);
+  const safeLogPath     = psSingleQuote(logPath);
 
   // Helper embedded in the script so both the non-elevated and elevated
   // instances can write timestamped entries to the same log file.
@@ -148,7 +149,7 @@ function Write-Log {
     $ts = (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss')
     $entry = "[$ts] $msg"
     Write-Host $entry
-    Add-Content -Path "${safeLogPath}" -Value $entry -Encoding UTF8
+    Add-Content -Path ${safeLogPath} -Value $entry -Encoding UTF8
 }
 `;
 
@@ -171,10 +172,10 @@ Write-Log "Running as administrator."
 $name    = "${SERVICE_NAME}"
 $display = "${SERVICE_DISPLAY}"
 $desc    = "${SERVICE_DESC}"
-$exe     = "${safeInstallPath}"
-$hostSrc = "${safeHostSrcPath}"
-$hostExe = "${safeHostExePath}"
-$log     = "${safeLogPath}"
+$exe     = ${safeInstallPath}
+$hostSrc = ${safeHostSrcPath}
+$hostExe = ${safeHostExePath}
+$log     = ${safeLogPath}
 
 # Compile the service host C# into a native exe (done once at install time,
 # not on every service start — avoids the SCM 1053 startup timeout).
@@ -225,7 +226,7 @@ Write-Log "Service status: $finalStatus"
 $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch '^(127|169)' } | Select-Object -First 1).IPAddress
 $url = if ($ip) { "http://$($ip):${port}" } else { "http://localhost:${port}" }
 Write-Log "Control panel URL: $url"
-Write-Log "Install log: ${safeLogPath}"
+Write-Log "Install log: $log"
 Write-Log "--- install complete ---"
 
 $summary = @"
@@ -234,7 +235,7 @@ $summary = @"
 ==============================================
   Status : $finalStatus
   URL    : $url
-  Log    : ${safeLogPath}
+  Log    : $log
 
   To uninstall: service-remote.exe --uninstall-service
 ==============================================
@@ -251,7 +252,7 @@ export function uninstallService(): void {
   logger.log(`[Service] Uninstalling Windows service "${SERVICE_NAME}" …`);
 
   const logPath     = getLogPath();
-  const safeLogPath = psEscape(logPath);
+  const safeLogPath = psSingleQuote(logPath);
 
   const logFn = `
 function Write-Log {
@@ -259,7 +260,7 @@ function Write-Log {
     $ts = (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss')
     $entry = "[$ts] $msg"
     Write-Host $entry
-    Add-Content -Path "${safeLogPath}" -Value $entry -Encoding UTF8
+    Add-Content -Path ${safeLogPath} -Value $entry -Encoding UTF8
 }
 `;
 
@@ -276,6 +277,7 @@ if (-not $isAdmin) {
 
 Write-Log "Running as administrator."
 $name = "${SERVICE_NAME}"
+$log  = ${safeLogPath}
 Write-Log "Stopping service $name …"
 $out = & sc.exe stop $name 2>&1; Write-Log ($out -join ' ')
 Start-Sleep -Seconds 2
@@ -284,7 +286,7 @@ $out = & sc.exe delete $name 2>&1; Write-Log ($out -join ' ')
 Write-Log "--- uninstall complete ---"
 Write-Host ""
 Write-Host "Done. Service '$name' removed."
-Write-Host "Log: ${safeLogPath}"
+Write-Host "Log: $log"
 Start-Sleep -Seconds 3
 `;
 

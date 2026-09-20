@@ -1,5 +1,4 @@
 import fs from 'fs';
-
 interface LogEntry {
   ts: string;
   level: 'debug' | 'info' | 'warn' | 'error';
@@ -15,28 +14,78 @@ const MAX_MEMORY = 500;
 const DEFAULT_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 const entries: LogEntry[] = [];
-let logFilePath: string | null = null;
-let maxFileSizeBytes = DEFAULT_MAX_FILE_SIZE;
-
-function setLogFile(filePath: string, opts?: LogFileOptions): void {
-  logFilePath = filePath;
-  maxFileSizeBytes = opts?.maxFileSizeBytes ?? DEFAULT_MAX_FILE_SIZE;
+interface LogFileTarget {
+  path: string;
+  maxSizeBytes: number;
+  sizeBytes: number;
+  sizeKnown: boolean;
 }
 
-/** Rotate logFile → logFile.1 (overwriting any previous .1), then start fresh. */
-function rotate(): void {
-  if (!logFilePath) return;
+let logFile: LogFileTarget | null = null;
+let fileWriteQueue: Promise<void> = Promise.resolve();
+
+function setLogFile(filePath: string, opts?: LogFileOptions): void {
+  logFile = {
+    path: filePath,
+    maxSizeBytes: opts?.maxFileSizeBytes ?? DEFAULT_MAX_FILE_SIZE,
+    sizeBytes: 0,
+    sizeKnown: false,
+  };
+}
+
+/** Rotate the active log file, overwriting any previous .1 file. */
+async function appendFileEntry(target: LogFileTarget, line: string): Promise<void> {
+  if (!target.sizeKnown) {
+    try {
+      target.sizeBytes = (await fs.promises.stat(target.path)).size;
+    } catch {
+      target.sizeBytes = 0;
+    }
+    target.sizeKnown = true;
+  }
+
+  if (target.sizeBytes >= target.maxSizeBytes) {
+    try {
+      try { await fs.promises.unlink(target.path + '.1'); } catch {}
+      await fs.promises.rename(target.path, target.path + '.1');
+    } catch {
+      // If rename fails (for example, the file does not exist yet), continue.
+    }
+    // Keep the in-memory estimate aligned with the fresh file we are about to write.
+    target.sizeBytes = 0;
+  }
+
   try {
-    fs.renameSync(logFilePath, logFilePath + '.1');
-  } catch (_) {
-    // If rename fails (e.g. file doesn't exist yet), continue silently
+    await fs.promises.appendFile(target.path, line, 'utf-8');
+    target.sizeBytes += Buffer.byteLength(line, 'utf8');
+  } catch {
+    // Logging is best-effort and must not reject the caller's operation.
   }
 }
 
+function enqueueFileEntry(entry: LogEntry): void {
+  const target = logFile;
+  if (!target) return;
+  const line = JSON.stringify(entry) + '\n';
+  fileWriteQueue = fileWriteQueue
+    .then(() => appendFileEntry(target, line))
+    .catch(() => {
+      // A logging failure must never become an unhandled rejection.
+    });
+}
+
+function redact(text: string): string {
+  let result = text.replace(/Bearer\s+[^\s,;]+/gi, 'Bearer [REDACTED]');
+  result = result.replace(/(["']?(?:password|clientSecret|refreshToken|accessToken)["']?\s*[:=]\s*)(["'][^"']*["']|[^,\s}&]+)/gi, (_match, prefix: string, value: string) => {
+    return `${prefix}${value.startsWith('"') || value.startsWith("'") ? '"[REDACTED]"' : '[REDACTED]'}`;
+  });
+  return result;
+}
+
 function write(level: LogEntry['level'], args: unknown[]): void {
-  const msg = args
+  const msg = redact(args
     .map((a) => (typeof a === 'string' ? a : a instanceof Error ? a.message : JSON.stringify(a)))
-    .join(' ');
+    .join(' '));
   const ts = new Date().toISOString();
   const entry: LogEntry = { ts, level, msg };
 
@@ -48,17 +97,7 @@ function write(level: LogEntry['level'], args: unknown[]): void {
     consoleFn(msg);
   }
 
-  if (logFilePath) {
-    try {
-      // Check size before appending and rotate if needed
-      let size = 0;
-      try { size = fs.statSync(logFilePath).size; } catch (_) { /* file may not exist yet */ }
-      if (size >= maxFileSizeBytes) rotate();
-      fs.appendFileSync(logFilePath, JSON.stringify(entry) + '\n', 'utf-8');
-    } catch (_) {
-      // best-effort
-    }
-  }
+  enqueueFileEntry(entry);
 }
 
 function log(...args: unknown[]): void {
@@ -81,4 +120,9 @@ function getLogs(): LogEntry[] {
   return [...entries];
 }
 
-export { log, warn, error, debug, getLogs, setLogFile };
+/** Resolves once all queued log-file writes have completed (test and shutdown seam). */
+function flushLogWrites(): Promise<void> {
+  return fileWriteQueue;
+}
+
+export { log, warn, error, debug, getLogs, setLogFile, flushLogWrites };

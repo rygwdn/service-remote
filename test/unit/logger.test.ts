@@ -27,15 +27,16 @@ describe('logger log rotation', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test('writes log entries to file', () => {
+  test('writes log entries to file', async () => {
     const logger = freshLogger();
     logger.setLogFile(logFile);
     logger.log('hello world');
+    await logger.flushLogWrites();
     const content = fs.readFileSync(logFile, 'utf-8');
     assert.ok(content.includes('hello world'));
   });
 
-  test('rotates log file when it exceeds MAX_FILE_SIZE', () => {
+  test('rotates log file when it exceeds MAX_FILE_SIZE', async () => {
     const logger = freshLogger();
     logger.setLogFile(logFile, { maxFileSizeBytes: 200 });
 
@@ -43,6 +44,7 @@ describe('logger log rotation', () => {
     for (let i = 0; i < 20; i++) {
       logger.log(`log line number ${i} with some padding to make it longer`);
     }
+    await logger.flushLogWrites();
 
     // The rotated file should exist
     assert.ok(fs.existsSync(logFile + '.1'), 'rotated file .1 should exist');
@@ -55,23 +57,25 @@ describe('logger log rotation', () => {
     assert.ok(rotatedSize + currentSize > currentSize, 'rotation moved data');
   });
 
-  test('only keeps one rotated file (overwrites .1 on subsequent rotations)', () => {
+  test('only keeps one rotated file (overwrites .1 on subsequent rotations)', async () => {
     const logger = freshLogger();
     logger.setLogFile(logFile, { maxFileSizeBytes: 100 });
 
     for (let i = 0; i < 60; i++) {
       logger.log(`entry ${i} padding padding padding padding padding`);
     }
+    await logger.flushLogWrites();
 
     // Should have .1 but not .2
     assert.ok(fs.existsSync(logFile + '.1'), '.1 should exist');
     assert.ok(!fs.existsSync(logFile + '.2'), '.2 should not exist');
   });
 
-  test('does not rotate when file is within size limit', () => {
+  test('does not rotate when file is within size limit', async () => {
     const logger = freshLogger();
     logger.setLogFile(logFile, { maxFileSizeBytes: 100000 });
     logger.log('small log entry');
+    await logger.flushLogWrites();
     assert.ok(!fs.existsSync(logFile + '.1'), '.1 should not exist for small file');
   });
 });

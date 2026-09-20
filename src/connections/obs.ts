@@ -7,15 +7,28 @@ import * as levelsWs from '../levels-ws';
 
 const obs = new OBSWebSocket();
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let screenshotTimer: ReturnType<typeof setInterval> | null = null;
+let screenshotTimer: ReturnType<typeof setTimeout> | null = null;
+let screenshotInFlight = false;
 let wantConnected = false;
+let obsConnected = false;
+let connectionGeneration = 0;
+let connectInFlight = false;
 
 const SCREENSHOT_INTERVAL_MS = 250;
 
-async function captureScreenshot(): Promise<void> {
-  const currentScene = state.get().obs.currentScene;
-  if (!currentScene) return;
+function isCurrentGeneration(generation: number): boolean {
+  return wantConnected && generation === connectionGeneration;
+}
+
+function isCurrentConnection(generation: number): boolean {
+  return isCurrentGeneration(generation) && obsConnected;
+}
+
+async function captureScreenshot(generation: number): Promise<void> {
+  screenshotInFlight = true;
   try {
+    const currentScene = state.get().obs.currentScene;
+    if (!currentScene || !isCurrentConnection(generation)) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await (obs as any).call('GetSourceScreenshot', {
       sourceName: currentScene,
@@ -23,50 +36,96 @@ async function captureScreenshot(): Promise<void> {
       imageWidth: 320,
       imageCompressionQuality: 50,
     });
+    if (!isCurrentConnection(generation)) return;
     const b64 = (result.imageData as string).replace(/^data:image\/\w+;base64,/, '');
     screenshotWs.broadcast(Buffer.from(b64, 'base64'));
   } catch {
-    // Ignore screenshot errors (e.g. scene not yet loaded)
+    // Ignore screenshot errors (e.g. scene not yet loaded or disconnect).
+  } finally {
+    screenshotInFlight = false;
+    if (isCurrentConnection(generation)) {
+      screenshotTimer = setTimeout(() => {
+        screenshotTimer = null;
+        void captureScreenshot(generation);
+      }, SCREENSHOT_INTERVAL_MS);
+    }
   }
 }
 
-function startScreenshotCapture(): void {
+function startScreenshotCapture(generation: number): void {
   stopScreenshotCapture();
-  screenshotTimer = setInterval(captureScreenshot, SCREENSHOT_INTERVAL_MS);
-}
+  screenshotTimer = setTimeout(() => {
+    screenshotTimer = null;
+    if (!isCurrentConnection(generation)) return;
+    if (screenshotInFlight) {
+      screenshotTimer = setTimeout(() => {
+        screenshotTimer = null;
+        if (!isCurrentConnection(generation)) return;
+        if (screenshotInFlight) {
+          startScreenshotCapture(generation);
+        } else {
+          void captureScreenshot(generation);
+        }
+      }, 50);
+      return;
+    }
+    void captureScreenshot(generation);
+  }, 0);
 
+}
 function stopScreenshotCapture(): void {
   if (screenshotTimer) {
-    clearInterval(screenshotTimer);
+    clearTimeout(screenshotTimer);
     screenshotTimer = null;
   }
 }
 
 async function connect(): Promise<void> {
   wantConnected = true;
-  if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (obsConnected || connectInFlight) return;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  connectInFlight = true;
+  const generation = ++connectionGeneration;
   logger.log('[OBS] Attempting to connect to', config.obs.address);
   try {
     // 2047 = All standard events; 65536 = InputVolumeMeters (high-frequency, opt-in)
     await obs.connect(config.obs.address, config.obs.password || undefined, { eventSubscriptions: 2047 | 65536 });
+    if (!isCurrentGeneration(generation)) {
+      obs.disconnect();
+      return;
+    }
+    obsConnected = true;
     logger.log('[OBS] Connected');
     state.update('obs', { connected: true });
-    await refreshState();
-    startScreenshotCapture();
+    await refreshState(generation);
+    if (isCurrentConnection(generation)) startScreenshotCapture(generation);
   } catch (err) {
-    logger.log('[OBS] Connection failed:', (err as Error).message);
-    state.update('obs', { connected: false });
-    scheduleReconnect();
+    if (isCurrentGeneration(generation)) {
+      obsConnected = false;
+      logger.log('[OBS] Connection failed:', (err as Error).message);
+      state.update('obs', { connected: false });
+      scheduleReconnect();
+    }
+  } finally {
+    connectInFlight = false;
+    if (wantConnected && generation !== connectionGeneration && !obsConnected) scheduleReconnect();
   }
 }
 
 function scheduleReconnect(): void {
-  if (!wantConnected) return;
-  if (reconnectTimer) clearTimeout(reconnectTimer);
-  reconnectTimer = setTimeout(connect, 5000);
+  if (!wantConnected || reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    void connect();
+  }, 5000);
 }
 
 obs.on('ConnectionClosed', () => {
+  obsConnected = false;
+  connectionGeneration++;
   logger.log('[OBS] Disconnected');
   stopScreenshotCapture();
   state.update('obs', { connected: false });
@@ -74,24 +133,38 @@ obs.on('ConnectionClosed', () => {
 });
 
 obs.on('CurrentProgramSceneChanged', async ({ sceneName }) => {
+  const generation = connectionGeneration;
+  if (!isCurrentConnection(generation)) return;
   state.update('obs', { currentScene: sceneName });
-  await refreshLiveStatus(sceneName);
+  await refreshLiveStatus(sceneName, generation);
 });
 
 obs.on('SceneListChanged', async () => {
-  const { scenes } = await obs.call('GetSceneList');
-  state.update('obs', { scenes: scenes.map((s) => s.sceneName as string).reverse() });
+  const generation = connectionGeneration;
+  if (!isCurrentConnection(generation)) return;
+  try {
+    const { scenes } = await obs.call('GetSceneList');
+    if (!isCurrentConnection(generation)) return;
+    state.update('obs', { scenes: scenes.map((s) => s.sceneName as string).reverse() });
+  } catch (err) {
+    if (isCurrentConnection(generation)) {
+      logger.error('[OBS] Scene list refresh failed:', (err as Error).message);
+    }
+  }
 });
 
 obs.on('StreamStateChanged', ({ outputActive }) => {
+  if (!obsConnected) return;
   state.update('obs', { streaming: outputActive });
 });
 
 obs.on('RecordStateChanged', ({ outputActive }) => {
+  if (!obsConnected) return;
   state.update('obs', { recording: outputActive });
 });
 
 obs.on('InputVolumeChanged', ({ inputName, inputVolumeMul }) => {
+  if (!obsConnected) return;
   const db = mulToDb(inputVolumeMul);
   const rounded = isFinite(db) ? Math.round(db * 1000) / 1000 : db;
   const sources = state.get().obs.audioSources.map((s) =>
@@ -101,6 +174,8 @@ obs.on('InputVolumeChanged', ({ inputName, inputVolumeMul }) => {
 });
 
 obs.on('InputVolumeMeters', ({ inputs }) => {
+  if (!obsConnected) return;
+
   const obsLevels: Record<string, number> = {};
   for (const input of inputs) {
     // inputLevelsMul format per obs-websocket spec: [[magnitude, peak, inputPeak], ...]
@@ -119,6 +194,7 @@ obs.on('InputVolumeMeters', ({ inputs }) => {
 });
 
 obs.on('InputMuteStateChanged', ({ inputName, inputMuted }) => {
+  if (!obsConnected) return;
   const sources = state.get().obs.audioSources.map((s) =>
     s.name === inputName ? { ...s, muted: inputMuted } : s
   );
@@ -126,9 +202,11 @@ obs.on('InputMuteStateChanged', ({ inputName, inputMuted }) => {
 });
 
 obs.on('SceneItemEnableStateChanged', async () => {
+  const generation = connectionGeneration;
+  if (!isCurrentConnection(generation)) return;
   const currentScene = state.get().obs.currentScene;
   if (currentScene) {
-    await refreshLiveStatus(currentScene);
+    await refreshLiveStatus(currentScene, generation);
   }
 });
 
@@ -159,14 +237,14 @@ async function getSceneSourceNames(sceneName: string): Promise<Set<string>> {
   return names;
 }
 
-// Returns true if the source is hidden from the OBS audio mixer panel
+// Returns true if the source is hidden from the OBS audio mixer panel.
 async function isSourceHiddenFromMixer(sourceName: string): Promise<boolean> {
   try {
-    // GetSourcePrivateSettings is not in obs-websocket-js type definitions,
-    // so we use a runtime call with type assertion.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await (obs as any).call('GetSourcePrivateSettings', { sourceName });
-    const settings = (result?.sourcePrivateSettings ?? {}) as Record<string, unknown>;
+    // GetSourcePrivateSettings is not in obs-websocket-js type definitions
+    // (private settings API), so the call goes through an unchecked surface.
+    const untypedCall = obs as unknown as { call(request: string, args?: Record<string, unknown>): Promise<unknown> };
+    const result = await untypedCall.call('GetSourcePrivateSettings', { sourceName });
+    const settings = (result as { sourcePrivateSettings?: Record<string, unknown> } | null)?.sourcePrivateSettings;
     if (settings?.audioMixerHidden) {
       logger.log(`[OBS] Source "${sourceName}" is hidden from audio mixer`);
       return true;
@@ -178,11 +256,10 @@ async function isSourceHiddenFromMixer(sourceName: string): Promise<boolean> {
   }
 }
 
-// Updates the live status of all audio sources based on the current scene's source list.
-// When a source transitions from live to not-live, its level is reset to 0 in the UI.
-async function refreshLiveStatus(sceneName: string): Promise<void> {
+async function refreshLiveStatus(sceneName: string, generation = connectionGeneration): Promise<void> {
   try {
     const liveSourceNames = await getSceneSourceNames(sceneName);
+    if (!isCurrentConnection(generation)) return;
     const prevSources = state.get().obs.audioSources;
     const sources = prevSources.map((s) => ({
       ...s,
@@ -192,11 +269,14 @@ async function refreshLiveStatus(sceneName: string): Promise<void> {
     }));
     state.update('obs', { audioSources: sources });
   } catch (err) {
-    logger.log('[OBS] Failed to refresh live status:', (err as Error).message);
+    if (isCurrentConnection(generation)) {
+      logger.log('[OBS] Failed to refresh live status:', (err as Error).message);
+    }
   }
 }
 
-async function refreshState(): Promise<void> {
+
+async function refreshState(generation = connectionGeneration): Promise<void> {
   try {
     const [sceneList, streamStatus, recordStatus] = await Promise.all([
       obs.call('GetSceneList'),
@@ -209,9 +289,11 @@ async function refreshState(): Promise<void> {
 
     // Get the source names active in the current scene
     const liveSourceNames = await getSceneSourceNames(currentScene);
+    if (!isCurrentConnection(generation)) return;
 
     // Get audio sources, filtering out those hidden from the OBS audio mixer
     const { inputs } = await obs.call('GetInputList');
+    if (!isCurrentConnection(generation)) return;
     const audioSources: Array<{ name: string; volume: number; muted: boolean; live: boolean; level: number }> = [];
     for (const input of inputs) {
       try {
@@ -234,6 +316,7 @@ async function refreshState(): Promise<void> {
       }
     }
 
+    if (!isCurrentConnection(generation)) return;
     state.update('obs', {
       scenes,
       currentScene,
@@ -242,10 +325,12 @@ async function refreshState(): Promise<void> {
       audioSources,
     });
   } catch (err) {
-    logger.log('[OBS] Failed to refresh state:', (err as Error).message);
+    if (isCurrentGeneration(generation)) {
+      logger.log('[OBS] Failed to refresh state:', (err as Error).message);
+    }
   }
-}
 
+}
 function mulToDb(mul: number): number {
   if (mul === 0) return -Infinity;
   return 20 * Math.log10(mul);
@@ -254,9 +339,10 @@ function mulToDb(mul: number): number {
 function dbToMul(db: number): number {
   return Math.pow(10, db / 20);
 }
-
 function disconnect(): void {
   wantConnected = false;
+  obsConnected = false;
+  connectionGeneration++;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;

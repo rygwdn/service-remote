@@ -96,6 +96,9 @@ jobs:
             ls-remote --tags "https://github.com/$GH_REPO.git" refs/tags/dev \
             && gh api --method DELETE "/repos/$GH_REPO/git/refs/tags/dev" || true
 
+      - name: Create executable SHA-256 sidecar
+        run: sha256sum service-remote.exe > service-remote.exe.sha256
+
       - name: Create dev release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -107,4 +110,6 @@ jobs:
             --notes "Latest build from main. Automatically updated on every push." \
             --prerelease \
             service-remote-windows.zip \
-            service-remote.exe
+            service-remote.exe \
+            service-remote.exe.sha256
+

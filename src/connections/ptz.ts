@@ -132,18 +132,26 @@ function parseZoomResponse(msg: Buffer): number | null {
 // ── Per-camera connection ─────────────────────────────────────────────────────
 
 type InquiryHandler = (msg: Buffer) => void;
+interface PendingInquiry {
+  generation: number;
+  handler: InquiryHandler;
+  timer: NodeJS.Timeout;
+}
+
 
 interface CameraConn {
   idx: number;
   socket: dgram.Socket | null;
   seqNum: number;
-  pending: Map<number, InquiryHandler>;
+  pending: Map<number, PendingInquiry>;
+  generation: number;
   pan: number | null;
   tilt: number | null;
   zoom: number | null;
-  focusStopTimer: ReturnType<typeof setTimeout> | null;
-  reconnectTimer: ReturnType<typeof setTimeout> | null;
-  positionTimer: ReturnType<typeof setInterval> | null;
+  focusStopTimer: NodeJS.Timeout | null;
+  queryTimer: NodeJS.Timeout | null;
+  reconnectTimer: NodeJS.Timeout | null;
+  positionTimer: NodeJS.Timeout | null;
   wantConnected: boolean;
 }
 
@@ -160,10 +168,12 @@ function makeCameraConn(idx: number): CameraConn {
     socket: null,
     seqNum: 1,
     pending: new Map(),
+    generation: 0,
     pan: null,
     tilt: null,
     zoom: null,
     focusStopTimer: null,
+    queryTimer: null,
     reconnectTimer: null,
     positionTimer: null,
     wantConnected: false,
@@ -178,90 +188,130 @@ function nextSeq(cam: CameraConn): number {
 
 function updateCameraState(cam: CameraConn, patch: Partial<PtzCameraState>): void {
   const currentCameras = state.get().ptz.cameras;
-  const updated = currentCameras.map((c, i) => i === cam.idx ? { ...c, ...patch } : c);
+  const current = currentCameras[cam.idx];
+  if (!current) return;
+  const changed = (Object.keys(patch) as Array<keyof PtzCameraState>).some((key) =>
+    !Object.is(current[key], patch[key]),
+  );
+  if (!changed) return;
+  const updated = currentCameras.slice();
+  updated[cam.idx] = { ...current, ...patch };
   state.update('ptz', { cameras: updated });
 }
 
 function sendPacket(cam: CameraConn, payload: number[], seq?: number): void {
-  if (!cam.socket) return;
+  const socket = cam.socket;
+  if (!socket) return;
   const cfg = config.ptz.cameras[cam.idx];
   const s = seq ?? nextSeq(cam);
   const pkt = buildViscaPacket(s, payload);
-  cam.socket.send(pkt, cfg.port, cfg.address, (err) => {
-    if (err) logger.error(`[PTZ cam${cam.idx}] Send error:`, err.message);
+  socket.send(pkt, cfg.port, cfg.address, (err) => {
+    if (err && socket === cam.socket && cam.wantConnected && wantConnectedGlobal) {
+      logger.error(`[PTZ cam${cam.idx}] Send error:`, err.message);
+    }
   });
 }
 
 function sendInquiry(cam: CameraConn, payload: number[], handler: InquiryHandler): void {
+  if (!cam.socket || !cam.wantConnected || !wantConnectedGlobal) return;
+  const generation = cam.generation;
   const seq = nextSeq(cam);
-  cam.pending.set(seq, handler);
-  // Remove pending entry after timeout so stale entries don't accumulate
-  setTimeout(() => cam.pending.delete(seq), 2000);
+  const timer = setTimeout(() => {
+    const current = cam.pending.get(seq);
+    if (current?.generation === generation && current.timer === timer) cam.pending.delete(seq);
+  }, 2000);
+  const pending: PendingInquiry = { generation, handler, timer };
+  cam.pending.set(seq, pending);
   sendPacket(cam, payload, seq);
 }
 
-function queryPosition(cam: CameraConn): void {
-  if (!cam.socket) return;
+function queryPosition(cam: CameraConn, generation = cam.generation): void {
+  if (!isActiveGeneration(cam, generation)) return;
   const cfg = config.ptz.cameras[cam.idx];
 
   sendInquiry(cam, panTiltInquiry(cfg.cameraId), (msg) => {
+    if (!isActiveGeneration(cam, generation)) return;
     const pos = parsePanTiltResponse(msg);
     if (!pos) return;
     cam.pan = pos.pan;
     cam.tilt = pos.tilt;
+    updateCameraState(cam, { pan: pos.pan, tilt: pos.tilt });
   });
 
   sendInquiry(cam, zoomInquiry(cfg.cameraId), (msg) => {
+    if (!isActiveGeneration(cam, generation)) return;
     const z = parseZoomResponse(msg);
-    if (z !== null) cam.zoom = z;
+    if (z !== null) {
+      cam.zoom = z;
+      updateCameraState(cam, { zoom: z });
+    }
   });
 }
 
+// A generation token stays valid while the camera connection that minted it is
+// current; cleanupCamera and doConnectCamera increment to invalidate stale ones.
+function isActiveGeneration(cam: CameraConn, generation: number): boolean {
+  return cam.generation === generation;
+}
+
 function cleanupCamera(cam: CameraConn): void {
+  // Invalidate all callbacks before releasing the socket and timers.
+  cam.generation++;
   if (cam.focusStopTimer) { clearTimeout(cam.focusStopTimer); cam.focusStopTimer = null; }
-  if (cam.positionTimer)  { clearInterval(cam.positionTimer); cam.positionTimer = null; }
+  if (cam.queryTimer)      { clearTimeout(cam.queryTimer); cam.queryTimer = null; }
+  if (cam.positionTimer)   { clearInterval(cam.positionTimer); cam.positionTimer = null; }
+  for (const pending of cam.pending.values()) clearTimeout(pending.timer);
   cam.pending.clear();
   if (cam.socket) {
-    try { cam.socket.close(); } catch (_) {}
+    try { cam.socket.close(); } catch {}
     cam.socket = null;
   }
   cam.pan = null;
   cam.tilt = null;
   cam.zoom = null;
-  updateCameraState(cam, { connected: false });
+  updateCameraState(cam, { connected: false, pan: null, tilt: null, zoom: null });
 }
 
 function scheduleReconnect(cam: CameraConn): void {
-  if (!cam.wantConnected) return;
-  cam.reconnectTimer = setTimeout(() => doConnectCamera(cam), RECONNECT_MS);
+  if (!cam.wantConnected || !wantConnectedGlobal || cam.reconnectTimer) return;
+  cam.reconnectTimer = setTimeout(() => {
+    cam.reconnectTimer = null;
+    doConnectCamera(cam);
+  }, RECONNECT_MS);
 }
 
 function doConnectCamera(cam: CameraConn): void {
-  if (!cam.wantConnected) return;
+  if (!cam.wantConnected || !wantConnectedGlobal || cam.socket) return;
   const cfg = config.ptz.cameras[cam.idx];
   if (!cfg?.enabled) return;
 
+  const generation = ++cam.generation;
   const sock = dgram.createSocket('udp4');
   cam.socket = sock;
 
   sock.on('error', (err) => {
+    if (cam.socket !== sock || cam.generation !== generation) return;
     logger.error(`[PTZ cam${cam.idx}] Socket error:`, err.message);
     cleanupCamera(cam);
     scheduleReconnect(cam);
   });
 
   sock.on('message', (msg: Buffer) => {
+    if (!isActiveGeneration(cam, generation) || cam.socket !== sock) return;
     const seqNum = extractSeqNum(msg);
-    if (seqNum !== null) {
-      const handler = cam.pending.get(seqNum);
-      if (handler) {
-        cam.pending.delete(seqNum);
-        handler(msg);
-      }
-    }
+    if (seqNum === null) return;
+    const pending = cam.pending.get(seqNum);
+    if (!pending || pending.generation !== generation) return;
+    cam.pending.delete(seqNum);
+    clearTimeout(pending.timer);
+    pending.handler(msg);
   });
 
   sock.bind(0, () => {
+    if (!isActiveGeneration(cam, generation) || cam.socket !== sock) {
+      try { sock.close(); } catch {}
+      return;
+    }
     logger.log(`[PTZ cam${cam.idx}] Connected to ${cfg.address}:${cfg.port}`);
     updateCameraState(cam, {
       connected: true,
@@ -269,10 +319,10 @@ function doConnectCamera(cam: CameraConn): void {
     });
 
     // Query current position so go-to commands have a valid starting point
-    queryPosition(cam);
+    queryPosition(cam, generation);
 
     // Periodic position re-sync (camera might be moved externally)
-    cam.positionTimer = setInterval(() => queryPosition(cam), POSITION_POLL_MS);
+    cam.positionTimer = setInterval(() => queryPosition(cam, generation), POSITION_POLL_MS);
   });
 }
 
@@ -393,7 +443,12 @@ function preset(camera: number, action: 'recall' | 'save', presetIndex: number):
     cam.pan = null;
     cam.tilt = null;
     cam.zoom = null;
-    setTimeout(() => queryPosition(cam), 1500);
+    const generation = cam.generation;
+    clearTimeout(cam.queryTimer ?? undefined);
+    cam.queryTimer = setTimeout(() => {
+      cam.queryTimer = null;
+      if (cam.generation === generation) queryPosition(cam, generation);
+    }, 1500);
   }
 }
 

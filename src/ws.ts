@@ -1,4 +1,5 @@
 import type { AppState, ChangeEvent, Connections, Channel, X32Connection } from './types';
+import type { RequestSecurity } from './security';
 import * as levelsWs from './levels-ws';
 import * as screenshotWs from './screenshot-ws';
 
@@ -19,9 +20,23 @@ interface SocketData {
 // Shape of messages the client sends
 interface SubscribeMsg {
   type: 'subscribe' | 'unsubscribe';
-  channels: string[];
+  channels: unknown;
 }
 
+const MAX_MESSAGE_BYTES = 8 * 1024;
+const MAX_CHANNELS_PER_MESSAGE = 16;
+const MAX_TOPICS_PER_SOCKET = 8;
+const MAX_BUS_TOPICS_PER_SOCKET = 4;
+const FIXED_TOPICS: Record<string, true> = { state: true, levels: true, screenshot: true };
+
+function busIndexForTopic(topic: string): number | null {
+  const match = topic.match(/^bus:(?:[1-9]|1[0-6])$/);
+  return match ? Number(topic.slice(4)) : null;
+}
+
+function isAllowedTopic(topic: string): boolean {
+  return FIXED_TOPICS[topic] === true || busIndexForTopic(topic) !== null;
+}
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function stripLevels(state: AppState): AppState {
@@ -65,7 +80,8 @@ function setupWebSocket(
   {
     disconnectDelay = 5000,
     canStopX32 = (): boolean => true,
-  }: { disconnectDelay?: number; canStopX32?: () => boolean } = {},
+    security,
+  }: { disconnectDelay?: number; canStopX32?: () => boolean; security?: RequestSecurity } = {},
 ): SetupResult {
   let connectionsStarted = false;
   let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -206,40 +222,44 @@ function setupWebSocket(
     },
 
     message(ws: import('bun').ServerWebSocket<SocketData>, msg: string | Buffer): void {
-      if (typeof msg !== 'string') return;
+      if (typeof msg !== 'string' || Buffer.byteLength(msg, 'utf8') > MAX_MESSAGE_BYTES) return;
       let parsed: SubscribeMsg;
       try { parsed = JSON.parse(msg) as SubscribeMsg; } catch { return; }
-      if (!parsed || !Array.isArray(parsed.channels)) return;
+      if (!parsed || (parsed.type !== 'subscribe' && parsed.type !== 'unsubscribe') || !Array.isArray(parsed.channels)) return;
+      const channels = parsed.channels
+        .filter((channel): channel is string => typeof channel === 'string')
+        .slice(0, MAX_CHANNELS_PER_MESSAGE);
 
       if (parsed.type === 'subscribe') {
-        for (const channel of parsed.channels) {
-          if (ws.data.topics.has(channel)) continue;
+        let busTopicCount = 0;
+        for (const topic of ws.data.topics) if (busIndexForTopic(topic) !== null) busTopicCount++;
+        for (const channel of channels) {
+          if (!isAllowedTopic(channel) || ws.data.topics.has(channel)) continue;
+          const busIndex = busIndexForTopic(channel);
+          if (ws.data.topics.size >= MAX_TOPICS_PER_SOCKET) break;
+          if (busIndex !== null && busTopicCount >= MAX_BUS_TOPICS_PER_SOCKET) continue;
+
           ws.data.topics.add(channel);
           ws.subscribe(channel);
+          if (busIndex !== null) {
+            busTopicCount++;
+            if (connections?.x32) {
+              startBusTracking(connections.x32, busIndex);
+              ws.sendText(JSON.stringify(buildBusState(busIndex, state.get())));
 
-          // Bus subscription: start tracking and send initial bus state
-          const busMatch = channel.match(/^bus:(\d+)$/);
-          if (busMatch && connections?.x32) {
-            const busIndex = parseInt(busMatch[1], 10);
-            startBusTracking(connections.x32, busIndex);
-            ws.sendText(JSON.stringify(buildBusState(busIndex, state.get())));
-
-            // Start x32 if it was idle (bus-mix page opened standalone)
-            if (!connectionsStarted && !connections.x32.isActive()) {
-              startConnections();
+              // Start x32 if it was idle (bus-mix page opened standalone)
+              if (!connectionsStarted && !connections.x32.isActive()) startConnections();
             }
           }
         }
-      } else if (parsed.type === 'unsubscribe') {
-        for (const channel of parsed.channels) {
-          if (!ws.data.topics.has(channel)) continue;
+      } else {
+        for (const channel of channels) {
+          if (!isAllowedTopic(channel) || !ws.data.topics.has(channel)) continue;
           ws.data.topics.delete(channel);
           ws.unsubscribe(channel);
 
-          const busMatch = channel.match(/^bus:(\d+)$/);
-          if (busMatch && connections?.x32) {
-            stopBusTracking(connections.x32, parseInt(busMatch[1], 10));
-          }
+          const busIndex = busIndexForTopic(channel);
+          if (busIndex !== null && connections?.x32) stopBusTracking(connections.x32, busIndex);
         }
       }
     },
@@ -250,8 +270,8 @@ function setupWebSocket(
       // Clean up bus subscriptions for this socket
       if (connections?.x32) {
         for (const topic of ws.data.topics) {
-          const busMatch = topic.match(/^bus:(\d+)$/);
-          if (busMatch) stopBusTracking(connections.x32, parseInt(busMatch[1], 10));
+          const busIndex = busIndexForTopic(topic);
+          if (busIndex !== null) stopBusTracking(connections.x32, busIndex);
         }
       }
 
@@ -268,13 +288,11 @@ function setupWebSocket(
   };
 
   function upgrade(req: Request, srv: import('bun').Server<SocketData>): boolean {
-    // Capture server reference on first upgrade
-    if (!server) server = srv;
-
     const url = new URL(req.url);
-    if (!url.pathname.startsWith('/ws')) return false;
-
-    // Parse bus index from /ws?bus=N or pass it through for the client to send via subscribe msg
+    if (url.pathname !== '/ws') return false;
+    if (security && (security.checkHost(req) || !security.authenticate(req))) return false;
+    // Capture server reference only after the request has passed all gates.
+    if (!server) server = srv;
     const upgraded = srv.upgrade(req, { data: { topics: new Set<string>() } });
     return upgraded;
   }

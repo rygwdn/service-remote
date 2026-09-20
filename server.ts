@@ -19,6 +19,7 @@ import { version } from './src/version';
 import state from './src/state';
 import { startTray } from './src/tray';
 import { setupWebSocket } from './src/ws';
+import { createSecurity } from './src/security';
 import { setupRoutes } from './src/routes';
 import obs from './src/connections/obs';
 import * as x32 from './src/connections/x32';
@@ -69,6 +70,10 @@ async function serveStatic(pathname: string): Promise<Response | null> {
   });
 }
 
+// BASE_PATH: optional subpath prefix (e.g. "/service"). Strip trailing slash.
+const BASE_PATH = (process.env.SERVICE_REMOTE_BASE_PATH ?? '').replace(/\/+$/, '');
+const security = createSecurity(config.userConfigPath, { basePath: BASE_PATH });
+
 youtube.connect();
 
 const handleRequest = setupRoutes({ obs, x32, proclaim, ptz });
@@ -76,15 +81,14 @@ const handleRequest = setupRoutes({ obs, x32, proclaim, ptz });
 const { websocket, upgrade, hasClients } = setupWebSocket(
   state,
   { obs, x32, proclaim, ptz },
-  { canStopX32: () => !hasClients() },
+  { canStopX32: () => !hasClients(), security },
 );
 
 // ── Bun.serve ────────────────────────────────────────────────────────────────
 
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : config.server.port;
 
-// BASE_PATH: optional subpath prefix (e.g. "/service"). Strip trailing slash.
-const BASE_PATH = (process.env.SERVICE_REMOTE_BASE_PATH ?? '').replace(/\/+$/, '');
+// URL rewriting preserves the external BASE_PATH while routing internally.
 
 function rewriteUrl(req: Request): Request {
   if (!BASE_PATH) return req;
@@ -98,24 +102,35 @@ const server = Bun.serve<import('./src/ws').SocketData>({
   port,
 
   async fetch(req, srv) {
+    const hostError = security.checkHost(req);
+    if (hostError) return hostError;
+
+    const bootstrap = security.bootstrap(req);
+    if (bootstrap) return bootstrap;
+
     const { pathname } = new URL(req.url);
 
     // Redirect bare subpath to subpath + "/" so relative asset URLs resolve correctly
-    if (BASE_PATH && pathname === BASE_PATH) {
-      return Response.redirect(BASE_PATH + '/', 301);
-    }
+    if (BASE_PATH && pathname === BASE_PATH) return Response.redirect(BASE_PATH + '/', 301);
 
     const rewritten = rewriteUrl(req);
+    const rewrittenPath = new URL(rewritten.url).pathname;
+    const isApi = rewrittenPath === '/api' || rewrittenPath.startsWith('/api/');
+    const isWebSocket = rewrittenPath === '/ws';
+    if (isApi || isWebSocket) {
+      const authError = security.requireAuth(rewritten);
+      if (authError) return authError;
+    }
 
-    // WebSocket upgrade
-    if (upgrade(rewritten, srv)) return undefined as unknown as Response;
+    // WebSocket upgrade (authentication is also checked inside upgrade so this
+    // helper remains safe when used by another Bun fetch boundary).
+    if (isWebSocket && upgrade(rewritten, srv)) return undefined as unknown as Response;
 
     // API routes
     const apiResponse = handleRequest(rewritten);
     if (apiResponse) return apiResponse;
 
     // Static files
-    const { pathname: rewrittenPath } = new URL(rewritten.url);
     const staticResponse = await serveStatic(rewrittenPath);
     if (staticResponse) return staticResponse;
 
