@@ -54,6 +54,7 @@ cp config.default.json config.json
 | `server.openBrowser` | Open the local control panel when starting the server |
 | `server.allowedHosts` | Extra `Host` values accepted at the security boundary (e.g. a Tailscale funnel hostname); takes effect on restart |
 | `server.basePath` | Optional URL subpath prefix (e.g. `/service`) for reverse-proxy hosting; `SERVICE_REMOTE_BASE_PATH` env overrides it |
+| `server.token` | Optional installation-token override (secret; wins over `SERVICE_REMOTE_TOKEN` env and the generated token file, which is still maintained for recovery) |
 | `obs.address` | OBS WebSocket URL (default `ws://localhost:4455`) |
 | `obs.password` | OBS WebSocket password, if enabled |
 | `obs.screenshotInterval` | Screenshot polling interval in milliseconds |

@@ -74,7 +74,7 @@ async function serveStatic(pathname: string): Promise<Response | null> {
 // service installs (SCM-spawned children never see user/machine env changes);
 // SERVICE_REMOTE_BASE_PATH remains as an override. Strip trailing slash.
 const BASE_PATH = (process.env.SERVICE_REMOTE_BASE_PATH || config.server.basePath || '').replace(/\/+$/, '');
-const security = createSecurity(config.userConfigPath, { basePath: BASE_PATH, allowedHosts: config.server.allowedHosts });
+const security = createSecurity(config.userConfigPath, { basePath: BASE_PATH, allowedHosts: config.server.allowedHosts, token: config.server.token });
 
 youtube.connect();
 

@@ -141,7 +141,7 @@ test.describe('Overview panel', () => {
       (window as any).Alpine.store('ui').serverConnected = false;
     });
     await expect(page.locator('.disconnected-overlay')).toBeVisible();
-    await expect(page.locator('.disconnected-message')).toContainText('reconnecting');
+    await expect(page.locator('.disconnected-message:not(.token-form)')).toContainText('reconnecting');
   });
 
   test('overview info cells are compact: proclaim cell height <= 60px', async ({ page, setState }) => {

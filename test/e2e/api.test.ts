@@ -360,6 +360,22 @@ describe('API routes', () => {
         server: { port: 3000, openBrowser: true, basePath: 'service/' },
       });
       assert.equal(badPath.status, 400);
+
+      const withToken = await req(server, 'POST', '/api/config', {
+        ...base,
+        server: { port: 3000, openBrowser: true, token: 'hbc123' },
+      });
+      assert.equal(withToken.status, 200);
+
+      const badToken = await req(server, 'POST', '/api/config', {
+        ...base,
+        server: { port: 3000, openBrowser: true, token: 42 },
+      });
+      assert.equal(badToken.status, 400);
+
+      const state = await req(server, 'GET', '/api/config');
+      const bodyText = JSON.stringify(await state.json());
+      assert.ok(!bodyText.includes('hbc123'), 'token must not be returned by GET /api/config');
     });
 
     test('reconnects PTZ when camera config changes', async () => {

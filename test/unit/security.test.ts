@@ -67,6 +67,19 @@ describe('security token lifecycle', () => {
 });
 
 describe('security request boundary', () => {
+  test('accepts an explicit token option over the token file', () => {
+    const { dir, configPath } = tempConfigPath();
+    try {
+      const security = createSecurity(configPath, { token: 'hbc123' });
+      assert.equal(security.authenticate(request(`http://localhost/api?token=hbc123`)), true);
+      assert.equal(security.bootstrap(request(`http://localhost/?token=hbc123`))?.status, 302);
+      const other = createSecurity(configPath, {});
+      assert.equal(other.authenticate(request('http://localhost/api?token=hbc123')), false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('bootstraps a token into a clean redirect and strict cookie', () => {
     const { dir, configPath } = tempConfigPath();
     try {

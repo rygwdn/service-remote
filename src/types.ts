@@ -101,6 +101,7 @@ export interface Config {
     openBrowser: boolean;
     allowedHosts: string[];
     basePath: string;
+    token: string;
   };
   obs: {
     address: string;

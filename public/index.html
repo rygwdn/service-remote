@@ -527,7 +527,14 @@
 
     <!-- Disconnected overlay -->
     <div class="disconnected-overlay" x-show="!$store.ui.serverConnected">
-      <div class="disconnected-message">Disconnected — reconnecting&hellip;</div>
+      <div class="disconnected-message" x-show="!$store.ui.authRequired">Disconnected — reconnecting&hellip;</div>
+      <form class="disconnected-message token-form" x-show="$store.ui.authRequired" @submit.prevent="$store.ui.submitToken()">
+        <label for="token-input">Access token</label>
+        <div class="token-row">
+          <input id="token-input" type="password" x-model="$store.ui.tokenInput" autocomplete="current-password">
+          <button type="submit">Connect</button>
+        </div>
+      </form>
     </div>
 
   </main>

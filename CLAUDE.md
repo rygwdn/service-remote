@@ -94,7 +94,7 @@ To bootstrap a browser, open the server URL with `?token=<installation-token>`. 
 
 ```ts
 {
-  server: { port: number; openBrowser: boolean; allowedHosts: string[]; basePath: string };
+  server: { port: number; openBrowser: boolean; allowedHosts: string[]; basePath: string; token: string };
   obs: { address: string; password: string; screenshotInterval: number };
   x32: { address: string; port: number };
   proclaim: { host: string; port: number; password: string;

@@ -3,7 +3,8 @@
     "port": 3000,
     "openBrowser": true,
     "allowedHosts": [],
-    "basePath": ""
+    "basePath": "",
+    "token": ""
   },
   "obs": {
     "address": "ws://localhost:4455",

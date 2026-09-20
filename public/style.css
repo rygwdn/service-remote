@@ -120,6 +120,37 @@ main {
   border: 1px solid rgba(255,255,255,0.2);
 }
 
+.token-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 1rem;
+}
+
+.token-form .token-row {
+  display: flex;
+  gap: 8px;
+}
+
+.token-form input {
+  flex: 1;
+  min-width: 220px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+}
+
+.token-form button {
+  padding: 8px 16px;
+  border-radius: var(--radius-control);
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  cursor: pointer;
+}
+
 .panel {
   display: none;
   padding: 16px;

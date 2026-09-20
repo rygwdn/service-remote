@@ -17,6 +17,14 @@ document.addEventListener('alpine:init', () => {
     faderEnabled: { obs: false, x32: false },
     hidden: { obs: [] },
     serverConnected: false,
+    authRequired: false,
+    tokenInput: 'hbc123',
+
+    submitToken() {
+      const value = this.tokenInput.trim();
+      if (!value) return;
+      window.location.assign(basePath + '/?token=' + encodeURIComponent(value));
+    },
 
     setTab(tab) {
       this.tab = tab;
@@ -278,7 +286,10 @@ function connectWs() {
     missedHeartbeats: 3,
     onOpen: (socket) => {
       ws = socket;
-      if (window.Alpine) Alpine.store('ui').serverConnected = true;
+      if (window.Alpine) {
+        Alpine.store('ui').serverConnected = true;
+        Alpine.store('ui').authRequired = false;
+      }
       updateScreenshotSubscription();
     },
     onMessage: (event) => {
@@ -295,6 +306,7 @@ function connectWs() {
     onClose: () => {
       ws = null;
       if (window.Alpine) Alpine.store('ui').serverConnected = false;
+      checkAuth();
       if (currentScreenshotUrl) {
         URL.revokeObjectURL(currentScreenshotUrl);
         currentScreenshotUrl = null;
@@ -304,6 +316,17 @@ function connectWs() {
   updateScreenshotSubscription();
   return wsController;
 }
+
+// Probe the API to distinguish "server unreachable" from "not authenticated".
+// Exposed for tests.
+function checkAuth() {
+  fetch(basePath + '/api/state')
+    .then((res) => {
+      if (window.Alpine && !Alpine.store('ui').serverConnected) Alpine.store('ui').authRequired = res.status === 401;
+    })
+    .catch(() => {});
+}
+window.__srCheckAuth = checkAuth;
 // Sort X32 channels for display: main L/R first, then bus, then ch, then mtx.
 const X32_TYPE_ORDER = { main: 0, bus: 1, ch: 2, mtx: 3 };
 function sortedX32Channels(channels) {

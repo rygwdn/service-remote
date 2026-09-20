@@ -11,6 +11,8 @@ interface SecurityOptions {
   env?: NodeJS.ProcessEnv;
   /** Extra hostnames accepted by the Host/Origin boundary (e.g. a Tailscale FQDN). */
   allowedHosts?: readonly string[];
+  /** Explicit installation token (e.g. from config); overrides env and the token file. */
+  token?: string;
 }
 
 interface RequestSecurity {
@@ -139,7 +141,8 @@ function bearerValue(req: Request): string | null {
 
 function createSecurity(configPath: string, options: SecurityOptions = {}): RequestSecurity {
   const basePath = (options.basePath ?? '').replace(/\/+$/, '');
-  const token = readOrCreateToken(configPath, options.env ?? process.env);
+  // Explicit token (config) wins over env, which wins over the token file.
+  const token = options.token?.trim() || readOrCreateToken(configPath, options.env ?? process.env);
   const allowedHosts = collectAllowedHosts(options.allowedHosts ?? []);
 
   function queryValue(req: Request): string | null {
