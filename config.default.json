@@ -1,7 +1,9 @@
 {
   "server": {
     "port": 3000,
-    "openBrowser": true
+    "openBrowser": true,
+    "allowedHosts": [],
+    "basePath": ""
   },
   "obs": {
     "address": "ws://localhost:4455",

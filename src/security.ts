@@ -9,6 +9,8 @@ const COOKIE_NAME = 'service-remote-token';
 interface SecurityOptions {
   basePath?: string;
   env?: NodeJS.ProcessEnv;
+  /** Extra hostnames accepted by the Host/Origin boundary (e.g. a Tailscale FQDN). */
+  allowedHosts?: readonly string[];
 }
 
 interface RequestSecurity {
@@ -100,13 +102,17 @@ function normalizeAuthority(value: string): string {
   return normalizeHostname(text);
 }
 
-function collectAllowedHosts(): Set<string> {
+function collectAllowedHosts(extraAllowedHosts: readonly string[]): Set<string> {
   const allowed = new Set(['localhost', '127.0.0.1', '::1']);
   allowed.add(normalizeHostname(os.hostname()));
   for (const addresses of Object.values(os.networkInterfaces())) {
     for (const address of addresses ?? []) {
       if (!address.internal) allowed.add(normalizeHostname(address.address));
     }
+  }
+  for (const host of extraAllowedHosts) {
+    const normalized = normalizeHostname(host.trim());
+    if (normalized) allowed.add(normalized);
   }
   return allowed;
 }
@@ -134,7 +140,7 @@ function bearerValue(req: Request): string | null {
 function createSecurity(configPath: string, options: SecurityOptions = {}): RequestSecurity {
   const basePath = (options.basePath ?? '').replace(/\/+$/, '');
   const token = readOrCreateToken(configPath, options.env ?? process.env);
-  const allowedHosts = collectAllowedHosts();
+  const allowedHosts = collectAllowedHosts(options.allowedHosts ?? []);
 
   function queryValue(req: Request): string | null {
     return new URL(req.url).searchParams.get('token');

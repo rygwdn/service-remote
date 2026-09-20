@@ -192,12 +192,19 @@ function buildSafeConfig(body: JsonObject, current: typeof config): { value?: Re
   }
 
   const server = body.server === undefined ? current.server : body.server;
-  if (!isObject(server) || unknownKeys(server, ['port', 'openBrowser']).length > 0 || !validPort(server.port) || typeof server.openBrowser !== 'boolean') return { error: 'Invalid server configuration' };
+  if (!isObject(server) || unknownKeys(server, ['port', 'openBrowser', 'allowedHosts', 'basePath']).length > 0 || !validPort(server.port) || typeof server.openBrowser !== 'boolean') return { error: 'Invalid server configuration' };
+  if (server.allowedHosts !== undefined && (!Array.isArray(server.allowedHosts) || !server.allowedHosts.every((v) => isString(v, 0, 253)))) return { error: 'Invalid server configuration' };
+  if (server.basePath !== undefined && (!isString(server.basePath, 0, 128) || (server.basePath !== '' && !/^\/[A-Za-z0-9._~-]*$/.test(server.basePath)))) return { error: 'Invalid server configuration' };
   const ui = body.ui === undefined ? current.ui : body.ui;
   if (!isObject(ui) || unknownKeys(ui, ['hiddenObs', 'hiddenX32']).length > 0 || !Array.isArray(ui.hiddenObs) || !Array.isArray(ui.hiddenX32) || !ui.hiddenObs.every((v) => isString(v, 0, 256)) || !ui.hiddenX32.every((v) => isString(v, 0, 256))) return { error: 'Invalid UI configuration' };
 
   return { value: {
-    server,
+    server: {
+      port: server.port,
+      openBrowser: server.openBrowser,
+      allowedHosts: Array.isArray(server.allowedHosts) ? server.allowedHosts : current.server.allowedHosts,
+      basePath: server.basePath ?? current.server.basePath,
+    },
     obs: { address: obsIn.address, password: secretValue(obsIn.password, current.obs.password), screenshotInterval: obsIn.screenshotInterval ?? current.obs.screenshotInterval },
     x32: { address: x32In.address, port: x32In.port ?? current.x32.port },
     proclaim: { host: proclaimIn.host, port: proclaimIn.port ?? current.proclaim.port, password: secretValue(proclaimIn.password, current.proclaim.password), pollInterval: proclaimIn.pollInterval ?? current.proclaim.pollInterval, presentationDbPath: proclaimIn.presentationDbPath ?? current.proclaim.presentationDbPath },

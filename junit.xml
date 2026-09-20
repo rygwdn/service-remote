@@ -1,0 +1,547 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bun test" tests="300" assertions="38" failures="0" skipped="0" time="5.360727505">
+  <testsuite name="test/unit/proclaimDb.test.ts" file="test/unit/proclaimDb.test.ts" tests="5" assertions="0" failures="0" skipped="0" time="0.012665799" hostname="03a50982843b">
+    <testsuite name="proclaimDb.lyricsToSlides" file="test/unit/proclaimDb.test.ts" line="8" tests="5" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="splits lyrics on blank paragraphs into per-slide line arrays" classname="proclaimDb.lyricsToSlides" time="0.000682" file="test/unit/proclaimDb.test.ts" line="9" assertions="0" />
+      <testcase name="keeps section labels so slide indexes align with Proclaim slideIndex" classname="proclaimDb.lyricsToSlides" time="0.000029" file="test/unit/proclaimDb.test.ts" line="28" assertions="0" />
+      <testcase name="handles empty and self-closing paragraphs" classname="proclaimDb.lyricsToSlides" time="0.000013" file="test/unit/proclaimDb.test.ts" line="45" assertions="0" />
+      <testcase name="returns [] for empty or missing lyrics" classname="proclaimDb.lyricsToSlides" time="0.000009" file="test/unit/proclaimDb.test.ts" line="54" assertions="0" />
+      <testcase name="falls back to Run Text regex for malformed XML" classname="proclaimDb.lyricsToSlides" time="0.000476" file="test/unit/proclaimDb.test.ts" line="59" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/security.test.ts" file="test/unit/security.test.ts" tests="6" assertions="0" failures="0" skipped="0" time="0.008633934" hostname="03a50982843b">
+    <testsuite name="security token lifecycle" file="test/unit/security.test.ts" line="17" tests="3" assertions="0" failures="0" skipped="0" time="0.002" hostname="03a50982843b">
+      <testcase name="creates a persistent token with restrictive permissions and reuses it" classname="security token lifecycle" time="0.00254" file="test/unit/security.test.ts" line="18" assertions="0" />
+      <testcase name="uses an environment override while preserving the persistent fallback" classname="security token lifecycle" time="0.000264" file="test/unit/security.test.ts" line="36" assertions="0" />
+      <testcase name="accepts bearer, cookie, and query authentication but rejects wrong tokens" classname="security token lifecycle" time="0.000135" file="test/unit/security.test.ts" line="53" assertions="0" />
+    </testsuite>
+    <testsuite name="security request boundary" file="test/unit/security.test.ts" line="69" tests="3" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="bootstraps a token into a clean redirect and strict cookie" classname="security request boundary" time="0.0004" file="test/unit/security.test.ts" line="70" assertions="0" />
+      <testcase name="marks HTTPS bootstrap cookies Secure and does not bootstrap WebSocket upgrades" classname="security request boundary" time="0.000135" file="test/unit/security.test.ts" line="91" assertions="0" />
+      <testcase name="allows local hosts and matching origins while rejecting foreign hosts and origins" classname="security request boundary" time="0.000361" file="test/unit/security.test.ts" line="105" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/x32-pending-bus-send.test.ts" file="test/unit/x32-pending-bus-send.test.ts" tests="7" assertions="0" failures="0" skipped="0" time="0.00716523" hostname="03a50982843b">
+    <testsuite name="x32 pending bus-send mechanism" file="test/unit/x32-pending-bus-send.test.ts" line="17" tests="7" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testsuite name="applyBusSendPatchWithPending()" file="test/unit/x32-pending-bus-send.test.ts" line="19" tests="7" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="applies level patch normally when no pending entry" classname="applyBusSendPatchWithPending() &gt; x32 pending bus-send mechanism" time="0.000092" file="test/unit/x32-pending-bus-send.test.ts" line="20" assertions="0" />
+        <testcase name="suppresses level when pending exists and diff &gt; 0.05" classname="applyBusSendPatchWithPending() &gt; x32 pending bus-send mechanism" time="0.000059" file="test/unit/x32-pending-bus-send.test.ts" line="26" assertions="0" />
+        <testcase name="applies and clears pending on confirmation (diff &lt;= 0.05)" classname="applyBusSendPatchWithPending() &gt; x32 pending bus-send mechanism" time="0.00004" file="test/unit/x32-pending-bus-send.test.ts" line="33" assertions="0" />
+        <testcase name="clears expired pending (&gt;= 2000ms) and applies normally" classname="applyBusSendPatchWithPending() &gt; x32 pending bus-send mechanism" time="0.000016" file="test/unit/x32-pending-bus-send.test.ts" line="42" assertions="0" />
+        <testcase name="non-level fields (on) always pass through" classname="applyBusSendPatchWithPending() &gt; x32 pending bus-send mechanism" time="0.00001" file="test/unit/x32-pending-bus-send.test.ts" line="50" assertions="0" />
+        <testcase name="pending for different key does not affect other key" classname="applyBusSendPatchWithPending() &gt; x32 pending bus-send mechanism" time="0.000008" file="test/unit/x32-pending-bus-send.test.ts" line="57" assertions="0" />
+        <testcase name="patch with both level and on: level suppressed, on passes through" classname="applyBusSendPatchWithPending() &gt; x32 pending bus-send mechanism" time="0.000015" file="test/unit/x32-pending-bus-send.test.ts" line="64" assertions="0" />
+      </testsuite>
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/ptz.test.ts" file="test/unit/ptz.test.ts" tests="30" assertions="0" failures="0" skipped="0" time="0.006089984" hostname="03a50982843b">
+    <testsuite name="VISCA command building" file="test/unit/ptz.test.ts" line="9" tests="28" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testsuite name="buildViscaPacket" file="test/unit/ptz.test.ts" line="10" tests="2" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="wraps payload with 8-byte VISCA/IP header" classname="buildViscaPacket &gt; VISCA command building" time="0.000073" file="test/unit/ptz.test.ts" line="11" assertions="0" />
+        <testcase name="encodes sequence number correctly" classname="buildViscaPacket &gt; VISCA command building" time="0.00002" file="test/unit/ptz.test.ts" line="22" assertions="0" />
+      </testsuite>
+      <testsuite name="encodePos / decodePos" file="test/unit/ptz.test.ts" line="28" tests="6" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="encodes zero as four zero nibbles" classname="encodePos / decodePos &gt; VISCA command building" time="0.000025" file="test/unit/ptz.test.ts" line="29" assertions="0" />
+        <testcase name="encodes a positive value correctly" classname="encodePos / decodePos &gt; VISCA command building" time="0.000006" file="test/unit/ptz.test.ts" line="33" assertions="0" />
+        <testcase name="encodes a negative value as two&apos;s complement" classname="encodePos / decodePos &gt; VISCA command building" time="0.000005" file="test/unit/ptz.test.ts" line="38" assertions="0" />
+        <testcase name="encodes -1 (0xFFFF) as all F nibbles" classname="encodePos / decodePos &gt; VISCA command building" time="0.000004" file="test/unit/ptz.test.ts" line="43" assertions="0" />
+        <testcase name="round-trips positive values through encode/decode" classname="encodePos / decodePos &gt; VISCA command building" time="0.000023" file="test/unit/ptz.test.ts" line="47" assertions="0" />
+        <testcase name="round-trips negative values through encode/decode" classname="encodePos / decodePos &gt; VISCA command building" time="0.000012" file="test/unit/ptz.test.ts" line="53" assertions="0" />
+      </testsuite>
+      <testsuite name="absPanTiltCommand" file="test/unit/ptz.test.ts" line="60" tests="5" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="builds absolute pan/tilt command with encoded positions" classname="absPanTiltCommand &gt; VISCA command building" time="0.000065" file="test/unit/ptz.test.ts" line="61" assertions="0" />
+        <testcase name="encodes non-zero pan and tilt positions" classname="absPanTiltCommand &gt; VISCA command building" time="0.00001" file="test/unit/ptz.test.ts" line="77" assertions="0" />
+        <testcase name="clamps pan speed to 1–24" classname="absPanTiltCommand &gt; VISCA command building" time="0.00001" file="test/unit/ptz.test.ts" line="84" assertions="0" />
+        <testcase name="clamps tilt speed to 1–20" classname="absPanTiltCommand &gt; VISCA command building" time="0.000006" file="test/unit/ptz.test.ts" line="89" assertions="0" />
+        <testcase name="uses camera ID in address byte" classname="absPanTiltCommand &gt; VISCA command building" time="0.000004" file="test/unit/ptz.test.ts" line="94" assertions="0" />
+      </testsuite>
+      <testsuite name="absZoomCommand" file="test/unit/ptz.test.ts" line="99" tests="3" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="builds absolute zoom command for position 0 (wide)" classname="absZoomCommand &gt; VISCA command building" time="0.000023" file="test/unit/ptz.test.ts" line="100" assertions="0" />
+        <testcase name="encodes a mid-range zoom position" classname="absZoomCommand &gt; VISCA command building" time="0.000006" file="test/unit/ptz.test.ts" line="112" assertions="0" />
+        <testcase name="clamps zoom to 0–16384" classname="absZoomCommand &gt; VISCA command building" time="0.000008" file="test/unit/ptz.test.ts" line="118" assertions="0" />
+      </testsuite>
+      <testsuite name="panTiltInquiry" file="test/unit/ptz.test.ts" line="124" tests="2" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns correct inquiry bytes" classname="panTiltInquiry &gt; VISCA command building" time="0.000007" file="test/unit/ptz.test.ts" line="125" assertions="0" />
+        <testcase name="uses camera ID in address byte" classname="panTiltInquiry &gt; VISCA command building" time="0.000004" file="test/unit/ptz.test.ts" line="129" assertions="0" />
+      </testsuite>
+      <testsuite name="zoomInquiry" file="test/unit/ptz.test.ts" line="134" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns correct inquiry bytes" classname="zoomInquiry &gt; VISCA command building" time="0.000006" file="test/unit/ptz.test.ts" line="135" assertions="0" />
+      </testsuite>
+      <testsuite name="focusCommand" file="test/unit/ptz.test.ts" line="140" tests="5" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="auto focus" classname="focusCommand &gt; VISCA command building" time="0.000021" file="test/unit/ptz.test.ts" line="141" assertions="0" />
+        <testcase name="manual focus" classname="focusCommand &gt; VISCA command building" time="0.000007" file="test/unit/ptz.test.ts" line="144" assertions="0" />
+        <testcase name="focus far" classname="focusCommand &gt; VISCA command building" time="0.000004" file="test/unit/ptz.test.ts" line="147" assertions="0" />
+        <testcase name="focus near" classname="focusCommand &gt; VISCA command building" time="0.000012" file="test/unit/ptz.test.ts" line="150" assertions="0" />
+        <testcase name="focus stop" classname="focusCommand &gt; VISCA command building" time="0.000004" file="test/unit/ptz.test.ts" line="153" assertions="0" />
+      </testsuite>
+      <testsuite name="presetCommand" file="test/unit/ptz.test.ts" line="158" tests="3" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="recall preset 0" classname="presetCommand &gt; VISCA command building" time="0.000013" file="test/unit/ptz.test.ts" line="159" assertions="0" />
+        <testcase name="save preset 5" classname="presetCommand &gt; VISCA command building" time="0.000005" file="test/unit/ptz.test.ts" line="162" assertions="0" />
+        <testcase name="recall preset 8" classname="presetCommand &gt; VISCA command building" time="0.000004" file="test/unit/ptz.test.ts" line="165" assertions="0" />
+      </testsuite>
+      <testsuite name="homeCommand" file="test/unit/ptz.test.ts" line="170" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns home command bytes" classname="homeCommand &gt; VISCA command building" time="0.000006" file="test/unit/ptz.test.ts" line="171" assertions="0" />
+      </testsuite>
+    </testsuite>
+    <testsuite name="PTZ inquiry state publication" file="test/unit/ptz.test.ts" line="256" tests="2" assertions="0" failures="0" skipped="0" time="0.003" hostname="03a50982843b">
+      <testcase name="publishes decoded pan, tilt, and zoom responses to shared state" classname="PTZ inquiry state publication" time="0.003643" file="test/unit/ptz.test.ts" line="257" assertions="0" />
+      <testcase name="does not publish a delayed inquiry response after disconnect" classname="PTZ inquiry state publication" time="0.000533" file="test/unit/ptz.test.ts" line="283" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/youtube.test.ts" file="test/unit/youtube.test.ts" tests="23" assertions="32" failures="0" skipped="0" time="0.003036075" hostname="03a50982843b">
+    <testsuite name="parseApiResponse" file="test/unit/youtube.test.ts" line="22" tests="8" assertions="10" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="returns nulls when items array is empty" classname="parseApiResponse" time="0.00009" file="test/unit/youtube.test.ts" line="23" assertions="1" />
+      <testcase name="returns nulls when items is missing" classname="parseApiResponse" time="0.00001" file="test/unit/youtube.test.ts" line="28" assertions="1" />
+      <testcase name="parses viewerCount and broadcastTitle from a valid response" classname="parseApiResponse" time="0.000018" file="test/unit/youtube.test.ts" line="33" assertions="2" />
+      <testcase name="returns broadcastStatus live when actualStartTime set but no actualEndTime" classname="parseApiResponse" time="0.000011" file="test/unit/youtube.test.ts" line="45" assertions="1" />
+      <testcase name="returns broadcastStatus complete when actualEndTime is set" classname="parseApiResponse" time="0.000009" file="test/unit/youtube.test.ts" line="58" assertions="1" />
+      <testcase name="returns broadcastStatus null when no liveStreamingDetails" classname="parseApiResponse" time="0.000048" file="test/unit/youtube.test.ts" line="71" assertions="1" />
+      <testcase name="returns viewerCount null when concurrentViewers is missing" classname="parseApiResponse" time="0.00001" file="test/unit/youtube.test.ts" line="78" assertions="2" />
+      <testcase name="parses zero viewers" classname="parseApiResponse" time="0.000008" file="test/unit/youtube.test.ts" line="90" assertions="1" />
+    </testsuite>
+    <testsuite name="parseIni" file="test/unit/youtube.test.ts" line="101" tests="3" assertions="5" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="parses simple INI content into sections" classname="parseIni" time="0.000075" file="test/unit/youtube.test.ts" line="102" assertions="2" />
+      <testcase name="handles values with = in them" classname="parseIni" time="0.000011" file="test/unit/youtube.test.ts" line="114" assertions="1" />
+      <testcase name="ignores lines before any section" classname="parseIni" time="0.000016" file="test/unit/youtube.test.ts" line="121" assertions="2" />
+    </testsuite>
+    <testsuite name="extractCredsFromIni" file="test/unit/youtube.test.ts" line="131" tests="4" assertions="4" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="finds RefreshToken and AccessToken from OBS [YouTube] section in global.ini" classname="extractCredsFromIni" time="0.000043" file="test/unit/youtube.test.ts" line="132" assertions="1" />
+      <testcase name="returns accessToken and tokenExpiry as undefined when Token is absent" classname="extractCredsFromIni" time="0.000076" file="test/unit/youtube.test.ts" line="153" assertions="1" />
+      <testcase name="returns null if no YouTube section found" classname="extractCredsFromIni" time="0.000008" file="test/unit/youtube.test.ts" line="163" assertions="1" />
+      <testcase name="returns null if YouTube section has no RefreshToken" classname="extractCredsFromIni" time="0.000006" file="test/unit/youtube.test.ts" line="168" assertions="1" />
+    </testsuite>
+    <testsuite name="seedAccessToken" file="test/unit/youtube.test.ts" line="174" tests="1" assertions="1" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="pre-seeds the in-memory access token cache" classname="seedAccessToken" time="0.00002" file="test/unit/youtube.test.ts" line="175" assertions="1" />
+    </testsuite>
+    <testsuite name="parseBroadcastsResponse" file="test/unit/youtube.test.ts" line="182" tests="6" assertions="7" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="returns empty array when items is missing" classname="parseBroadcastsResponse" time="0.000029" file="test/unit/youtube.test.ts" line="183" assertions="1" />
+      <testcase name="returns empty array when items is empty" classname="parseBroadcastsResponse" time="0.000006" file="test/unit/youtube.test.ts" line="187" assertions="1" />
+      <testcase name="filters out completed and revoked broadcasts" classname="parseBroadcastsResponse" time="0.000034" file="test/unit/youtube.test.ts" line="191" assertions="2" />
+      <testcase name="maps fields correctly" classname="parseBroadcastsResponse" time="0.000012" file="test/unit/youtube.test.ts" line="205" assertions="1" />
+      <testcase name="includes testing and liveStarting statuses" classname="parseBroadcastsResponse" time="0.000011" file="test/unit/youtube.test.ts" line="222" assertions="1" />
+      <testcase name="omits scheduledStartTime when absent" classname="parseBroadcastsResponse" time="0.000008" file="test/unit/youtube.test.ts" line="234" assertions="1" />
+    </testsuite>
+    <testsuite name="YouTube polling lifecycle" file="test/unit/youtube.test.ts" line="242" tests="1" assertions="5" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="serializes polls, aborts owned requests, and ignores stale completion" classname="YouTube polling lifecycle" time="0.000882" file="test/unit/youtube.test.ts" line="243" assertions="5" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/x32.test.ts" file="test/unit/x32.test.ts" tests="72" assertions="0" failures="0" skipped="0" time="0.004263572" hostname="03a50982843b">
+    <testsuite name="x32 parseOscMessage()" file="test/unit/x32.test.ts" line="5" tests="42" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testsuite name="fader messages (/ch/XX/mix/fader)" file="test/unit/x32.test.ts" line="6" tests="4" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="single-digit channel is zero-padded" classname="fader messages (/ch/XX/mix/fader) &gt; x32 parseOscMessage()" time="0.000092" file="test/unit/x32.test.ts" line="7" assertions="0" />
+        <testcase name="two-digit channel" classname="fader messages (/ch/XX/mix/fader) &gt; x32 parseOscMessage()" time="0.000016" file="test/unit/x32.test.ts" line="12" assertions="0" />
+        <testcase name="fader at zero" classname="fader messages (/ch/XX/mix/fader) &gt; x32 parseOscMessage()" time="0.000017" file="test/unit/x32.test.ts" line="17" assertions="0" />
+        <testcase name="missing args defaults fader to 0" classname="fader messages (/ch/XX/mix/fader) &gt; x32 parseOscMessage()" time="0.000012" file="test/unit/x32.test.ts" line="22" assertions="0" />
+      </testsuite>
+      <testsuite name="mute messages (/ch/XX/mix/on)" file="test/unit/x32.test.ts" line="28" tests="3" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="value 0 means muted" classname="mute messages (/ch/XX/mix/on) &gt; x32 parseOscMessage()" time="0.000026" file="test/unit/x32.test.ts" line="29" assertions="0" />
+        <testcase name="value 1 means not muted" classname="mute messages (/ch/XX/mix/on) &gt; x32 parseOscMessage()" time="0.000014" file="test/unit/x32.test.ts" line="34" assertions="0" />
+        <testcase name="missing args defaults to not muted" classname="mute messages (/ch/XX/mix/on) &gt; x32 parseOscMessage()" time="0.000011" file="test/unit/x32.test.ts" line="39" assertions="0" />
+      </testsuite>
+      <testsuite name="name messages (/ch/XX/config/name)" file="test/unit/x32.test.ts" line="45" tests="3" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns label patch for non-empty name" classname="name messages (/ch/XX/config/name) &gt; x32 parseOscMessage()" time="0.000026" file="test/unit/x32.test.ts" line="46" assertions="0" />
+        <testcase name="returns null for empty string name" classname="name messages (/ch/XX/config/name) &gt; x32 parseOscMessage()" time="0.000007" file="test/unit/x32.test.ts" line="51" assertions="0" />
+        <testcase name="returns null when args are missing" classname="name messages (/ch/XX/config/name) &gt; x32 parseOscMessage()" time="0.000005" file="test/unit/x32.test.ts" line="56" assertions="0" />
+      </testsuite>
+      <testsuite name="bus fader messages (/bus/XX/mix/fader)" file="test/unit/x32.test.ts" line="62" tests="3" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="bus fader returns type bus" classname="bus fader messages (/bus/XX/mix/fader) &gt; x32 parseOscMessage()" time="0.000022" file="test/unit/x32.test.ts" line="63" assertions="0" />
+        <testcase name="two-digit bus" classname="bus fader messages (/bus/XX/mix/fader) &gt; x32 parseOscMessage()" time="0.00001" file="test/unit/x32.test.ts" line="68" assertions="0" />
+        <testcase name="missing args defaults bus fader to 0" classname="bus fader messages (/bus/XX/mix/fader) &gt; x32 parseOscMessage()" time="0.000008" file="test/unit/x32.test.ts" line="73" assertions="0" />
+      </testsuite>
+      <testsuite name="bus mute messages (/bus/XX/mix/on)" file="test/unit/x32.test.ts" line="79" tests="2" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="value 0 means bus muted" classname="bus mute messages (/bus/XX/mix/on) &gt; x32 parseOscMessage()" time="0.000013" file="test/unit/x32.test.ts" line="80" assertions="0" />
+        <testcase name="value 1 means bus not muted" classname="bus mute messages (/bus/XX/mix/on) &gt; x32 parseOscMessage()" time="0.000008" file="test/unit/x32.test.ts" line="85" assertions="0" />
+      </testsuite>
+      <testsuite name="bus name messages (/bus/XX/config/name)" file="test/unit/x32.test.ts" line="91" tests="3" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns label patch for non-empty bus name" classname="bus name messages (/bus/XX/config/name) &gt; x32 parseOscMessage()" time="0.000013" file="test/unit/x32.test.ts" line="92" assertions="0" />
+        <testcase name="returns null for empty bus name" classname="bus name messages (/bus/XX/config/name) &gt; x32 parseOscMessage()" time="0.000007" file="test/unit/x32.test.ts" line="97" assertions="0" />
+        <testcase name="returns null when bus name args are missing" classname="bus name messages (/bus/XX/config/name) &gt; x32 parseOscMessage()" time="0.000007" file="test/unit/x32.test.ts" line="102" assertions="0" />
+      </testsuite>
+      <testsuite name="matrix faders" file="test/unit/x32.test.ts" line="108" tests="5" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="parses mtx fader" classname="matrix faders &gt; x32 parseOscMessage()" time="0.000087" file="test/unit/x32.test.ts" line="109" assertions="0" />
+        <testcase name="parses mtx mute (on=0 → muted)" classname="matrix faders &gt; x32 parseOscMessage()" time="0.000016" file="test/unit/x32.test.ts" line="114" assertions="0" />
+        <testcase name="parses mtx mute (on=1 → not muted)" classname="matrix faders &gt; x32 parseOscMessage()" time="0.000013" file="test/unit/x32.test.ts" line="119" assertions="0" />
+        <testcase name="parses mtx name" classname="matrix faders &gt; x32 parseOscMessage()" time="0.000012" file="test/unit/x32.test.ts" line="124" assertions="0" />
+        <testcase name="returns null for empty mtx name" classname="matrix faders &gt; x32 parseOscMessage()" time="0.000007" file="test/unit/x32.test.ts" line="129" assertions="0" />
+      </testsuite>
+      <testsuite name="main faders" file="test/unit/x32.test.ts" line="134" tests="4" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="parses main L/R fader" classname="main faders &gt; x32 parseOscMessage()" time="0.00002" file="test/unit/x32.test.ts" line="135" assertions="0" />
+        <testcase name="parses main L/R mute" classname="main faders &gt; x32 parseOscMessage()" time="0.000013" file="test/unit/x32.test.ts" line="140" assertions="0" />
+        <testcase name="parses main M/C fader" classname="main faders &gt; x32 parseOscMessage()" time="0.000017" file="test/unit/x32.test.ts" line="145" assertions="0" />
+        <testcase name="parses main M/C mute" classname="main faders &gt; x32 parseOscMessage()" time="0.000012" file="test/unit/x32.test.ts" line="150" assertions="0" />
+      </testsuite>
+      <testsuite name="color messages (/ch/XX/config/color, /bus/XX/config/color, etc.)" file="test/unit/x32.test.ts" line="156" tests="6" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="ch color returns color patch" classname="color messages (/ch/XX/config/color, /bus/XX/config/color, etc.) &gt; x32 parseOscMessage()" time="0.000018" file="test/unit/x32.test.ts" line="157" assertions="0" />
+        <testcase name="bus color returns color patch" classname="color messages (/ch/XX/config/color, /bus/XX/config/color, etc.) &gt; x32 parseOscMessage()" time="0.000008" file="test/unit/x32.test.ts" line="162" assertions="0" />
+        <testcase name="mtx color returns color patch" classname="color messages (/ch/XX/config/color, /bus/XX/config/color, etc.) &gt; x32 parseOscMessage()" time="0.000018" file="test/unit/x32.test.ts" line="167" assertions="0" />
+        <testcase name="main L/R color returns color patch" classname="color messages (/ch/XX/config/color, /bus/XX/config/color, etc.) &gt; x32 parseOscMessage()" time="0.000016" file="test/unit/x32.test.ts" line="172" assertions="0" />
+        <testcase name="color 0 (off) returns color patch with 0" classname="color messages (/ch/XX/config/color, /bus/XX/config/color, etc.) &gt; x32 parseOscMessage()" time="0.000015" file="test/unit/x32.test.ts" line="177" assertions="0" />
+        <testcase name="missing args defaults color to 0" classname="color messages (/ch/XX/config/color, /bus/XX/config/color, etc.) &gt; x32 parseOscMessage()" time="0.000008" file="test/unit/x32.test.ts" line="182" assertions="0" />
+      </testsuite>
+      <testsuite name="unrecognised addresses" file="test/unit/x32.test.ts" line="188" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns null for unknown OSC address" classname="unrecognised addresses &gt; x32 parseOscMessage()" time="0.000015" file="test/unit/x32.test.ts" line="189" assertions="0" />
+      </testsuite>
+      <testsuite name="DCA group messages (/ch/XX/grp/dca and /bus/XX/grp/dca)" file="test/unit/x32.test.ts" line="196" tests="8" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="ch dca bitmask with bit 7 set → spill: true" classname="DCA group messages (/ch/XX/grp/dca and /bus/XX/grp/dca) &gt; x32 parseOscMessage()" time="0.000025" file="test/unit/x32.test.ts" line="197" assertions="0" />
+        <testcase name="ch dca bitmask with bit 7 clear → spill: false" classname="DCA group messages (/ch/XX/grp/dca and /bus/XX/grp/dca) &gt; x32 parseOscMessage()" time="0.000008" file="test/unit/x32.test.ts" line="202" assertions="0" />
+        <testcase name="ch dca bitmask with multiple bits set including bit 7 → spill: true" classname="DCA group messages (/ch/XX/grp/dca and /bus/XX/grp/dca) &gt; x32 parseOscMessage()" time="0.000007" file="test/unit/x32.test.ts" line="207" assertions="0" />
+        <testcase name="ch dca bitmask with only lower bits set → spill: false" classname="DCA group messages (/ch/XX/grp/dca and /bus/XX/grp/dca) &gt; x32 parseOscMessage()" time="0.000008" file="test/unit/x32.test.ts" line="212" assertions="0" />
+        <testcase name="missing args defaults to spill: false" classname="DCA group messages (/ch/XX/grp/dca and /bus/XX/grp/dca) &gt; x32 parseOscMessage()" time="0.000008" file="test/unit/x32.test.ts" line="217" assertions="0" />
+        <testcase name="bus dca bitmask with bit 7 set → spill: true" classname="DCA group messages (/ch/XX/grp/dca and /bus/XX/grp/dca) &gt; x32 parseOscMessage()" time="0.000007" file="test/unit/x32.test.ts" line="222" assertions="0" />
+        <testcase name="bus dca bitmask with bit 7 clear → spill: false" classname="DCA group messages (/ch/XX/grp/dca and /bus/XX/grp/dca) &gt; x32 parseOscMessage()" time="0.000007" file="test/unit/x32.test.ts" line="227" assertions="0" />
+        <testcase name="two-digit channel" classname="DCA group messages (/ch/XX/grp/dca and /bus/XX/grp/dca) &gt; x32 parseOscMessage()" time="0.000007" file="test/unit/x32.test.ts" line="232" assertions="0" />
+      </testsuite>
+    </testsuite>
+    <testsuite name="x32 parseBusSendMessage()" file="test/unit/x32.test.ts" line="239" tests="12" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testsuite name="send level messages (/ch/NN/mix/BB/level)" file="test/unit/x32.test.ts" line="240" tests="5" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="parses channel 1 send level to bus 8" classname="send level messages (/ch/NN/mix/BB/level) &gt; x32 parseBusSendMessage()" time="0.000058" file="test/unit/x32.test.ts" line="241" assertions="0" />
+        <testcase name="parses channel 16 send level to bus 1" classname="send level messages (/ch/NN/mix/BB/level) &gt; x32 parseBusSendMessage()" time="0.000009" file="test/unit/x32.test.ts" line="246" assertions="0" />
+        <testcase name="level at zero" classname="send level messages (/ch/NN/mix/BB/level) &gt; x32 parseBusSendMessage()" time="0.000006" file="test/unit/x32.test.ts" line="251" assertions="0" />
+        <testcase name="missing args defaults level to 0" classname="send level messages (/ch/NN/mix/BB/level) &gt; x32 parseBusSendMessage()" time="0.000006" file="test/unit/x32.test.ts" line="256" assertions="0" />
+        <testcase name="two-digit channel and bus" classname="send level messages (/ch/NN/mix/BB/level) &gt; x32 parseBusSendMessage()" time="0.000006" file="test/unit/x32.test.ts" line="261" assertions="0" />
+      </testsuite>
+      <testsuite name="send on/off messages (/ch/NN/mix/BB/on)" file="test/unit/x32.test.ts" line="267" tests="3" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="value 1 means send is on" classname="send on/off messages (/ch/NN/mix/BB/on) &gt; x32 parseBusSendMessage()" time="0.000007" file="test/unit/x32.test.ts" line="268" assertions="0" />
+        <testcase name="value 0 means send is off" classname="send on/off messages (/ch/NN/mix/BB/on) &gt; x32 parseBusSendMessage()" time="0.000007" file="test/unit/x32.test.ts" line="273" assertions="0" />
+        <testcase name="missing args defaults to on: false" classname="send on/off messages (/ch/NN/mix/BB/on) &gt; x32 parseBusSendMessage()" time="0.000006" file="test/unit/x32.test.ts" line="278" assertions="0" />
+      </testsuite>
+      <testsuite name="unrecognised addresses" file="test/unit/x32.test.ts" line="284" tests="4" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns null for channel master fader (not a bus send)" classname="unrecognised addresses &gt; x32 parseBusSendMessage()" time="0.000005" file="test/unit/x32.test.ts" line="285" assertions="0" />
+        <testcase name="returns null for bus master fader" classname="unrecognised addresses &gt; x32 parseBusSendMessage()" time="0.000004" file="test/unit/x32.test.ts" line="289" assertions="0" />
+        <testcase name="returns null for channel master mute" classname="unrecognised addresses &gt; x32 parseBusSendMessage()" time="0.000008" file="test/unit/x32.test.ts" line="293" assertions="0" />
+        <testcase name="returns null for unrelated address" classname="unrecognised addresses &gt; x32 parseBusSendMessage()" time="0.000004" file="test/unit/x32.test.ts" line="297" assertions="0" />
+      </testsuite>
+    </testsuite>
+    <testsuite name="x32 parseMeterBlob()" file="test/unit/x32.test.ts" line="303" tests="6" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="returns empty array for empty blob" classname="x32 parseMeterBlob()" time="0.000028" file="test/unit/x32.test.ts" line="317" assertions="0" />
+      <testcase name="returns empty array for blob shorter than count+one float (&lt; 8 bytes)" classname="x32 parseMeterBlob()" time="0.000005" file="test/unit/x32.test.ts" line="321" assertions="0" />
+      <testcase name="parses a single float value" classname="x32 parseMeterBlob()" time="0.000032" file="test/unit/x32.test.ts" line="325" assertions="0" />
+      <testcase name="parses multiple float values in order" classname="x32 parseMeterBlob()" time="0.000019" file="test/unit/x32.test.ts" line="332" assertions="0" />
+      <testcase name="ignores trailing bytes that do not form a complete float" classname="x32 parseMeterBlob()" time="0.000011" file="test/unit/x32.test.ts" line="341" assertions="0" />
+      <testcase name="32-channel bank 0 blob: channel positions 0–31 map to ch 1–32" classname="x32 parseMeterBlob()" time="0.000029" file="test/unit/x32.test.ts" line="349" assertions="0" />
+    </testsuite>
+    <testsuite name="x32 parseMeterBlob() level rounding" file="test/unit/x32.test.ts" line="360" tests="5" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="level values are rounded to 3 decimal places" classname="x32 parseMeterBlob() level rounding" time="0.000057" file="test/unit/x32.test.ts" line="372" assertions="0" />
+      <testcase name="level 0.5 rounds to 0.5 (no change)" classname="x32 parseMeterBlob() level rounding" time="0.000008" file="test/unit/x32.test.ts" line="387" assertions="0" />
+      <testcase name="level 0.0 rounds to 0.0 (no change)" classname="x32 parseMeterBlob() level rounding" time="0.000006" file="test/unit/x32.test.ts" line="393" assertions="0" />
+      <testcase name="level 1.0 rounds to 1.0 (no change)" classname="x32 parseMeterBlob() level rounding" time="0.000006" file="test/unit/x32.test.ts" line="399" assertions="0" />
+      <testcase name="all values in a multi-float blob are rounded to 3 decimal places" classname="x32 parseMeterBlob() level rounding" time="0.000015" file="test/unit/x32.test.ts" line="405" assertions="0" />
+    </testsuite>
+    <testsuite name="x32 buildMeterRequests()" file="test/unit/x32.test.ts" line="417" tests="4" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="returns two OSC messages for banks 0 and 2" classname="x32 buildMeterRequests()" time="0.000011" file="test/unit/x32.test.ts" line="422" assertions="0" />
+      <testcase name="all requests use /meters address (not /meters/N)" classname="x32 buildMeterRequests()" time="0.000012" file="test/unit/x32.test.ts" line="427" assertions="0" />
+      <testcase name="bank paths are /meters/0 (channels) and /meters/2 (bus/mtx/main)" classname="x32 buildMeterRequests()" time="0.000016" file="test/unit/x32.test.ts" line="434" assertions="0" />
+      <testcase name="each request has exactly two args: bank path string and time_factor int" classname="x32 buildMeterRequests()" time="0.00002" file="test/unit/x32.test.ts" line="441" assertions="0" />
+    </testsuite>
+    <testsuite name="x32 connection state and lifecycle" file="test/unit/x32.test.ts" line="459" tests="3" assertions="0" failures="0" skipped="0" time="0.001" hostname="03a50982843b">
+      <testcase name="setFader resolves after its optimistic update and preserves the prior snapshot" classname="x32 connection state and lifecycle" time="0.001015" file="test/unit/x32.test.ts" line="460" assertions="0" />
+      <testcase name="setBusSend replaces the channel and nested send without mutating a prior snapshot" classname="x32 connection state and lifecycle" time="0.000518" file="test/unit/x32.test.ts" line="487" assertions="0" />
+      <testcase name="explicit disconnect deactivates the connection and a later connect starts a fresh lifecycle" classname="x32 connection state and lifecycle" time="0.000446" file="test/unit/x32.test.ts" line="513" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/obs-screenshot.test.ts" file="test/unit/obs-screenshot.test.ts" tests="3" assertions="6" failures="0" skipped="0" time="0.008450852" hostname="03a50982843b">
+    <testsuite name="OBS screenshot capture" file="test/unit/obs-screenshot.test.ts" line="60" tests="3" assertions="6" failures="0" skipped="0" time="0.006" hostname="03a50982843b">
+      <testcase name="getSceneScreenshot uses OBS and decodes the returned JPEG" classname="OBS screenshot capture" time="0.000236" file="test/unit/obs-screenshot.test.ts" line="74" assertions="2" />
+      <testcase name="does not start a second screenshot while the first is pending" classname="OBS screenshot capture" time="0.003017" file="test/unit/obs-screenshot.test.ts" line="90" assertions="2" />
+      <testcase name="disconnect suppresses publication from a screenshot that completes later" classname="OBS screenshot capture" time="0.00309" file="test/unit/obs-screenshot.test.ts" line="106" assertions="2" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/proclaimDbDb.test.ts" file="test/unit/proclaimDbDb.test.ts" tests="5" assertions="0" failures="0" skipped="0" time="0.039270434" hostname="03a50982843b">
+    <testsuite name="proclaimDb.getSongSlides" file="test/unit/proclaimDbDb.test.ts" line="35" tests="5" assertions="0" failures="0" skipped="0" time="0.037" hostname="03a50982843b">
+      <testcase name="extracts per-slide lyric lines for a SongLyrics item by ServiceItemId" classname="proclaimDb.getSongSlides" time="0.010652" file="test/unit/proclaimDbDb.test.ts" line="36" assertions="0" />
+      <testcase name="returns [] for a song item without lyrics content" classname="proclaimDb.getSongSlides" time="0.009452" file="test/unit/proclaimDbDb.test.ts" line="59" assertions="0" />
+      <testcase name="returns null for unknown item id" classname="proclaimDb.getSongSlides" time="0.009636" file="test/unit/proclaimDbDb.test.ts" line="64" assertions="0" />
+      <testcase name="returns null when DB path is unset or missing" classname="proclaimDb.getSongSlides" time="0.00008" file="test/unit/proclaimDbDb.test.ts" line="69" assertions="0" />
+      <testcase name="returns null on malformed Content JSON without throwing" classname="proclaimDb.getSongSlides" time="0.009042" file="test/unit/proclaimDbDb.test.ts" line="76" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/discovery.test.ts" file="test/unit/discovery.test.ts" tests="3" assertions="0" failures="0" skipped="0" time="0.002233369" hostname="03a50982843b">
+    <testsuite name="getBroadcastAddresses" file="test/unit/discovery.test.ts" line="4" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="returns discovered IPv4 broadcast addresses in dotted-quad format" classname="getBroadcastAddresses" time="0.000159" file="test/unit/discovery.test.ts" line="5" assertions="0" />
+    </testsuite>
+    <testsuite name="discoverProclaim" file="test/unit/discovery.test.ts" line="14" tests="2" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="reports a Proclaim server for any HTTP response" classname="discoverProclaim" time="0.000128" file="test/unit/discovery.test.ts" line="15" assertions="0" />
+      <testcase name="reports not found when the Proclaim connection is refused" classname="discoverProclaim" time="0.000079" file="test/unit/discovery.test.ts" line="28" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/proclaim.test.ts" file="test/unit/proclaim.test.ts" tests="19" assertions="0" failures="0" skipped="0" time="0.651273927" hostname="03a50982843b">
+    <testsuite name="proclaim.goToItem" file="test/unit/proclaim.test.ts" line="30" tests="1" assertions="0" failures="0" skipped="0" time="0.001" hostname="03a50982843b">
+      <testcase name="sends production navigation commands for each service section" classname="proclaim.goToItem" time="0.001969" file="test/unit/proclaim.test.ts" line="36" assertions="0" />
+    </testsuite>
+    <testsuite name="proclaim._authenticateAppCommand" file="test/unit/proclaim.test.ts" line="90" tests="3" assertions="0" failures="0" skipped="0" time="0.003" hostname="03a50982843b">
+      <testcase name="returns token on success" classname="proclaim._authenticateAppCommand" time="0.00115" file="test/unit/proclaim.test.ts" line="98" assertions="0" />
+      <testcase name="throws on HTTP error" classname="proclaim._authenticateAppCommand" time="0.001236" file="test/unit/proclaim.test.ts" line="105" assertions="0" />
+      <testcase name="throws when token is missing from response" classname="proclaim._authenticateAppCommand" time="0.001026" file="test/unit/proclaim.test.ts" line="111" assertions="0" />
+    </testsuite>
+    <testsuite name="proclaim._authenticateRemote" file="test/unit/proclaim.test.ts" line="118" tests="3" assertions="0" failures="0" skipped="0" time="0.001" hostname="03a50982843b">
+      <testcase name="returns onAirSessionId and connectionId on success" classname="proclaim._authenticateRemote" time="0.001079" file="test/unit/proclaim.test.ts" line="126" assertions="0" />
+      <testcase name="throws when onair/session fails" classname="proclaim._authenticateRemote" time="0.00096" file="test/unit/proclaim.test.ts" line="145" assertions="0" />
+      <testcase name="throws when auth/control returns no connectionId" classname="proclaim._authenticateRemote" time="0.000961" file="test/unit/proclaim.test.ts" line="151" assertions="0" />
+    </testsuite>
+    <testsuite name="proclaim.sendAction" file="test/unit/proclaim.test.ts" line="161" tests="3" assertions="0" failures="0" skipped="0" time="0.024" hostname="03a50982843b">
+      <testcase name="returns false when not authenticated" classname="proclaim.sendAction" time="0.000907" file="test/unit/proclaim.test.ts" line="169" assertions="0" />
+      <testcase name="sends correct URL and headers after auth" classname="proclaim.sendAction" time="0.01229" file="test/unit/proclaim.test.ts" line="175" assertions="0" />
+      <testcase name="includes index in URL when provided" classname="proclaim.sendAction" time="0.012941" file="test/unit/proclaim.test.ts" line="202" assertions="0" />
+    </testsuite>
+    <testsuite name="proclaim service item indexing" file="test/unit/proclaim.test.ts" line="226" tests="2" assertions="0" failures="0" skipped="0" time="0.223" hostname="03a50982843b">
+      <testcase name="preserves full-list 1-based index when excluded items are interspersed" classname="proclaim service item indexing" time="0.109687" file="test/unit/proclaim.test.ts" line="236" assertions="0" />
+      <testcase name="filters out Slide Group grouping items from serviceItems" classname="proclaim service item indexing" time="0.114222" file="test/unit/proclaim.test.ts" line="288" assertions="0" />
+    </testsuite>
+    <testsuite name="proclaim statusChanged initial poll" file="test/unit/proclaim.test.ts" line="333" tests="1" assertions="0" failures="0" skipped="0" time="0.111" hostname="03a50982843b">
+      <testcase name="first statusChanged poll uses Int64/Int32 min sentinel values" classname="proclaim statusChanged initial poll" time="0.111869" file="test/unit/proclaim.test.ts" line="343" assertions="0" />
+    </testsuite>
+    <testsuite name="proclaim 404 logging" file="test/unit/proclaim.test.ts" line="365" tests="1" assertions="0" failures="0" skipped="0" time="0.115" hostname="03a50982843b">
+      <testcase name="404 from presentations/onair and statusChanged does not emit info-level log entries" classname="proclaim 404 logging" time="0.115006" file="test/unit/proclaim.test.ts" line="375" assertions="0" />
+    </testsuite>
+    <testsuite name="proclaim._pollStatus" file="test/unit/proclaim.test.ts" line="398" tests="5" assertions="0" failures="0" skipped="0" time="0.161" hostname="03a50982843b">
+      <testcase name="sets connected=true, onAir=false when session returns empty" classname="proclaim._pollStatus" time="0.059902" file="test/unit/proclaim.test.ts" line="408" assertions="0" />
+      <testcase name="sets connected=false on network error and schedules reconnect" classname="proclaim._pollStatus" time="0.064011" file="test/unit/proclaim.test.ts" line="430" assertions="0" />
+      <testcase name="clears app command token on sendAction 401" classname="proclaim._pollStatus" time="0.020815" file="test/unit/proclaim.test.ts" line="450" assertions="0" />
+      <testcase name="does not overlap a pending status poll and aborts it on disconnect" classname="proclaim._pollStatus" time="0.00946" file="test/unit/proclaim.test.ts" line="466" assertions="0" />
+      <testcase name="ignores a stale poll completion after disconnect" classname="proclaim._pollStatus" time="0.009717" file="test/unit/proclaim.test.ts" line="493" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/state.test.ts" file="test/unit/state.test.ts" tests="8" assertions="0" failures="0" skipped="0" time="0.004195822" hostname="03a50982843b">
+    <testsuite name="State" file="test/unit/state.test.ts" line="4" tests="8" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="get() returns the initial shape" classname="State" time="0.000409" file="test/unit/state.test.ts" line="5" assertions="0" />
+      <testcase name="update() merges a patch into the named section" classname="State" time="0.000117" file="test/unit/state.test.ts" line="23" assertions="0" />
+      <testcase name="update() does not affect other sections" classname="State" time="0.000104" file="test/unit/state.test.ts" line="34" assertions="0" />
+      <testcase name="successive updates accumulate" classname="State" time="0.000083" file="test/unit/state.test.ts" line="41" assertions="0" />
+      <testcase name="update() emits a change event with section and full state" classname="State" time="0.000562" file="test/unit/state.test.ts" line="49" assertions="0" />
+      <testcase name="update() with array field replaces it entirely" classname="State" time="0.000101" file="test/unit/state.test.ts" line="61" assertions="0" />
+      <testcase name="update() does not emit change when nothing changed" classname="State" time="0.000087" file="test/unit/state.test.ts" line="68" assertions="0" />
+      <testcase name="update() does emit change when value actually changes" classname="State" time="0.000101" file="test/unit/state.test.ts" line="77" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/x32-pending-fader.test.ts" file="test/unit/x32-pending-fader.test.ts" tests="14" assertions="0" failures="0" skipped="0" time="0.003020534" hostname="03a50982843b">
+    <testsuite name="x32 pending fader mechanism" file="test/unit/x32-pending-fader.test.ts" line="20" tests="14" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testsuite name="applyOscPatchWithPending()" file="test/unit/x32-pending-fader.test.ts" line="22" tests="14" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="applies fader patch normally when no pending entry exists" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000241" file="test/unit/x32-pending-fader.test.ts" line="23" assertions="0" />
+        <testcase name="skips fader update when pending entry exists and incoming differs by &gt; 0.05" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000104" file="test/unit/x32-pending-fader.test.ts" line="29" assertions="0" />
+        <testcase name="clears pending entry when incoming fader is within 0.05 of pending value" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000058" file="test/unit/x32-pending-fader.test.ts" line="37" assertions="0" />
+        <testcase name="applies fader when incoming is within 0.05 of pending (confirmation)" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000061" file="test/unit/x32-pending-fader.test.ts" line="45" assertions="0" />
+        <testcase name="diff of 0.04 is treated as confirmed (within tolerance)" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000068" file="test/unit/x32-pending-fader.test.ts" line="53" assertions="0" />
+        <testcase name="diff of 0.06 is skipped (outside tolerance)" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000046" file="test/unit/x32-pending-fader.test.ts" line="61" assertions="0" />
+        <testcase name="clears expired pending entry (&gt;= 2000ms) and applies fader normally" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000061" file="test/unit/x32-pending-fader.test.ts" line="69" assertions="0" />
+        <testcase name="non-fader fields (muted) are always applied even when pending fader exists" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000053" file="test/unit/x32-pending-fader.test.ts" line="80" assertions="0" />
+        <testcase name="non-fader fields (label) are always applied even when pending fader exists" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000043" file="test/unit/x32-pending-fader.test.ts" line="87" assertions="0" />
+        <testcase name="patch with both fader and other fields: fader is skipped, other fields pass through" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000061" file="test/unit/x32-pending-fader.test.ts" line="94" assertions="0" />
+        <testcase name="pending entry for different channel does not affect other channel" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000043" file="test/unit/x32-pending-fader.test.ts" line="102" assertions="0" />
+        <testcase name="pending entry for ch does not affect bus channel with same index" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000067" file="test/unit/x32-pending-fader.test.ts" line="110" assertions="0" />
+        <testcase name="pending entry for bus type uses correct key" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000045" file="test/unit/x32-pending-fader.test.ts" line="117" assertions="0" />
+        <testcase name="empty patch is returned unchanged" classname="applyOscPatchWithPending() &gt; x32 pending fader mechanism" time="0.000043" file="test/unit/x32-pending-fader.test.ts" line="124" assertions="0" />
+      </testsuite>
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/obs.test.ts" file="test/unit/obs.test.ts" tests="6" assertions="0" failures="0" skipped="0" time="0.00185312" hostname="03a50982843b">
+    <testsuite name="OBS conversion helpers" file="test/unit/obs.test.ts" line="4" tests="4" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="extractObsPeak returns the largest peak channel value" classname="OBS conversion helpers" time="0.000145" file="test/unit/obs.test.ts" line="5" assertions="0" />
+      <testcase name="extractObsPeak ignores inputPeak and empty channels" classname="OBS conversion helpers" time="0.000029" file="test/unit/obs.test.ts" line="9" assertions="0" />
+      <testcase name="mulToDb handles unity, attenuation, and silence" classname="OBS conversion helpers" time="0.000103" file="test/unit/obs.test.ts" line="14" assertions="0" />
+      <testcase name="dbToMul is the inverse of mulToDb for finite values" classname="OBS conversion helpers" time="0.000047" file="test/unit/obs.test.ts" line="20" assertions="0" />
+    </testsuite>
+    <testsuite name="OBS live source status" file="test/unit/obs.test.ts" line="26" tests="2" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="marks active sources live and resets levels for inactive sources" classname="OBS live source status" time="0.000144" file="test/unit/obs.test.ts" line="27" assertions="0" />
+      <testcase name="preserves levels for sources that remain active" classname="OBS live source status" time="0.00004" file="test/unit/obs.test.ts" line="38" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/config.test.ts" file="test/unit/config.test.ts" tests="10" assertions="0" failures="0" skipped="0" time="0.00127583" hostname="03a50982843b">
+    <testsuite name="config merge()" file="test/unit/config.test.ts" line="5" tests="8" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="returns base fields when override is empty" classname="config merge()" time="0.000037" file="test/unit/config.test.ts" line="6" assertions="0" />
+      <testcase name="override values replace base values" classname="config merge()" time="0.000039" file="test/unit/config.test.ts" line="10" assertions="0" />
+      <testcase name="override adds new keys not in base" classname="config merge()" time="0.000037" file="test/unit/config.test.ts" line="14" assertions="0" />
+      <testcase name="nested objects are merged recursively" classname="config merge()" time="0.000042" file="test/unit/config.test.ts" line="18" assertions="0" />
+      <testcase name="arrays in override replace (not merge) base arrays" classname="config merge()" time="0.000029" file="test/unit/config.test.ts" line="26" assertions="0" />
+      <testcase name="null override value replaces base object" classname="config merge()" time="0.000036" file="test/unit/config.test.ts" line="34" assertions="0" />
+      <testcase name="does not mutate the base object" classname="config merge()" time="0.000039" file="test/unit/config.test.ts" line="39" assertions="0" />
+      <testcase name="deeply nested merge" classname="config merge()" time="0.00006" file="test/unit/config.test.ts" line="45" assertions="0" />
+    </testsuite>
+    <testsuite name="config defaults" file="test/unit/config.test.ts" line="54" tests="2" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="server.openBrowser defaults to true" classname="config defaults" time="0.000024" file="test/unit/config.test.ts" line="55" assertions="0" />
+      <testcase name="server.openBrowser can be disabled via user config merge" classname="config defaults" time="0.000029" file="test/unit/config.test.ts" line="59" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/unit/logger.test.ts" file="test/unit/logger.test.ts" tests="4" assertions="0" failures="0" skipped="0" time="0.025267265" hostname="03a50982843b">
+    <testsuite name="logger log rotation" file="test/unit/logger.test.ts" line="9" tests="4" assertions="0" failures="0" skipped="0" time="0.022" hostname="03a50982843b">
+      <testcase name="writes log entries to file" classname="logger log rotation" time="0.004802" file="test/unit/logger.test.ts" line="30" assertions="0" />
+      <testcase name="rotates log file when it exceeds MAX_FILE_SIZE" classname="logger log rotation" time="0.006201" file="test/unit/logger.test.ts" line="39" assertions="0" />
+      <testcase name="only keeps one rotated file (overwrites .1 on subsequent rotations)" classname="logger log rotation" time="0.012036" file="test/unit/logger.test.ts" line="60" assertions="0" />
+      <testcase name="does not rotate when file is within size limit" classname="logger log rotation" time="0.000777" file="test/unit/logger.test.ts" line="74" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/e2e/levels-ws.test.ts" file="test/e2e/levels-ws.test.ts" tests="3" assertions="0" failures="0" skipped="0" time="0.194191428" hostname="03a50982843b">
+    <testsuite name="levels broadcast (unified WS)" file="test/e2e/levels-ws.test.ts" line="26" tests="3" assertions="0" failures="0" skipped="0" time="0.162" hostname="03a50982843b">
+      <testcase name="subscribed client receives levels payload when broadcast is called" classname="levels broadcast (unified WS)" time="0.003481" file="test/e2e/levels-ws.test.ts" line="43" assertions="0" />
+      <testcase name="broadcast with only x32 levels works" classname="levels broadcast (unified WS)" time="0.000022" file="test/e2e/levels-ws.test.ts" line="71" assertions="0" />
+      <testcase name="broadcast does not affect main state channel" classname="levels broadcast (unified WS)" time="0.159957" file="test/e2e/levels-ws.test.ts" line="79" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/e2e/bus-ws.test.ts" file="test/e2e/bus-ws.test.ts" tests="5" assertions="0" failures="0" skipped="0" time="0.177162057" hostname="03a50982843b">
+    <testsuite name="Bus WebSocket (unified /ws + subscribe)" file="test/e2e/bus-ws.test.ts" line="59" tests="5" assertions="0" failures="0" skipped="0" time="0.165" hostname="03a50982843b">
+      <testcase name="subscribing to bus:8 receives immediate bus-state message" classname="Bus WebSocket (unified /ws + subscribe)" time="0.004747" file="test/e2e/bus-ws.test.ts" line="70" assertions="0" />
+      <testcase name="invalid bus indexes are ignored without a bus-state response" classname="Bus WebSocket (unified /ws + subscribe)" time="0.048486" file="test/e2e/bus-ws.test.ts" line="84" assertions="0" />
+      <testcase name="state update triggers broadcast to bus subscriber" classname="Bus WebSocket (unified /ws + subscribe)" time="0.0532" file="test/e2e/bus-ws.test.ts" line="91" assertions="0" />
+      <testcase name="subscribing starts bus send tracking for the requested bus" classname="Bus WebSocket (unified /ws + subscribe)" time="0.054304" file="test/e2e/bus-ws.test.ts" line="105" assertions="0" />
+      <testcase name="subscribing to bus starts bus send tracking even with x32 inactive flag" classname="Bus WebSocket (unified /ws + subscribe)" time="0.006379" file="test/e2e/bus-ws.test.ts" line="114" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/e2e/ws.test.ts" file="test/e2e/ws.test.ts" tests="24" assertions="0" failures="0" skipped="0" time="1.042088483" hostname="03a50982843b">
+    <testsuite name="WebSocket" file="test/e2e/ws.test.ts" line="37" tests="4" assertions="0" failures="0" skipped="0" time="0.214" hostname="03a50982843b">
+      <testcase name="new client receives full state immediately on connect" classname="WebSocket" time="0.00234" file="test/e2e/ws.test.ts" line="47" assertions="0" />
+      <testcase name="state update is broadcast to connected client" classname="WebSocket" time="0.102736" file="test/e2e/ws.test.ts" line="56" assertions="0" />
+      <testcase name="broadcast reaches all connected clients" classname="WebSocket" time="0.109623" file="test/e2e/ws.test.ts" line="67" assertions="0" />
+      <testcase name="late-connecting client receives the current (updated) state" classname="WebSocket" time="0.001301" file="test/e2e/ws.test.ts" line="78" assertions="0" />
+    </testsuite>
+    <testsuite name="WebSocket meter subscription lifecycle" file="test/e2e/ws.test.ts" line="86" tests="5" assertions="0" failures="0" skipped="0" time="0.109" hostname="03a50982843b">
+      <testcase name="startMeterUpdates is called when the first client connects" classname="WebSocket meter subscription lifecycle" time="0.003611" file="test/e2e/ws.test.ts" line="87" assertions="0" />
+      <testcase name="startMeterUpdates is NOT called again when a second client connects" classname="WebSocket meter subscription lifecycle" time="0.00209" file="test/e2e/ws.test.ts" line="95" assertions="0" />
+      <testcase name="stopMeterUpdates is called when the last client disconnects" classname="WebSocket meter subscription lifecycle" time="0.023336" file="test/e2e/ws.test.ts" line="104" assertions="0" />
+      <testcase name="stopMeterUpdates is NOT called while other clients remain connected" classname="WebSocket meter subscription lifecycle" time="0.028917" file="test/e2e/ws.test.ts" line="113" assertions="0" />
+      <testcase name="x32 is NOT stopped when main ws client leaves but bus-mix clients remain" classname="WebSocket meter subscription lifecycle" time="0.053602" file="test/e2e/ws.test.ts" line="124" assertions="0" />
+    </testsuite>
+    <testsuite name="WebSocket level stripping" file="test/e2e/ws.test.ts" line="145" tests="4" assertions="0" failures="0" skipped="0" time="0.209" hostname="03a50982843b">
+      <testcase name="initial state broadcast does not include level on audioSources" classname="WebSocket level stripping" time="0.00342" file="test/e2e/ws.test.ts" line="155" assertions="0" />
+      <testcase name="initial state broadcast does not include level on x32 channels" classname="WebSocket level stripping" time="0.000967" file="test/e2e/ws.test.ts" line="164" assertions="0" />
+      <testcase name="state update broadcast does not include level on audioSources" classname="WebSocket level stripping" time="0.099459" file="test/e2e/ws.test.ts" line="173" assertions="0" />
+      <testcase name="state update broadcast does not include level on x32 channels" classname="WebSocket level stripping" time="0.107558" file="test/e2e/ws.test.ts" line="184" assertions="0" />
+    </testsuite>
+    <testsuite name="WebSocket connection lifecycle" file="test/e2e/ws.test.ts" line="196" tests="4" assertions="0" failures="0" skipped="0" time="0.065" hostname="03a50982843b">
+      <testcase name="all connections are started when the first client connects" classname="WebSocket connection lifecycle" time="0.005211" file="test/e2e/ws.test.ts" line="197" assertions="0" />
+      <testcase name="connections are NOT started again when a second client connects" classname="WebSocket connection lifecycle" time="0.004311" file="test/e2e/ws.test.ts" line="207" assertions="0" />
+      <testcase name="all connections are stopped when the last client disconnects" classname="WebSocket connection lifecycle" time="0.028471" file="test/e2e/ws.test.ts" line="218" assertions="0" />
+      <testcase name="connections are NOT stopped while other clients remain connected" classname="WebSocket connection lifecycle" time="0.028306" file="test/e2e/ws.test.ts" line="229" assertions="0" />
+    </testsuite>
+    <testsuite name="WebSocket security and bounded topic protocol" file="test/e2e/ws.test.ts" line="291" tests="7" assertions="0" failures="0" skipped="0" time="0.42" hostname="03a50982843b">
+      <testcase name="setupWebSocket rejects failed security checks before attempting upgrade" classname="WebSocket security and bounded topic protocol" time="0.000746" file="test/e2e/ws.test.ts" line="292" assertions="0" />
+      <testcase name="setupWebSocket accepts authenticated requests and injects bounded topic data" classname="WebSocket security and bounded topic protocol" time="0.000476" file="test/e2e/ws.test.ts" line="308" assertions="0" />
+      <testcase name="topics=levels,bus:N sends bus state without an unwanted full state" classname="WebSocket security and bounded topic protocol" time="0.06267" file="test/e2e/ws.test.ts" line="324" assertions="0" />
+      <testcase name="bus topic reports the current X32 connected flag" classname="WebSocket security and bounded topic protocol" time="0.059356" file="test/e2e/ws.test.ts" line="335" assertions="0" />
+      <testcase name="invalid bus topics and unknown topics produce no snapshots" classname="WebSocket security and bounded topic protocol" time="0.172435" file="test/e2e/ws.test.ts" line="346" assertions="0" />
+      <testcase name="per-socket bus topic cap limits initial snapshots to four buses" classname="WebSocket security and bounded topic protocol" time="0.064712" file="test/e2e/ws.test.ts" line="357" assertions="0" />
+      <testcase name="oversized messages are ignored without creating a subscription" classname="WebSocket security and bounded topic protocol" time="0.06328" file="test/e2e/ws.test.ts" line="366" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/e2e/screenshot-ws.test.ts" file="test/e2e/screenshot-ws.test.ts" tests="1" assertions="0" failures="0" skipped="0" time="0.003922197" hostname="03a50982843b">
+    <testsuite name="screenshot broadcast (unified WS)" file="test/e2e/screenshot-ws.test.ts" line="4" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testcase name="broadcast invokes the registered publisher with the frame" classname="screenshot broadcast (unified WS)" time="0.000291" file="test/e2e/screenshot-ws.test.ts" line="5" assertions="0" />
+    </testsuite>
+  </testsuite>
+  <testsuite name="test/e2e/api.test.ts" file="test/e2e/api.test.ts" tests="52" assertions="0" failures="0" skipped="0" time="3.152503586" hostname="03a50982843b">
+    <testsuite name="API routes" file="test/e2e/api.test.ts" line="23" tests="52" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+      <testsuite name="GET /api/state" file="test/e2e/api.test.ts" line="44" tests="2" assertions="0" failures="0" skipped="0" time="0.003" hostname="03a50982843b">
+        <testcase name="returns the full state object" classname="GET /api/state &gt; API routes" time="0.00321" file="test/e2e/api.test.ts" line="45" assertions="0" />
+        <testcase name="reflects state updates" classname="GET /api/state &gt; API routes" time="0.000611" file="test/e2e/api.test.ts" line="56" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/obs/scene" file="test/e2e/api.test.ts" line="65" tests="1" assertions="0" failures="0" skipped="0" time="0.001" hostname="03a50982843b">
+        <testcase name="calls obs.setScene and returns ok" classname="POST /api/obs/scene &gt; API routes" time="0.001616" file="test/e2e/api.test.ts" line="66" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/obs/mute" file="test/e2e/api.test.ts" line="75" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls obs.toggleMute with the input name" classname="POST /api/obs/mute &gt; API routes" time="0.000661" file="test/e2e/api.test.ts" line="76" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/obs/volume" file="test/e2e/api.test.ts" line="85" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls obs.setInputVolume with input and dB value" classname="POST /api/obs/volume &gt; API routes" time="0.000716" file="test/e2e/api.test.ts" line="86" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/obs/stream" file="test/e2e/api.test.ts" line="95" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls obs.toggleStream" classname="POST /api/obs/stream &gt; API routes" time="0.000534" file="test/e2e/api.test.ts" line="96" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/obs/record" file="test/e2e/api.test.ts" line="105" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls obs.toggleRecord" classname="POST /api/obs/record &gt; API routes" time="0.000453" file="test/e2e/api.test.ts" line="106" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/x32/fader" file="test/e2e/api.test.ts" line="115" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls x32.setFader with channel and value" classname="POST /api/x32/fader &gt; API routes" time="0.000634" file="test/e2e/api.test.ts" line="116" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/x32/mute" file="test/e2e/api.test.ts" line="125" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls x32.toggleMute with the channel index" classname="POST /api/x32/mute &gt; API routes" time="0.00049" file="test/e2e/api.test.ts" line="126" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/x32/spill" file="test/e2e/api.test.ts" line="135" tests="3" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls x32.setSpill to assign a channel to DCA 8" classname="POST /api/x32/spill &gt; API routes" time="0.000443" file="test/e2e/api.test.ts" line="136" assertions="0" />
+        <testcase name="calls x32.setSpill to unassign a bus from DCA 8" classname="POST /api/x32/spill &gt; API routes" time="0.000293" file="test/e2e/api.test.ts" line="144" assertions="0" />
+        <testcase name="defaults type to ch when not specified" classname="POST /api/x32/spill &gt; API routes" time="0.0002" file="test/e2e/api.test.ts" line="152" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/x32/bus-send" file="test/e2e/api.test.ts" line="160" tests="3" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls x32.setBusSend with channel, busIndex, and value" classname="POST /api/x32/bus-send &gt; API routes" time="0.000445" file="test/e2e/api.test.ts" line="161" assertions="0" />
+        <testcase name="returns 400 when busIndex is missing" classname="POST /api/x32/bus-send &gt; API routes" time="0.000212" file="test/e2e/api.test.ts" line="169" assertions="0" />
+        <testcase name="returns 400 when value is missing" classname="POST /api/x32/bus-send &gt; API routes" time="0.000174" file="test/e2e/api.test.ts" line="174" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/proclaim/action" file="test/e2e/api.test.ts" line="180" tests="2" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls proclaim.sendAction with command name and returns ok" classname="POST /api/proclaim/action &gt; API routes" time="0.000457" file="test/e2e/api.test.ts" line="181" assertions="0" />
+        <testcase name="passes index through to sendAction" classname="POST /api/proclaim/action &gt; API routes" time="0.000227" file="test/e2e/api.test.ts" line="189" assertions="0" />
+      </testsuite>
+      <testsuite name="GET /api/proclaim/thumb" file="test/e2e/api.test.ts" line="198" tests="5" assertions="0" failures="0" skipped="0" time="0.073" hostname="03a50982843b">
+        <testcase name="route exists (not 404)" classname="GET /api/proclaim/thumb &gt; API routes" time="0.001466" file="test/e2e/api.test.ts" line="199" assertions="0" />
+        <testcase name="returns 204 when Proclaim responds with JSON and no completionEstimateMs" classname="GET /api/proclaim/thumb &gt; API routes" time="0.003724" file="test/e2e/api.test.ts" line="204" assertions="0" />
+        <testcase name="waits for completionEstimateMs and retries when Proclaim returns JSON with estimate" classname="GET /api/proclaim/thumb &gt; API routes" time="0.063508" file="test/e2e/api.test.ts" line="217" assertions="0" />
+        <testcase name="serves cached image on second request with same localRevision" classname="GET /api/proclaim/thumb &gt; API routes" time="0.004377" file="test/e2e/api.test.ts" line="237" assertions="0" />
+        <testcase name="sets immutable Cache-Control header when localRevision is known" classname="GET /api/proclaim/thumb &gt; API routes" time="0.002961" file="test/e2e/api.test.ts" line="259" assertions="0" />
+      </testsuite>
+      <testsuite name="error handling" file="test/e2e/api.test.ts" line="277" tests="1" assertions="0" failures="0" skipped="0" time="0.002" hostname="03a50982843b">
+        <testcase name="returns 500 when a backend call throws" classname="error handling &gt; API routes" time="0.00281" file="test/e2e/api.test.ts" line="278" assertions="0" />
+      </testsuite>
+      <testsuite name="GET /api/config" file="test/e2e/api.test.ts" line="289" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns obs, x32, proclaim, and youtube config sections" classname="GET /api/config &gt; API routes" time="0.000698" file="test/e2e/api.test.ts" line="290" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/config" file="test/e2e/api.test.ts" line="302" tests="3" assertions="0" failures="0" skipped="0" time="0.002" hostname="03a50982843b">
+        <testcase name="rejects request missing required keys" classname="POST /api/config &gt; API routes" time="0.001242" file="test/e2e/api.test.ts" line="303" assertions="0" />
+        <testcase name="saves and reconnects changed connections" classname="POST /api/config &gt; API routes" time="0.001709" file="test/e2e/api.test.ts" line="310" assertions="0" />
+        <testcase name="reconnects PTZ when camera config changes" classname="POST /api/config &gt; API routes" time="0.000722" file="test/e2e/api.test.ts" line="330" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/youtube/start" file="test/e2e/api.test.ts" line="357" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns 500 with error message when OAuth not configured" classname="POST /api/youtube/start &gt; API routes" time="0.000616" file="test/e2e/api.test.ts" line="358" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/youtube/stop" file="test/e2e/api.test.ts" line="366" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns 500 with error message when OAuth not configured" classname="POST /api/youtube/stop &gt; API routes" time="0.000472" file="test/e2e/api.test.ts" line="367" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/youtube/import-obs-creds" file="test/e2e/api.test.ts" line="375" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="rejects caller-supplied OBS config paths and uses the default path" classname="POST /api/youtube/import-obs-creds &gt; API routes" time="0.000688" file="test/e2e/api.test.ts" line="376" assertions="0" />
+      </testsuite>
+      <testsuite name="GET /api/youtube/broadcasts" file="test/e2e/api.test.ts" line="389" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns 500 with error when no OAuth token available" classname="GET /api/youtube/broadcasts &gt; API routes" time="0.000666" file="test/e2e/api.test.ts" line="390" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/discover/x32" file="test/e2e/api.test.ts" line="398" tests="1" assertions="0" failures="0" skipped="0" time="3.013" hostname="03a50982843b">
+        <testcase name="returns a result with found boolean" classname="POST /api/discover/x32 &gt; API routes" time="3.013853" file="test/e2e/api.test.ts" line="399" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/discover/obs" file="test/e2e/api.test.ts" line="407" tests="1" assertions="0" failures="0" skipped="0" time="0.011" hostname="03a50982843b">
+        <testcase name="returns a result with found boolean" classname="POST /api/discover/obs &gt; API routes" time="0.011091" file="test/e2e/api.test.ts" line="408" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/discover/proclaim" file="test/e2e/api.test.ts" line="416" tests="1" assertions="0" failures="0" skipped="0" time="0.001" hostname="03a50982843b">
+        <testcase name="returns a result with found boolean" classname="POST /api/discover/proclaim &gt; API routes" time="0.001026" file="test/e2e/api.test.ts" line="417" assertions="0" />
+      </testsuite>
+      <testsuite name="GET /api/logs" file="test/e2e/api.test.ts" line="425" tests="2" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns a logs array" classname="GET /api/logs &gt; API routes" time="0.000348" file="test/e2e/api.test.ts" line="426" assertions="0" />
+        <testcase name="log entries have ts, level, and msg fields" classname="GET /api/logs &gt; API routes" time="0.000454" file="test/e2e/api.test.ts" line="433" assertions="0" />
+      </testsuite>
+      <testsuite name="GET /api/server/addresses" file="test/e2e/api.test.ts" line="446" tests="2" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="returns port and addresses array" classname="GET /api/server/addresses &gt; API routes" time="0.000654" file="test/e2e/api.test.ts" line="447" assertions="0" />
+        <testcase name="always includes localhost address" classname="GET /api/server/addresses &gt; API routes" time="0.00041" file="test/e2e/api.test.ts" line="455" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/ptz/pan-tilt" file="test/e2e/api.test.ts" line="462" tests="2" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls ptz.panTilt and returns ok" classname="POST /api/ptz/pan-tilt &gt; API routes" time="0.000796" file="test/e2e/api.test.ts" line="463" assertions="0" />
+        <testcase name="passes explicit camera index" classname="POST /api/ptz/pan-tilt &gt; API routes" time="0.000434" file="test/e2e/api.test.ts" line="473" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/ptz/zoom" file="test/e2e/api.test.ts" line="484" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls ptz.zoom and returns ok" classname="POST /api/ptz/zoom &gt; API routes" time="0.000497" file="test/e2e/api.test.ts" line="485" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/ptz/focus" file="test/e2e/api.test.ts" line="494" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls ptz.focus and returns ok" classname="POST /api/ptz/focus &gt; API routes" time="0.000462" file="test/e2e/api.test.ts" line="495" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/ptz/preset" file="test/e2e/api.test.ts" line="504" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls ptz.preset and returns ok" classname="POST /api/ptz/preset &gt; API routes" time="0.00044" file="test/e2e/api.test.ts" line="505" assertions="0" />
+      </testsuite>
+      <testsuite name="POST /api/ptz/home" file="test/e2e/api.test.ts" line="514" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="03a50982843b">
+        <testcase name="calls ptz.home and returns ok" classname="POST /api/ptz/home &gt; API routes" time="0.000395" file="test/e2e/api.test.ts" line="515" assertions="0" />
+      </testsuite>
+      <testsuite name="GET /api/server/qr" file="test/e2e/api.test.ts" line="524" tests="2" assertions="0" failures="0" skipped="0" time="0.009" hostname="03a50982843b">
+        <testcase name="returns SVG for a valid url param" classname="GET /api/server/qr &gt; API routes" time="0.009969" file="test/e2e/api.test.ts" line="525" assertions="0" />
+        <testcase name="returns 400 when url param is missing" classname="GET /api/server/qr &gt; API routes" time="0.000348" file="test/e2e/api.test.ts" line="533" assertions="0" />
+      </testsuite>
+      <testsuite name="request validation and secret boundaries" file="test/e2e/api.test.ts" line="538" tests="6" assertions="0" failures="0" skipped="0" time="0.001" hostname="03a50982843b">
+        <testcase name="GET /api/config exposes configuration status without secret values" classname="request validation and secret boundaries &gt; API routes" time="0.000275" file="test/e2e/api.test.ts" line="539" assertions="0" />
+        <testcase name="rejects JSON mutation routes without an application/json content type" classname="request validation and secret boundaries &gt; API routes" time="0.000816" file="test/e2e/api.test.ts" line="562" assertions="0" />
+        <testcase name="rejects invalid and non-finite OBS volume values before calling OBS" classname="request validation and secret boundaries &gt; API routes" time="0.000831" file="test/e2e/api.test.ts" line="569" assertions="0" />
+        <testcase name="rejects invalid X32 command ranges before calling the mixer" classname="request validation and secret boundaries &gt; API routes" time="0.001091" file="test/e2e/api.test.ts" line="578" assertions="0" />
+        <testcase name="rejects invalid Proclaim actions and indexes before sending commands" classname="request validation and secret boundaries &gt; API routes" time="0.000778" file="test/e2e/api.test.ts" line="602" assertions="0" />
+        <testcase name="rejects poisoned configuration payloads without writing or reconnecting" classname="request validation and secret boundaries &gt; API routes" time="0.000275" file="test/e2e/api.test.ts" line="621" assertions="0" />
+      </testsuite>
+    </testsuite>
+  </testsuite>
+</testsuites>

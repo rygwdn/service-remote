@@ -99,6 +99,8 @@ export interface Config {
   server: {
     port: number;
     openBrowser: boolean;
+    allowedHosts: string[];
+    basePath: string;
   };
   obs: {
     address: string;

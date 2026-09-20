@@ -70,9 +70,11 @@ async function serveStatic(pathname: string): Promise<Response | null> {
   });
 }
 
-// BASE_PATH: optional subpath prefix (e.g. "/service"). Strip trailing slash.
-const BASE_PATH = (process.env.SERVICE_REMOTE_BASE_PATH ?? '').replace(/\/+$/, '');
-const security = createSecurity(config.userConfigPath, { basePath: BASE_PATH });
+// BASE_PATH: optional subpath prefix (e.g. "/service"). Config value wins for
+// service installs (SCM-spawned children never see user/machine env changes);
+// SERVICE_REMOTE_BASE_PATH remains as an override. Strip trailing slash.
+const BASE_PATH = (process.env.SERVICE_REMOTE_BASE_PATH || config.server.basePath || '').replace(/\/+$/, '');
+const security = createSecurity(config.userConfigPath, { basePath: BASE_PATH, allowedHosts: config.server.allowedHosts });
 
 youtube.connect();
 

@@ -60,4 +60,19 @@ describe('config defaults', () => {
     const result = merge(defaultCfg, { server: { openBrowser: false } });
     assert.equal(result.server.openBrowser, false);
   });
+
+  test('server.allowedHosts defaults to empty', () => {
+    assert.deepEqual(defaultCfg.server.allowedHosts, []);
+  });
+
+  test('server.allowedHosts is replaced wholesale by user config merge', () => {
+    const result = merge(defaultCfg, { server: { allowedHosts: ['soundroom.tailcb2070.ts.net'] } });
+    assert.deepEqual(result.server.allowedHosts, ['soundroom.tailcb2070.ts.net']);
+  });
+
+  test('server.basePath defaults to empty and can be set via user config merge', () => {
+    assert.equal(defaultCfg.server.basePath, '');
+    const result = merge(defaultCfg, { server: { basePath: '/service' } });
+    assert.equal(result.server.basePath, '/service');
+  });
 });

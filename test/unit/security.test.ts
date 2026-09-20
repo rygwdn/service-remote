@@ -116,4 +116,24 @@ describe('security request boundary', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test('allows configured extra hosts with matching origins while still rejecting others', () => {
+    const { dir, configPath } = tempConfigPath();
+    try {
+      const security = createSecurity(configPath, {
+        env: { SERVICE_REMOTE_TOKEN: 'host-token' },
+        allowedHosts: ['soundroom.tailcb2070.ts.net'],
+      });
+      assert.equal(security.checkHost(request('http://x/api', { Host: 'soundroom.tailcb2070.ts.net' })), null);
+      assert.equal(
+        security.checkHost(request('https://x/api', { Host: 'soundroom.tailcb2070.ts.net', Origin: 'https://soundroom.tailcb2070.ts.net' })),
+        null,
+      );
+      assert.equal(security.checkHost(request('http://x/api', { Host: 'SOUNDROOM.TAILCB2070.TS.NET' })), null);
+      assert.equal(security.checkHost(request('http://x/api', { Host: 'soundroom.tailcb2070.ts.net.evil.example' }))?.status, 403);
+      assert.equal(security.checkHost(request('http://x/api', { Host: 'other.tailcb2070.ts.net' }))?.status, 403);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

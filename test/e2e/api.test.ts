@@ -327,6 +327,41 @@ describe('API routes', () => {
       assert.equal(calls.proclaim.disconnect, 0);
     });
 
+    test('accepts server.allowedHosts and rejects non-string entries', async () => {
+      resetCalls();
+      const base = {
+        obs: { address: 'ws://localhost:4455', password: '', screenshotInterval: 1000 },
+        x32: { address: '192.168.1.100', port: 10023 },
+        proclaim: { host: '127.0.0.1', port: 52195, password: '', pollInterval: 1000, presentationDbPath: '' },
+        ptz: { cameras: [] },
+        youtube: { broadcastId: '', pollInterval: 30000 },
+        ui: { hiddenObs: [], hiddenX32: [] },
+      };
+      const ok = await req(server, 'POST', '/api/config', {
+        ...base,
+        server: { port: 3000, openBrowser: true, allowedHosts: ['soundroom.tailcb2070.ts.net'] },
+      });
+      assert.equal(ok.status, 200);
+
+      const bad = await req(server, 'POST', '/api/config', {
+        ...base,
+        server: { port: 3000, openBrowser: true, allowedHosts: ['soundroom.tailcb2070.ts.net', 42] },
+      });
+      assert.equal(bad.status, 400);
+
+      const okPath = await req(server, 'POST', '/api/config', {
+        ...base,
+        server: { port: 3000, openBrowser: true, basePath: '/service' },
+      });
+      assert.equal(okPath.status, 200);
+
+      const badPath = await req(server, 'POST', '/api/config', {
+        ...base,
+        server: { port: 3000, openBrowser: true, basePath: 'service/' },
+      });
+      assert.equal(badPath.status, 400);
+    });
+
     test('reconnects PTZ when camera config changes', async () => {
       resetCalls();
       calls.obs.disconnect = 0; calls.obs.connect = 0;
