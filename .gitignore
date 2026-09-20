@@ -11,3 +11,4 @@ test-results
 settings.local.json
 .DS_Store
 .service-remote-token
+junit.xml
