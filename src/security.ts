@@ -176,7 +176,10 @@ function createSecurity(configPath: string, options: SecurityOptions = {}): Requ
     // upgrade directly with the query token instead.
     if (!queryToken || req.headers.get('upgrade')?.toLowerCase() === 'websocket' || !tokenEqual(queryToken, token)) return null;
     url.searchParams.delete('token');
-    const headers = new Headers({ Location: url.toString() });
+    // Relative Location: the app may sit behind a TLS-terminating proxy that
+    // presents http:// internally, and an absolute URL would downgrade the
+    // client. Browsers resolve a relative Location against the original scheme.
+    const headers = new Headers({ Location: url.pathname + url.search });
     const cookieParts = [`${COOKIE_NAME}=${encodeURIComponent(token)}`, 'HttpOnly', 'SameSite=Strict', `Path=${basePath || '/'}`, 'Max-Age=2592000'];
     if (url.protocol === 'https:') cookieParts.push('Secure');
     headers.set('Set-Cookie', cookieParts.join('; '));

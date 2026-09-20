@@ -75,7 +75,7 @@ describe('security request boundary', () => {
       const response = security.bootstrap(request(`http://localhost/service/api/state?token=${token}&topics=state`));
       assert.ok(response);
       assert.equal(response.status, 302);
-      assert.equal(response.headers.get('location'), 'http://localhost/service/api/state?topics=state');
+      assert.equal(response.headers.get('location'), '/service/api/state?topics=state');
       const cookie = response.headers.get('set-cookie') ?? '';
       assert.match(cookie, new RegExp(`^${COOKIE_NAME}=${token}`));
       assert.match(cookie, /HttpOnly/);
