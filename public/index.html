@@ -125,6 +125,19 @@
           <button class="btn" @click="sendAction('NextAudioItem')">Audio &#9654;&#9654;</button>
         </div>
       </div>
+      <div class="song-lyrics"
+           x-show="songLyricsSlides($store.state.proclaim).length"
+           x-data>
+        <template x-for="(lines, idx) in songLyricsSlides($store.state.proclaim)" :key="idx">
+          <button class="song-slide"
+                  :class="{ active: idx === $store.state.proclaim.slideIndex }"
+                  @click="sendAction('GoToSlide', idx + 1)">
+            <template x-for="(line, li) in lines" :key="li">
+              <span class="song-line" x-text="line"></span>
+            </template>
+          </button>
+        </template>
+      </div>
       <div class="slide-grid"
            x-show="slideGridVisible($store.state.proclaim)"
            x-data>

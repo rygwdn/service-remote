@@ -420,6 +420,14 @@ function ovThumbs(p) {
   };
 }
 
+function songLyricsSlides(p) {
+  if (!p.onAir || !p.currentItemId) return [];
+  if (p.currentItemType !== 'SongLyrics') return [];
+  const slides = p.songLyrics?.[p.currentItemId];
+  if (!slides || slides.length === 0) return [];
+  return slides;
+}
+
 function slideGridVisible(p) {
   if (!p.onAir || !p.currentItemId) return false;
   const items = p.serviceItems || [];

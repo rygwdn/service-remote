@@ -31,6 +31,7 @@ type AppState = {
     currentItemType?: string | null;
     slideIndex?: number | null;
     serviceItems?: { id: string; title: string; kind: string; slideCount: number; index: number; section: string; group: string | null }[];
+    songLyrics?: Record<string, string[][]>;
   };
   ptz?: {
     cameras?: PtzCameraState[];
@@ -52,7 +53,7 @@ type Fixtures = {
 const defaultState: Required<AppState> = {
   obs: { connected: false, scenes: [], currentScene: '', streaming: false, recording: false, audioSources: [] },
   x32: { connected: false, channels: [] },
-  proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [] },
+  proclaim: { connected: false, onAir: false, currentItemId: null, currentItemTitle: null, currentItemType: null, slideIndex: null, serviceItems: [], songLyrics: {} },
   ptz: { cameras: [] },
   youtube: { connected: false, viewerCount: null, broadcastTitle: null, broadcastId: null, broadcastStatus: null },
 };
@@ -150,3 +151,4 @@ export const test = base.extend<{ setState: Fixtures['setState'] }, { serverUrl:
 });
 
 export { expect };
+export type { AppState };

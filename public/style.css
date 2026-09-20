@@ -240,6 +240,38 @@ main {
   }
 }
 
+.song-lyrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.song-slide {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 0 0 calc(33.333% - 4px);
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  padding: 8px;
+  cursor: pointer;
+  text-align: center;
+  opacity: 0.6;
+  color: var(--text);
+}
+
+.song-slide.active {
+  opacity: 1;
+  border-color: var(--primary);
+}
+
+.song-line {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .proclaim-now-playing {
   text-align: center;
   margin-bottom: 12px;
