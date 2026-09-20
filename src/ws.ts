@@ -98,7 +98,7 @@ interface SetupResult {
     message(ws: import('bun').ServerWebSocket<SocketData>, msg: string | Buffer): void;
     close(ws: import('bun').ServerWebSocket<SocketData>): void;
   };
-  upgrade(req: Request, server: import('bun').Server<SocketData>): boolean;
+  upgrade(req: Request, server: import('bun').Server<SocketData>, pathname?: string): boolean;
   hasClients(): boolean;
 }
 
@@ -339,9 +339,13 @@ function setupWebSocket(
     },
   };
 
-  function upgrade(req: Request, srv: import('bun').Server<SocketData>): boolean {
+  // `pathname` lets callers that rewrite the request URL (e.g. base-path
+  // stripping in server.ts) pass the effective path while `req` stays the
+  // ORIGINAL request: Bun's srv.upgrade requires the exact Request instance
+  // from the fetch handler (it carries the socket binding).
+  function upgrade(req: Request, srv: import('bun').Server<SocketData>, pathname?: string): boolean {
     const url = new URL(req.url);
-    if (url.pathname !== '/ws') return false;
+    if ((pathname ?? url.pathname) !== '/ws') return false;
     if (security && (security.checkHost(req) || !security.authenticate(req))) return false;
     // Capture server reference only after the request has passed all gates.
     if (!server) server = srv;

@@ -125,8 +125,10 @@ const server = Bun.serve<import('./src/ws').SocketData>({
     }
 
     // WebSocket upgrade (authentication is also checked inside upgrade so this
-    // helper remains safe when used by another Bun fetch boundary).
-    if (isWebSocket && upgrade(rewritten, srv)) return undefined as unknown as Response;
+    // helper remains safe when used by another Bun fetch boundary). Pass the
+    // original request: Bun's srv.upgrade only works on the Request instance
+    // the fetch handler received.
+    if (isWebSocket && upgrade(req, srv, rewrittenPath)) return undefined as unknown as Response;
 
     // API routes
     const apiResponse = handleRequest(rewritten);
